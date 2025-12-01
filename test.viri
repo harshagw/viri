@@ -1,0 +1,16 @@
+var test1 = "12312";
+var test2 = 123;
+
+if test2 > 123 {
+    return 12312;
+}
+
+if test1 <= 123 {
+    return 12312;
+}
+
+
+
+if test1 != test2 {
+    return 132
+}
