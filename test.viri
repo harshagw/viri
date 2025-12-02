@@ -1,19 +1,25 @@
-var a = "global a";
-var b = "global b";
-var c = "global c";
+var name = "Viri";
+var age = 5;
+var isCool = true;
+
 {
-  var a = "outer a";
-  var b = "outer b";
-  {
-    var a = 12 + (12 / 12);
-    print a;
-    print b;
-    print c;
-  }
-  print a;
-  print b;
-  print c;
+    var name = "Nested";
+    var greeting = "Hello from " + name;
+    print greeting;
+    print age;
 }
-print a;
-print b;
-print c;
+
+var result = (10 + 5) * 2;
+print "Math result:";
+print result;
+
+var x = 100;
+x = x - 50;
+print x;
+
+var check = 10 > 5;
+print "Is 10 > 5?";
+print check;
+
+print name;
+print "The end!";

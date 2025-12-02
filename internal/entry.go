@@ -25,10 +25,6 @@ func (v *Viri) Error(token Token, message string) {
 }
 
 func (v *Viri) Run(bytes *bytes.Buffer) {
-	fmt.Println("------- source code ---------")
-	fmt.Println(bytes.String())
-	fmt.Println("------- source code ---------")
-
 	scanner := NewScanner(bytes);
 	tokens, err := scanner.scan()
 	if err != nil {
@@ -37,28 +33,12 @@ func (v *Viri) Run(bytes *bytes.Buffer) {
 		return
 	}
 
-	fmt.Println("------- tokens ---------")
-	for _, token := range tokens {
-		fmt.Println(token.ToString())
-	}
-	fmt.Println("------- tokens ---------")
-
 	parser := NewParser(tokens, v);
-	statements, err := parser.parse();
-	if err != nil {
-		fmt.Println("Error parsing expression:", err)
-		v.hasErrors = true
-		return
-	}
-
+	statements := parser.parse();
+	
 	if v.hasErrors{
 		return;
 	}
-	
-	// astPrinter := NewAstPrinter()
-	// fmt.Println("------- AST tree ---------")
-	// fmt.Print(astPrinter.PrintTree(expr))
-	// fmt.Println("------- AST tree ---------")
 
 	interpreter := NewInterpreter(v)
 	err = interpreter.Interpret(statements)
