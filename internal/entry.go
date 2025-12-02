@@ -5,13 +5,24 @@ import (
 	"fmt"
 )
 
-type Viri struct {
-	hasErrors bool
+type ViriRuntimeConfig struct {
+	DebugMode bool
 }
 
-func NewViriRuntime() *Viri {
+type Viri struct {
+	hasErrors bool
+	config *ViriRuntimeConfig
+}
+
+func NewViriRuntime(config *ViriRuntimeConfig) *Viri {
+	if config == nil {
+		config = &ViriRuntimeConfig{
+			DebugMode: false,
+		}
+	}
 	return &Viri{
 		hasErrors: false,
+		config: config,
 	}
 }
 
@@ -38,6 +49,12 @@ func (v *Viri) Run(bytes *bytes.Buffer) {
 	
 	if v.hasErrors{
 		return;
+	}
+
+	if v.config.DebugMode {
+		astPrinter := NewAstPrinter()
+		tree := astPrinter.PrintStatements(statements)
+		fmt.Println(tree)
 	}
 
 	interpreter := NewInterpreter(v)
