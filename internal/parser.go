@@ -85,14 +85,28 @@ func (p *Parser) parseStmt() (Stmt, error) {
 		return stmt, nil	
 	}
 	if p.match(LEFT_BRACE){
-		block, err := p.parseBlockStmt()
+		stmt, err := p.parseBlockStmt()
 		if err != nil {
 			return nil, err
 		}
-		return block, nil
+		return stmt, nil
 	}
 	if p.match(IF){
 		stmt, err := p.parseIfStmt()
+		if err != nil {
+			return nil, err
+		}
+		return stmt, nil
+	}
+	if p.match(WHILE){
+		stmt, err := p.parseWhileStmt()
+		if err != nil {
+			return nil, err
+		}
+		return stmt, nil
+	}
+	if p.match(FOR){
+		stmt, err := p.parseForStmt()
 		if err != nil {
 			return nil, err
 		}
@@ -103,6 +117,93 @@ func (p *Parser) parseStmt() (Stmt, error) {
 		return nil, err
 	}
 	return stmts, nil
+}
+
+func (p *Parser) parseWhileStmt() (Stmt, error){
+	_, err := p.consume(LEFT_PAREN, "Expect '(' after while.")
+	if err != nil {
+		return nil, err
+	}
+	condition, err := p.parseExpr()
+	if err != nil {
+		return nil, err
+	}
+	_, err = p.consume(RIGHT_PAREN, "Expect ')' after while condition.")
+	if err != nil {
+		return nil, err
+	}
+	body, err := p.parseStmt()
+	if err != nil {
+		return nil, err
+	}
+	return &WhileStmt{
+		condition: condition,
+		body: body,
+	}, nil
+}
+
+func (p *Parser) parseForStmt() (Stmt, error){
+	_, err := p.consume(LEFT_PAREN, "Expect '(' after for.")
+	if err != nil {
+		return nil, err
+	}
+	
+	var intializer Stmt;
+
+	if p.match(VAR){
+		intializer, err = p.parseVarDecl()
+		if err != nil {
+			return nil, err
+		}
+	} else if p.match(SEMICOLON){
+		intializer = nil
+	} else {
+		intializer, err = p.parseExprStmt()
+		if err != nil {
+			return nil, err
+		}
+	}
+	
+	var condition Expr;
+
+	if !p.check(SEMICOLON){
+		condition, err = p.parseExpr()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	_, err = p.consume(SEMICOLON, "Expect ';' after for condition.")
+	if err != nil {
+		return nil, err
+	}
+
+	var increment Expr;
+	if !p.check(RIGHT_PAREN){
+		increment, err = p.parseExpr()
+		if err != nil {
+			return nil, err
+		}
+		
+	}
+
+	_, err = p.consume(RIGHT_PAREN, "Expect ')' after for.")
+	if err != nil {
+		return nil, err
+	}
+
+	body, err := p.parseStmt()
+	if err != nil {
+		return nil, err
+	}
+
+	return &Block{ statements: []Stmt{intializer, &WhileStmt{
+		condition: condition,
+		body: &Block{
+				statements: []Stmt{body, &ExprStmt{Expr: increment}},
+			},
+		}},
+	}, nil
 }
 
 func (p *Parser) parseIfStmt() (Stmt, error){

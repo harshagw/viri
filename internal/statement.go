@@ -14,6 +14,7 @@ type StmtVisitor interface{
 	visitVarDeclStmt(varDeclStmt *VarDeclStmt) (interface{}, error)
 	visitBlock(block *Block) (interface{}, error)
 	visitIfStmt(ifStmt *IfStmt) (interface{}, error)
+	visitWhileStmt(whileStmt *WhileStmt) (interface{}, error)
 }
 
 type ExprStmt struct {
@@ -74,4 +75,13 @@ type IfStmt struct {
 
 func (ifStmt *IfStmt) Accept(visitor StmtVisitor) (interface{}, error) {
 	return visitor.visitIfStmt(ifStmt)
+}
+
+type WhileStmt struct {
+	condition Expr
+	body Stmt
+}
+
+func (whileStmt *WhileStmt) Accept(visitor StmtVisitor) (interface{}, error) {
+	return visitor.visitWhileStmt(whileStmt)
 }

@@ -86,6 +86,23 @@ func (i *Interpreter) visitIfStmt(ifStmt *IfStmt) (interface{}, error) {
 	return nil, nil
 }
 
+func (i *Interpreter) visitWhileStmt(whileStmt *WhileStmt) (interface{}, error) {
+	for {
+		condition, err := i.evaluateExpr(whileStmt.condition)
+		if err != nil {
+			return nil, err
+		}
+		if !i.isTruthy(condition) {
+			break
+		}
+		_, err = i.evaluateStmt(whileStmt.body)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return nil, nil
+}
+
 func (i *Interpreter) evaluateStmt(stmt Stmt) (interface{}, error) {
 	return stmt.Accept(i)
 }
