@@ -44,26 +44,27 @@ func (v *Viri) Run(bytes *bytes.Buffer) {
 	fmt.Println("------- tokens ---------")
 
 	parser := NewParser(tokens, v);
-	expr, err := parser.parse();
+	statements, err := parser.parse();
 	if err != nil {
 		fmt.Println("Error parsing expression:", err)
 		v.hasErrors = true
 		return
 	}
+
+	if v.hasErrors{
+		return;
+	}
 	
-	astPrinter := NewAstPrinter()
-	fmt.Println("------- AST tree ---------")
-	fmt.Print(astPrinter.PrintTree(expr))
-	fmt.Println("------- AST tree ---------")
+	// astPrinter := NewAstPrinter()
+	// fmt.Println("------- AST tree ---------")
+	// fmt.Print(astPrinter.PrintTree(expr))
+	// fmt.Println("------- AST tree ---------")
 
 	interpreter := NewInterpreter(v)
-	result, err := interpreter.Interpret(expr)
+	err = interpreter.Interpret(statements)
 	if err != nil {
 		fmt.Println("Error interpreting expression:", err)
 		v.hasErrors = true
 		return
 	}
-	fmt.Println("------- result ---------")
-	fmt.Println(result)
-	fmt.Println("------- result ---------")
 }

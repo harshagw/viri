@@ -23,8 +23,45 @@ func NewParser(tokens []Token, viri *Viri) *Parser {
 	}
 }
 
-func (p *Parser) parse() (Expr, error) {
-	return p.parseExpr()
+func (p *Parser) parse() ([]Stmt, error) {
+	statements := []Stmt{}
+	for !p.isAtEnd() {
+		statement, err := p.parseStmt()
+		if err != nil {
+			return nil, err
+		}
+		statements = append(statements, statement)
+	}
+	return statements, nil
+}
+
+func (p *Parser) parseStmt() (Stmt, error) {
+	if p.match(PRINT) {
+		return p.parsePrintStmt()
+	}
+	return p.parseExprStmt()
+}
+
+func (p *Parser) parsePrintStmt() (Stmt, error) {
+	expr, err := p.parseExpr()
+	if err != nil {
+		return nil, err
+	}
+	p.consume(SEMICOLON, "Expect ';' after print expression.")
+	return &PrintStmt{
+		Expr: expr,
+	}, nil
+}
+
+func (p *Parser) parseExprStmt() (Stmt, error) {
+	expr, err := p.parseExpr()
+	if err != nil {
+		return nil, err
+	}
+	p.consume(SEMICOLON, "Expect ';' after expression statement.")
+	return &ExprStmt{
+		Expr: expr,
+	}, nil
 }
 
 func (p *Parser) parseExpr() (Expr, error) {
@@ -193,7 +230,7 @@ func (p *Parser) consume(tokenType TokenType, message string) Token {
 	if p.check(tokenType) {
 		return p.advance()
 	}
-	p.error(p.peek(), message)
+	p.error(p.previous(), message)
 	return p.previous()
 }
 

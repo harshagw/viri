@@ -1,1 +1,4 @@
-12312 / 123
+print 1312 + 12;
+print "one";
+print true;
+print 2 + 1;

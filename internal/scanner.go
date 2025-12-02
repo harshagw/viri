@@ -213,7 +213,13 @@ func (s *Scanner) scanIdentifier() {
 
 	text := s.getLexeme()
 	tokenType := s.identifierType(text)
-	s.addToken(tokenType)
+	if tokenType == TRUE {
+		s.addTokenWithLiteral(TRUE, true)
+	} else if tokenType == FALSE{
+		s.addTokenWithLiteral(FALSE, false)
+	} else {
+		s.addToken(tokenType)
+	}
 }
 
 func (s *Scanner) identifierType(text string) TokenType {

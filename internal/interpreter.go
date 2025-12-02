@@ -1,6 +1,8 @@
 package internal
 
-import "errors"
+import (
+	"errors"
+)
 
 type Interpreter struct {
 	viri *Viri
@@ -12,24 +14,46 @@ func NewInterpreter(viri *Viri) *Interpreter {
 	}
 }
 
-func (i *Interpreter) Interpret(expr Expr) (interface{}, error) {
-	result, err := i.evaluate(expr)
-	if err != nil {
-		return nil, err
+func (i *Interpreter) Interpret(stmts []Stmt) (error) {
+	for _, stmt := range stmts {
+		_, err := stmt.Accept(i)
+		if err != nil {
+			return err
+		}
 	}
-	return result, nil
+	return nil
 }
 
-func (i *Interpreter) evaluate(expr Expr) (interface{}, error) {
+func (i *Interpreter) evaluateExpr(expr Expr) (interface{}, error) {
 	return expr.Accept(i)
 }
 
-func (i *Interpreter) visitBinaryExp(binaryExp *BinaryExp) (interface{}, error) {
-	rightExp, err := i.evaluate(binaryExp.Right);
+func (i *Interpreter) visitPrintStmt(printStmt *PrintStmt) (interface{}, error) {
+	value, err := i.evaluateExpr(printStmt.Expr)
 	if err != nil {
 		return nil, err
 	}
-	leftExp, err := i.evaluate(binaryExp.Left);
+	err = printStmt.Print(value)
+	if err != nil {
+		return nil, err
+	}
+	return value, nil
+}
+
+func (i *Interpreter) visitExprStmt(exprStmt *ExprStmt) (interface{}, error) {
+	value, err := i.evaluateExpr(exprStmt.Expr)
+	if err != nil {
+		return nil, err
+	}
+	return value, nil
+}
+
+func (i *Interpreter) visitBinaryExp(binaryExp *BinaryExp) (interface{}, error) {
+	rightExp, err := i.evaluateExpr(binaryExp.Right);
+	if err != nil {
+		return nil, err
+	}
+	leftExp, err := i.evaluateExpr(binaryExp.Left);
 	if err != nil {
 		return nil, err
 	}
@@ -103,7 +127,7 @@ func (i *Interpreter) visitBinaryExp(binaryExp *BinaryExp) (interface{}, error) 
 
 
 func (i *Interpreter) visitGrouping(grouping *Grouping) (interface{}, error) {
-	return i.evaluate(grouping.Expr)
+	return i.evaluateExpr(grouping.Expr)
 }
 
 func (i *Interpreter) visitLiteral(literal *Literal) (interface{}, error) {
@@ -111,7 +135,7 @@ func (i *Interpreter) visitLiteral(literal *Literal) (interface{}, error) {
 }
 
 func (i *Interpreter) visitUnary(unary *Unary) (interface{}, error) {
-	rightExpr, err := i.evaluate(unary.Expr)
+	rightExpr, err := i.evaluateExpr(unary.Expr)
 	if err != nil {
 		return nil, err
 	}

@@ -1,15 +1,16 @@
 package internal
 
 type Expr interface{
-	Accept(visitor Visitor) (interface{}, error)
+	Accept(visitor ExprVisitor) (interface{}, error)
 }
 
-type Visitor interface{
+type ExprVisitor interface{
 	visitBinaryExp(binaryExp *BinaryExp) (interface{}, error)
 	visitGrouping(grouping *Grouping) (interface{}, error)
 	visitLiteral(literal *Literal) (interface{}, error)
 	visitUnary(unary *Unary) (interface{}, error)
 }
+
 
 type BinaryExp struct {
 	Left Expr
@@ -17,7 +18,7 @@ type BinaryExp struct {
 	Operator Token
 }
 
-func (binaryExp *BinaryExp) Accept(visitor Visitor) (interface{}, error) {
+func (binaryExp *BinaryExp) Accept(visitor ExprVisitor) (interface{}, error) {
 	return visitor.visitBinaryExp(binaryExp)
 }
 
@@ -26,7 +27,7 @@ type Grouping struct {
 }
 
 
-func (grouping *Grouping) Accept(visitor Visitor) (interface{}, error) {
+func (grouping *Grouping) Accept(visitor ExprVisitor) (interface{}, error) {
 	return visitor.visitGrouping(grouping)
 }
 
@@ -34,7 +35,7 @@ type Literal struct {
 	Value interface{}
 }
 
-func (literal *Literal) Accept(visitor Visitor) (interface{}, error) {
+func (literal *Literal) Accept(visitor ExprVisitor) (interface{}, error) {
 	return visitor.visitLiteral(literal)
 }
 
@@ -43,6 +44,6 @@ type Unary struct {
 	Expr Expr
 }
 
-func (unary *Unary) Accept(visitor Visitor) (interface{}, error) {
+func (unary *Unary) Accept(visitor ExprVisitor) (interface{}, error) {
 	return visitor.visitUnary(unary)
 }
