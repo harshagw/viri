@@ -19,6 +19,11 @@ func (v *Viri) HasErrors() bool {
 	return v.hasErrors
 }
 
+func (v *Viri) Error(token Token, message string) {
+	fmt.Printf("Error at line %d: %s\n", token.Line, message)
+	v.hasErrors = true
+}
+
 func (v *Viri) Run(bytes *bytes.Buffer) {
 	fmt.Println("------- source code ---------")
 	fmt.Println(bytes.String())
@@ -37,4 +42,17 @@ func (v *Viri) Run(bytes *bytes.Buffer) {
 		fmt.Println(token.ToString())
 	}
 	fmt.Println("------- tokens ---------")
+
+	parser := NewParser(tokens, v);
+	expr, err := parser.parse();
+	if err != nil {
+		fmt.Println("Error parsing expression:", err)
+		v.hasErrors = true
+		return
+	}
+	
+	astPrinter := NewAstPrinter()
+	fmt.Println("------- AST tree ---------")
+	fmt.Print(astPrinter.PrintTree(expr))
+	fmt.Println("------- AST tree ---------")
 }
