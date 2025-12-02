@@ -2,12 +2,13 @@ var name = "Viri";
 var age = 5;
 var isCool = true;
 
-{
+if(123 >= 123){
+    print "executing if";
     var name = "Nested";
     var greeting = "Hello from " + name;
     print greeting;
     print age;
-}
+}else print "executing else";
 
 var result = (10 + 5) * 2;
 print "Math result:";
@@ -23,3 +24,6 @@ print check;
 
 print name;
 print "The end!";
+
+print "hi" or 2; // "hi".
+print nil or "no"; // "yes".

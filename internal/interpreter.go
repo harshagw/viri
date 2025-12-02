@@ -73,6 +73,24 @@ func (i *Interpreter) visitExprStmt(exprStmt *ExprStmt) (interface{}, error) {
 	return value, nil
 }
 
+func (i *Interpreter) visitIfStmt(ifStmt *IfStmt) (interface{}, error) {
+	value, err := i.evaluateExpr(ifStmt.condition)
+	if err != nil {
+		return nil, err
+	}
+	if i.isTruthy(value) {
+		return i.evaluateStmt(ifStmt.ifBranch)
+	}else if ifStmt.elseBranch != nil {
+		return i.evaluateStmt(ifStmt.elseBranch)
+	}
+	return nil, nil
+}
+
+func (i *Interpreter) evaluateStmt(stmt Stmt) (interface{}, error) {
+	return stmt.Accept(i)
+}
+	
+
 func (i *Interpreter) evaluateExpr(expr Expr) (interface{}, error) {
 	return expr.Accept(i)
 }
@@ -191,6 +209,19 @@ func (i *Interpreter) visitAssignment(assignment *Assignment) (interface{}, erro
 		return nil, err
 	}
 	return value, nil
+}
+
+func (i *Interpreter) visitLogical(logical *Logical) (interface{}, error) {
+	left, err := i.evaluateExpr(logical.Left)
+	if err != nil {
+		return nil, err
+	}
+	if (logical.Operator.TokenType == OR && i.isTruthy(left)) || (logical.Operator.TokenType == AND && !i.isTruthy(left)) {
+		// short circuit
+		return left, nil;
+	}
+
+	return i.evaluateExpr(logical.Right)
 }
 
 // Utility functions

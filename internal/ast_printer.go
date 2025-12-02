@@ -143,3 +143,15 @@ func (astPrinter *AstPrinter) visitAssignment(assignment *Assignment) (interface
 	}
 	return fmt.Sprintf("%s = %s", assignment.Name.Lexeme, value), nil
 }
+
+func (astPrinter *AstPrinter) visitLogical(logical *Logical) (interface{}, error) {
+	left, err := logical.Left.Accept(astPrinter)
+	if err != nil {
+		return nil, err
+	}
+	right, err := logical.Right.Accept(astPrinter)
+	if err != nil {
+		return nil, err
+	}
+	return fmt.Sprintf("(%s %s %s)", left, logical.Operator.Lexeme, right), nil
+}

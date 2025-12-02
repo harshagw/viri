@@ -13,6 +13,7 @@ type StmtVisitor interface{
 	visitPrintStmt(printStmt *PrintStmt) (interface{}, error)
 	visitVarDeclStmt(varDeclStmt *VarDeclStmt) (interface{}, error)
 	visitBlock(block *Block) (interface{}, error)
+	visitIfStmt(ifStmt *IfStmt) (interface{}, error)
 }
 
 type ExprStmt struct {
@@ -63,4 +64,14 @@ type Block struct {
 
 func (block *Block) Accept(visitor StmtVisitor) (interface{}, error) {
 	return visitor.visitBlock(block)
+}
+
+type IfStmt struct {
+	condition Expr
+	ifBranch Stmt
+	elseBranch Stmt
+}
+
+func (ifStmt *IfStmt) Accept(visitor StmtVisitor) (interface{}, error) {
+	return visitor.visitIfStmt(ifStmt)
 }

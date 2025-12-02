@@ -10,6 +10,7 @@ const (
 	UNARY ExprType = "UNARY"
 	VARIABLE ExprType = "VARIABLE"
 	ASSIGNMENT ExprType = "ASSIGNMENT"
+	LOGICAL ExprType = "LOGICAL"
 )
 
 type Expr interface{
@@ -24,6 +25,7 @@ type ExprVisitor interface{
 	visitUnary(unary *Unary) (interface{}, error)
 	visitVariable(variable *Variable) (interface{}, error)
 	visitAssignment(assignment *Assignment) (interface{}, error)
+	visitLogical(logical *Logical) (interface{}, error)
 }
 
 type BinaryExp struct {
@@ -100,4 +102,18 @@ func (assignment *Assignment) Accept(visitor ExprVisitor) (interface{}, error) {
 
 func (assignment *Assignment) Type() ExprType {
 	return ASSIGNMENT
+}
+
+type Logical struct {
+	Left Expr
+	Operator Token
+	Right Expr
+}
+
+func (logical *Logical) Accept(visitor ExprVisitor) (interface{}, error) {
+	return visitor.visitLogical(logical)
+}
+
+func (logical *Logical) Type() ExprType {
+	return LOGICAL
 }

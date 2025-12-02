@@ -91,11 +91,53 @@ func (p *Parser) parseStmt() (Stmt, error) {
 		}
 		return block, nil
 	}
+	if p.match(IF){
+		stmt, err := p.parseIfStmt()
+		if err != nil {
+			return nil, err
+		}
+		return stmt, nil
+	}
 	stmts, err := p.parseExprStmt()
 	if err != nil {
 		return nil, err
 	}
 	return stmts, nil
+}
+
+func (p *Parser) parseIfStmt() (Stmt, error){
+	_, err := p.consume(LEFT_PAREN, "Expect '(' after if.")
+	if err != nil {
+		return nil, err
+	}
+	condition, err := p.parseExpr()
+	if err != nil {
+		return nil, err
+	}
+	_, err = p.consume(RIGHT_PAREN, "Expect ')' after if condition.")
+	if err != nil {
+		return nil, err
+	}
+	ifStmt, err := p.parseStmt()
+	if err != nil {
+		return nil, err
+	}
+	if !p.match(ELSE){
+		return &IfStmt{
+			condition: condition,
+			ifBranch: ifStmt,
+			elseBranch: nil,
+		}, nil
+	}
+	elseStmt, err := p.parseStmt()
+	if err != nil {
+		return nil, err
+	}
+	return &IfStmt{
+		condition: condition,
+		ifBranch: ifStmt,
+		elseBranch: elseStmt,
+	}, nil
 }
 
 func (p *Parser) parseBlockStmt() (Stmt, error){
@@ -148,8 +190,7 @@ func (p *Parser) parseExpr() (Expr, error) {
 }
 
 func (p *Parser) parseAssignment() (Expr, error) {
-	expr,err := p.parseEquality()
-
+	expr,err := p.parseLogicOr()
 	if err != nil {
 		return nil, err
 	}
@@ -172,6 +213,46 @@ func (p *Parser) parseAssignment() (Expr, error) {
 		}, nil
 	}
 
+	return expr, nil
+}
+
+func (p *Parser) parseLogicOr() (Expr, error) {
+	expr, err := p.parseLogicAnd()
+	if err != nil {
+		return nil, err
+	}
+	for p.match(OR) {
+		operator := p.peekPrevious()
+		right, err := p.parseLogicAnd()
+		if err != nil {
+			return nil, err
+		}
+		expr = &Logical{
+			Left: expr,
+			Operator: *operator,
+			Right: right,
+		}
+	}
+	return expr, nil
+}
+
+func (p *Parser) parseLogicAnd() (Expr, error) {
+	expr, err := p.parseEquality()
+	if err != nil {
+		return nil, err
+	}
+	for p.match(AND) {
+		operator := p.peekPrevious()
+		right, err := p.parseEquality()
+		if err != nil {
+			return nil, err
+		}
+		expr = &Logical{
+			Left: expr,
+			Operator: *operator,
+			Right: right,
+		}
+	}
 	return expr, nil
 }
 
