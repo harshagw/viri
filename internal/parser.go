@@ -26,20 +26,84 @@ func NewParser(tokens []Token, viri *Viri) *Parser {
 func (p *Parser) parse() ([]Stmt, error) {
 	statements := []Stmt{}
 	for !p.isAtEnd() {
-		statement, err := p.parseStmt()
+		stmt, err := p.parseDeclaration()
 		if err != nil {
 			return nil, err
 		}
-		statements = append(statements, statement)
+		statements = append(statements, stmt)
 	}
 	return statements, nil
 }
 
+func (p *Parser) parseDeclaration() (Stmt, error) {
+	var (
+		stmt Stmt
+		err  error
+	)
+	if p.match(VAR) {
+		stmt, err = p.parseVarDecl()
+	} else {
+		stmt, err = p.parseStmt()
+	}
+	if err != nil {
+		p.synchronize()
+		return nil, err
+	}
+	return stmt, nil
+}
+
+func (p *Parser) parseVarDecl() (Stmt, error) {
+	name := p.consume(IDENTIFIER, "Expect variable name.")
+	var initializer Expr
+	var err error
+	if p.match(EQUAL) {
+		initializer, err = p.parseExpr()
+		if err != nil {
+			return nil, err
+		}
+	}
+	p.consume(SEMICOLON, "Expect ';' after variable declaration.")
+	return &VarDeclStmt{
+		tokenName:  name.Lexeme,
+		initializer: initializer,
+	}, nil
+}
+
 func (p *Parser) parseStmt() (Stmt, error) {
 	if p.match(PRINT) {
-		return p.parsePrintStmt()
+		stmt, err := p.parsePrintStmt()
+		if err != nil {
+			return nil, err
+		}
+		return stmt, nil	
 	}
-	return p.parseExprStmt()
+	if p.match(LEFT_BRACE){
+		block, err := p.parseBlock()
+		if err != nil {
+			return nil, err
+		}
+		return block, nil
+	}
+	stmts, err := p.parseExprStmt()
+	if err != nil {
+		return nil, err
+	}
+	return stmts, nil
+}
+
+func (p *Parser) parseBlock() (*Block, error){
+	statements := []Stmt{}
+	for !p.isAtEnd() && !p.check(RIGHT_BRACE) {
+		stmt, err := p.parseDeclaration()
+		if err != nil {
+			return nil, err
+		}
+		statements = append(statements, stmt)
+	}
+	p.consume(RIGHT_BRACE, "Expect '}' after block.")
+	return &Block{
+		statements: statements,
+	}, nil
 }
 
 func (p *Parser) parsePrintStmt() (Stmt, error) {
@@ -65,7 +129,35 @@ func (p *Parser) parseExprStmt() (Stmt, error) {
 }
 
 func (p *Parser) parseExpr() (Expr, error) {
-	return p.parseEquality()
+	return p.parseAssignment()
+}
+
+func (p *Parser) parseAssignment() (Expr, error) {
+	expr,err := p.parseEquality()
+
+	if err != nil {
+		return nil, err
+	}
+
+	if p.match(EQUAL) {
+		assignment := p.previous()
+		value, err := p.parseAssignment()
+		if err != nil {
+			return nil, err
+		}
+
+		if expr.Type() != VARIABLE {
+			return nil, p.error(assignment, "Expect variable name.")
+		}
+
+		variable := expr.(*Variable)
+		return &Assignment{
+			Name: variable.Name,
+			Value: value,
+		}, nil
+	}
+
+	return expr, nil
 }
 
 func (p *Parser) parseEquality() (Expr, error) {
@@ -168,6 +260,11 @@ func (p *Parser) parsePrimary() (Expr, error) {
 		return &Literal{
 			Value: p.previous().Literal,
 		},nil	
+	}
+	if (p.match(IDENTIFIER)) {
+		return &Variable{
+			Name: p.previous(),
+		}, nil
 	}
 	if p.match(LEFT_PAREN) {
 		expr, err := p.parseExpr()

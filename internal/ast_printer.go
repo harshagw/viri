@@ -6,11 +6,11 @@ import (
 )
 
 type AstPrinter struct {
-	
+	viri *Viri
 }
 
-func NewAstPrinter() *AstPrinter{
-	return &AstPrinter{}
+func NewAstPrinter(viri *Viri) *AstPrinter{
+	return &AstPrinter{viri: viri}
 }
 
 func (astPrinter *AstPrinter) Print(expr Expr) (string, error) {
@@ -128,4 +128,18 @@ func (astPrinter *AstPrinter) visitUnary(unary *Unary) (interface{}, error) {
 		return nil, err
 	}
 	return fmt.Sprintf("(%s %s)", unary.Operator.Lexeme, expr), nil
+}
+
+// Fix me - use the variable name to access the value stored
+
+func (astPrinter *AstPrinter) visitVariable(variable *Variable) (interface{}, error) {
+	return fmt.Sprintf("Assignment(%s)", variable.Name.Lexeme), nil
+}
+
+func (astPrinter *AstPrinter) visitAssignment(assignment *Assignment) (interface{}, error) {
+	value, err := assignment.Value.Accept(astPrinter)
+	if err != nil {
+		return nil, err
+	}
+	return fmt.Sprintf("%s = %s", assignment.Name.Lexeme, value), nil
 }

@@ -217,6 +217,8 @@ func (s *Scanner) scanIdentifier() {
 		s.addTokenWithLiteral(TRUE, true)
 	} else if tokenType == FALSE{
 		s.addTokenWithLiteral(FALSE, false)
+	} else if tokenType == IDENTIFIER {
+		s.addTokenWithLiteral(IDENTIFIER, text)
 	} else {
 		s.addToken(tokenType)
 	}

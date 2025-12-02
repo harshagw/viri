@@ -1,4 +1,19 @@
-print 1312 + 12;
-print "one";
-print true;
-print 2 + 1;
+var a = "global a";
+var b = "global b";
+var c = "global c";
+{
+  var a = "outer a";
+  var b = "outer b";
+  {
+    var a = 12 + (12 / 12);
+    print a;
+    print b;
+    print c;
+  }
+  print a;
+  print b;
+  print c;
+}
+print a;
+print b;
+print c;
