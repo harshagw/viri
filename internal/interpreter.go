@@ -4,6 +4,13 @@ import (
 	"errors"
 )
 
+// BreakError is a special error type used for control flow
+type BreakError struct{}
+
+func (e *BreakError) Error() string {
+	return "break"
+}
+
 type Interpreter struct {
 	viri *Viri
 	environment *Environment
@@ -30,13 +37,15 @@ func (i *Interpreter) visitBlock(block *Block) (interface{}, error) {
 	previousEnvironment := i.environment
 	newEnvironment := NewEnvironment(i.environment)
 	i.environment = newEnvironment
+	defer func() {
+		i.environment = previousEnvironment
+	}()
 	for _, stmt := range block.statements {
-		_, err := stmt.Accept(i)
+		_, err := i.evaluateStmt(stmt)
 		if err != nil {
 			return nil, err
 		}
 	}
-	i.environment = previousEnvironment
 	return nil, nil
 }
 
@@ -97,6 +106,11 @@ func (i *Interpreter) visitWhileStmt(whileStmt *WhileStmt) (interface{}, error) 
 		}
 		_, err = i.evaluateStmt(whileStmt.body)
 		if err != nil {
+			// Check if it's a break error
+			if _, ok := err.(*BreakError); ok {
+				// Break out of the loop
+				break
+			}
 			return nil, err
 		}
 	}
@@ -104,7 +118,12 @@ func (i *Interpreter) visitWhileStmt(whileStmt *WhileStmt) (interface{}, error) 
 }
 
 func (i *Interpreter) evaluateStmt(stmt Stmt) (interface{}, error) {
-	return stmt.Accept(i)
+	result, err := stmt.Accept(i)
+	// Automatically propagate BreakError
+	if _, ok := err.(*BreakError); ok {
+		return nil, err
+	}
+	return result, err
 }
 	
 
@@ -268,4 +287,8 @@ func (i *Interpreter) isEqual(a interface{}, b interface{}) bool {
 		return false
 	}
 	return a == b
+}
+
+func (i *Interpreter) visitBreakStmt(breakStmt *BreakStmt) (interface{}, error) {
+	return nil, &BreakError{}
 }

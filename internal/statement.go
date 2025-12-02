@@ -15,6 +15,7 @@ type StmtVisitor interface{
 	visitBlock(block *Block) (interface{}, error)
 	visitIfStmt(ifStmt *IfStmt) (interface{}, error)
 	visitWhileStmt(whileStmt *WhileStmt) (interface{}, error)
+	visitBreakStmt(breakStmt *BreakStmt) (interface{}, error)
 }
 
 type ExprStmt struct {
@@ -84,4 +85,12 @@ type WhileStmt struct {
 
 func (whileStmt *WhileStmt) Accept(visitor StmtVisitor) (interface{}, error) {
 	return visitor.visitWhileStmt(whileStmt)
+}
+
+type BreakStmt struct {
+	keyword Token
+}
+
+func (breakStmt *BreakStmt) Accept(visitor StmtVisitor) (interface{}, error) {
+	return visitor.visitBreakStmt(breakStmt)
 }

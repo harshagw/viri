@@ -242,6 +242,7 @@ func (s *Scanner) identifierType(text string) TokenType {
 		"return": RETURN,
 		"super":  SUPER,
 		"this":   THIS,
+		"break":  BREAK,
 	}
 
 	if tokenType, ok := keywords[text]; ok {

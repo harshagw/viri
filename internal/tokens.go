@@ -53,6 +53,7 @@ const (
 	RETURN
 	SUPER
 	THIS
+	BREAK
 	
 	EOF
 )
@@ -135,6 +136,8 @@ func (tt TokenType) String() string {
 		return "SUPER"
 	case THIS:
 		return "THIS"
+	case BREAK:
+		return "BREAK"
 	case EOF:
 		return "EOF"
 	default:

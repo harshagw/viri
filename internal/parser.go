@@ -13,6 +13,7 @@ type Parser struct {
 	viri *Viri
 	tokens []Token
 	current int
+	loopDepth int
 }
 
 func NewParser(tokens []Token, viri *Viri) *Parser {
@@ -112,6 +113,13 @@ func (p *Parser) parseStmt() (Stmt, error) {
 		}
 		return stmt, nil
 	}
+	if p.match(BREAK){
+		stmt, err := p.parseBreakStmt()
+		if err != nil {
+			return nil, err
+		}
+		return stmt, nil
+	}
 	stmts, err := p.parseExprStmt()
 	if err != nil {
 		return nil, err
@@ -132,7 +140,9 @@ func (p *Parser) parseWhileStmt() (Stmt, error){
 	if err != nil {
 		return nil, err
 	}
+	p.loopDepth++
 	body, err := p.parseStmt()
+	p.loopDepth--
 	if err != nil {
 		return nil, err
 	}
@@ -192,7 +202,9 @@ func (p *Parser) parseForStmt() (Stmt, error){
 		return nil, err
 	}
 
+	p.loopDepth++
 	body, err := p.parseStmt()
+	p.loopDepth--
 	if err != nil {
 		return nil, err
 	}
@@ -269,6 +281,20 @@ func (p *Parser) parsePrintStmt() (Stmt, error) {
 	}
 	return &PrintStmt{
 		Expr: expr,
+	}, nil
+}
+
+func (p *Parser) parseBreakStmt() (Stmt, error) {
+	keyword := p.peekPrevious()
+	if p.loopDepth == 0 {
+		return nil, p.error(keyword, "break statement must be inside a loop.")
+	}
+	_, err := p.consume(SEMICOLON, "Expect ';' after break.")
+	if err != nil {
+		return nil, err
+	}
+	return &BreakStmt{
+		keyword: *keyword,
 	}, nil
 }
 
