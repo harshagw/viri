@@ -13,9 +13,13 @@ func NewAstPrinter() *AstPrinter{
 	return &AstPrinter{}
 }
 
-func (astPrinter *AstPrinter) Print(expr Expr) string {
-	result := expr.Accept(astPrinter).(string)
-	return result
+func (astPrinter *AstPrinter) Print(expr Expr) (string, error) {
+	result, err := expr.Accept(astPrinter)
+	if err != nil {
+		return "", err
+	}
+	return result.(string), nil
+	
 }
 
 func (astPrinter *AstPrinter) PrintTree(expr Expr) string {
@@ -90,22 +94,38 @@ func (astPrinter *AstPrinter) printTree(expr Expr, builder *strings.Builder, pre
 	}
 }
 
-func (astPrinter *AstPrinter) visitBinaryExp(binaryExp *BinaryExp) interface{} {
+func (astPrinter *AstPrinter) visitBinaryExp(binaryExp *BinaryExp) (interface{}, error) {
+	left, err := binaryExp.Left.Accept(astPrinter)
+	if err != nil {
+		return nil, err
+	}
+	right, err := binaryExp.Right.Accept(astPrinter)
+	if err != nil {
+		return nil, err
+	}
 	return fmt.Sprintf("(%s %s %s)",
-		binaryExp.Left.Accept(astPrinter),
+		left,
 		binaryExp.Operator.Lexeme,
-		binaryExp.Right.Accept(astPrinter),
-	)
+		right,
+	), nil
 }
 
-func (astPrinter *AstPrinter) visitGrouping(grouping *Grouping) interface{} {
-	return fmt.Sprintf("(%s)", grouping.Expr.Accept(astPrinter))
+func (astPrinter *AstPrinter) visitGrouping(grouping *Grouping) (interface{}, error) {
+	expr, err := grouping.Expr.Accept(astPrinter)
+	if err != nil {
+		return nil, err
+	}
+	return fmt.Sprintf("(%s)", expr), nil
 }
 
-func (astPrinter *AstPrinter) visitLiteral(literal *Literal) interface{} {
-	return fmt.Sprintf("%v", literal.Value)
+func (astPrinter *AstPrinter) visitLiteral(literal *Literal) (interface{}, error) {
+	return fmt.Sprintf("%v", literal.Value), nil
 }
 
-func (astPrinter *AstPrinter) visitUnary(unary *Unary) interface{} {
-	return fmt.Sprintf("(%s %s)", unary.Operator.Lexeme, unary.Expr.Accept(astPrinter))
+func (astPrinter *AstPrinter) visitUnary(unary *Unary) (interface{}, error) {
+	expr, err := unary.Expr.Accept(astPrinter)
+	if err != nil {
+		return nil, err
+	}
+	return fmt.Sprintf("(%s %s)", unary.Operator.Lexeme, expr), nil
 }

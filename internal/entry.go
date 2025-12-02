@@ -55,4 +55,15 @@ func (v *Viri) Run(bytes *bytes.Buffer) {
 	fmt.Println("------- AST tree ---------")
 	fmt.Print(astPrinter.PrintTree(expr))
 	fmt.Println("------- AST tree ---------")
+
+	interpreter := NewInterpreter(v)
+	result, err := interpreter.Interpret(expr)
+	if err != nil {
+		fmt.Println("Error interpreting expression:", err)
+		v.hasErrors = true
+		return
+	}
+	fmt.Println("------- result ---------")
+	fmt.Println(result)
+	fmt.Println("------- result ---------")
 }
