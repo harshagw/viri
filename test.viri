@@ -75,3 +75,18 @@ fun makeCounter() {
 var counter = makeCounter();
 counter();
 counter();
+
+var a = "global";
+{
+  fun showA() {
+    print a;
+  }
+
+  showA();
+  a = a + "24423423";
+  showA();
+}
+
+{
+  var a = 12312;
+}

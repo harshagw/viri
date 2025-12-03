@@ -14,11 +14,14 @@ const FILE_EXTENSION = ".viri"
 func main() {
 	var fileName string
 	var debugMode bool
+	showWarning := true
 
 	for i := 1; i < len(os.Args); i++ {
 		arg := os.Args[i]
 		if arg == "--debug" {
 			debugMode = true
+		} else if arg == "--no-warning" {
+			showWarning = false
 		} else if strings.HasSuffix(arg, FILE_EXTENSION) {
 			fileName = arg
 		}
@@ -31,6 +34,7 @@ func main() {
 
 	config := &internal.ViriRuntimeConfig{
 		DebugMode: debugMode,
+		DisableWarning: !showWarning,
 	}
 	viri := internal.NewViriRuntime(config)
 

@@ -48,7 +48,7 @@ func (ps *PrintStmt) Print(value interface{}) error {
 }
 
 type VarDeclStmt struct {
-	tokenName string
+	token Token
 	initializer Expr
 }
 

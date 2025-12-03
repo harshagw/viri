@@ -118,7 +118,7 @@ func (astPrinter *AstPrinter) visitPrintStmt(printStmt *PrintStmt) (interface{},
 }
 
 func (astPrinter *AstPrinter) visitVarDeclStmt(varDeclStmt *VarDeclStmt) (interface{}, error) {
-	astPrinter.writeTreeNode(astPrinter.prefix, astPrinter.isLast, fmt.Sprintf("VarDeclStmt(%s)", varDeclStmt.tokenName))
+	astPrinter.writeTreeNode(astPrinter.prefix, astPrinter.isLast, fmt.Sprintf("VarDeclStmt(%s)", varDeclStmt.token.Lexeme))
 	if varDeclStmt.initializer != nil {
 		newPrefix := astPrinter.calculateNewPrefix(astPrinter.prefix, astPrinter.isLast)
 		astPrinter.printExpr(varDeclStmt.initializer, newPrefix, true)

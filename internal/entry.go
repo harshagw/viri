@@ -7,6 +7,7 @@ import (
 
 type ViriRuntimeConfig struct {
 	DebugMode bool
+	DisableWarning bool
 }
 
 type Viri struct {
@@ -18,6 +19,7 @@ func NewViriRuntime(config *ViriRuntimeConfig) *Viri {
 	if config == nil {
 		config = &ViriRuntimeConfig{
 			DebugMode: false,
+			DisableWarning: false,
 		}
 	}
 	return &Viri{
@@ -33,6 +35,13 @@ func (v *Viri) HasErrors() bool {
 func (v *Viri) Error(token Token, message string) {
 	fmt.Printf("Error at line %d: %s\n", token.Line, message)
 	v.hasErrors = true
+}
+
+func (v *Viri) Warn(token Token, message string) {
+	if v.config.DisableWarning {
+		return
+	}
+	fmt.Printf("Warning at line %d: %s\n", token.Line, message)
 }
 
 func (v *Viri) Run(bytes *bytes.Buffer) {
@@ -58,6 +67,13 @@ func (v *Viri) Run(bytes *bytes.Buffer) {
 	}
 
 	interpreter := NewInterpreter(v)
+
+	resolver := NewResolver(v, interpreter)
+	resolver.Resolve(statements)
+	if v.hasErrors {
+		return
+	}
+
 	err = interpreter.Interpret(statements)
 	if err != nil {
 		fmt.Println("Error interpreting expression:", err)

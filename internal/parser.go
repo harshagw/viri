@@ -72,7 +72,7 @@ func (p *Parser) parseVarDecl() (Stmt, error) {
 	}
 	
 	return &VarDeclStmt{
-		tokenName:  name.Lexeme,
+		token: *name,
 		initializer: initializer,
 	}, nil
 }

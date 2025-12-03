@@ -26,6 +26,7 @@ type Interpreter struct {
 	viri *Viri
 	environment *Environment
 	globals *Environment
+	localMap map[Expr]int
 }
 
 func NewInterpreter(viri *Viri) *Interpreter {
@@ -35,6 +36,7 @@ func NewInterpreter(viri *Viri) *Interpreter {
 		viri: viri,
 		environment: globals,
 		globals: globals,
+		localMap: make(map[Expr]int),
 	}
 }
 
@@ -46,6 +48,10 @@ func (i *Interpreter) Interpret(stmts []Stmt) (error) {
 		}
 	}
 	return nil
+}
+
+func (i *Interpreter) resolve(expr Expr, depth int) {
+	i.localMap[expr] = depth
 }
 
 func (i *Interpreter) visitBlock(block *Block) (interface{}, error) {
@@ -94,9 +100,9 @@ func (i *Interpreter) visitVarDeclStmt(varDeclStmt *VarDeclStmt) (interface{}, e
 		if err != nil {
 			return nil, err
 		}
-		i.environment.define(varDeclStmt.tokenName, value)
+		i.environment.define(varDeclStmt.token.Lexeme, value)
 	} else {
-		i.environment.define(varDeclStmt.tokenName, nil)
+		i.environment.define(varDeclStmt.token.Lexeme, nil)
 	}
 	return nil, nil
 }
@@ -191,7 +197,7 @@ func (i *Interpreter) visitBinaryExp(binaryExp *BinaryExp) (interface{}, error) 
 		} else if leftIsStr && rightIsStr {
 			return leftStr + rightStr,nil
 		} else {
-			return nil, errors.New("operands to '+' must both be numbers or both be strings")
+			return nil, fmt.Errorf("operands to '+' must both be numbers or both be strings (left: %T=%v, right: %T=%v)", leftExp, leftExp, rightExp, rightExp)
 		}
 	case MINUS:
 		if !i.isNumber(leftExp) || !i.isNumber(rightExp) {
@@ -271,7 +277,10 @@ func (i *Interpreter) visitUnary(unary *Unary) (interface{}, error) {
 }
 
 func (i *Interpreter) visitVariable(variable *Variable) (interface{}, error) {
-	return i.environment.get(variable.Name.Literal.(string))
+	if dist, ok := i.localMap[variable]; ok {
+		return i.environment.getAt(dist, variable.Name.Lexeme)
+	}
+	return i.globals.get(variable.Name.Lexeme)
 }
 
 func (i *Interpreter) visitAssignment(assignment *Assignment) (interface{}, error) {
@@ -279,9 +288,16 @@ func (i *Interpreter) visitAssignment(assignment *Assignment) (interface{}, erro
 	if err != nil {
 		return nil, err
 	}
-	err = i.environment.assign(assignment.Name.Literal.(string), value)
-	if err != nil {
-		return nil, err
+	if dist, ok := i.localMap[assignment]; ok {
+		err = i.environment.assignAt(dist, assignment.Name.Lexeme, value)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		err = i.globals.assign(assignment.Name.Lexeme, value)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return value, nil
 }
