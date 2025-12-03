@@ -2,6 +2,8 @@ package internal
 
 import (
 	"errors"
+	"fmt"
+	"strconv"
 )
 
 // BreakError is a special error type used for control flow
@@ -11,15 +13,28 @@ func (e *BreakError) Error() string {
 	return "break"
 }
 
+// ReturnError is a special error type used for control flow
+type ReturnError struct {
+	value interface{}
+}
+
+func (e *ReturnError) Error() string {
+	return "return " + fmt.Sprintf("%v", e.value)
+}
+
 type Interpreter struct {
 	viri *Viri
 	environment *Environment
+	globals *Environment
 }
 
 func NewInterpreter(viri *Viri) *Interpreter {
+	globals := NewEnvironment(nil)
+	globals.define("clock", NewClock())
 	return &Interpreter{
 		viri: viri,
-		environment: NewEnvironment(nil),
+		environment: globals,
+		globals: globals,
 	}
 }
 
@@ -34,9 +49,13 @@ func (i *Interpreter) Interpret(stmts []Stmt) (error) {
 }
 
 func (i *Interpreter) visitBlock(block *Block) (interface{}, error) {
-	previousEnvironment := i.environment
 	newEnvironment := NewEnvironment(i.environment)
-	i.environment = newEnvironment
+	return i.executeBlock(block, newEnvironment)
+}
+
+func (i *Interpreter) executeBlock(block *Block, environment *Environment) (interface{}, error) {
+	previousEnvironment := i.environment
+	i.environment = environment
 	defer func() {
 		i.environment = previousEnvironment
 	}()
@@ -47,6 +66,26 @@ func (i *Interpreter) visitBlock(block *Block) (interface{}, error) {
 		}
 	}
 	return nil, nil
+}
+
+func (i *Interpreter) visitFunction(function *Function) (interface{}, error) {
+	callableFunction := NewCallableFunction(function, i.environment)
+	i.environment.define(function.token.Lexeme, callableFunction)
+	return nil, nil
+}
+
+func (i *Interpreter) visitReturnStmt(returnStmt *ReturnStmt) (interface{}, error) {
+	var value interface{}
+
+	if(returnStmt.value != nil){
+		var err error
+		value, err = i.evaluateExpr(returnStmt.value)
+		if err != nil {
+			return nil, err
+		}
+	}
+	
+	return value, &ReturnError{value: value}
 }
 
 func (i *Interpreter) visitVarDeclStmt(varDeclStmt *VarDeclStmt) (interface{}, error) {
@@ -258,6 +297,34 @@ func (i *Interpreter) visitLogical(logical *Logical) (interface{}, error) {
 	}
 
 	return i.evaluateExpr(logical.Right)
+}
+
+func (i *Interpreter) visitCall(call *Call) (interface{}, error) {
+	callee, err := i.evaluateExpr(call.callee)
+	if err != nil {
+		return nil, err
+	}
+
+	arguments := []interface{}{}
+	for _, argument := range call.arguments {
+		argument, err := i.evaluateExpr(argument)
+		if err != nil {
+			return nil, err
+		}
+		arguments = append(arguments, argument)
+	}
+
+	callable, ok := callee.(Callable)
+
+	if !ok {
+		return nil, errors.New("can only call which is a function")
+	}	
+	
+	if callable.Arity() != len(arguments) {
+		return nil, errors.New("expected " + strconv.Itoa(callable.Arity()) + " arguments but got " + strconv.Itoa(len(arguments)))
+	}
+
+	return callable.Call(i, arguments)
 }
 
 // Utility functions

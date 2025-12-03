@@ -85,6 +85,22 @@ func (astPrinter *AstPrinter) visitLogical(logical *Logical) (interface{}, error
 	return nil, nil
 }
 
+func (astPrinter *AstPrinter) visitCall(call *Call) (interface{}, error) {
+	astPrinter.writeTreeNode(astPrinter.prefix, astPrinter.isLast, "Call")
+	newPrefix := astPrinter.calculateNewPrefix(astPrinter.prefix, astPrinter.isLast)
+	astPrinter.printExpr(call.callee, newPrefix, false)
+	astPrinter.writeTreeNode(newPrefix, true, "arguments")
+	argumentsPrefix := astPrinter.calculateNewPrefix(newPrefix, true)
+	for i, argument := range call.arguments {
+		argumentIsLast := i == len(call.arguments)-1
+		astPrinter.printExpr(argument, argumentsPrefix, argumentIsLast)
+	}
+	if len(call.arguments) == 0{
+		astPrinter.writeTreeNode(argumentsPrefix, true, "nil")
+	}
+	return nil, nil
+}
+
 // StmtVisitor implementation
 
 func (astPrinter *AstPrinter) visitExprStmt(exprStmt *ExprStmt) (interface{}, error) {
@@ -148,6 +164,26 @@ func (astPrinter *AstPrinter) visitWhileStmt(whileStmt *WhileStmt) (interface{},
 
 func (astPrinter *AstPrinter) visitBreakStmt(breakStmt *BreakStmt) (interface{}, error) {
 	astPrinter.writeTreeNode(astPrinter.prefix, astPrinter.isLast, "BreakStmt")
+	return nil, nil
+}
+
+func (astPrinter *AstPrinter) visitFunction(function *Function) (interface{}, error) {
+	astPrinter.writeTreeNode(astPrinter.prefix, astPrinter.isLast, "Function ("+function.token.Lexeme+")")
+	newPrefix := astPrinter.calculateNewPrefix(astPrinter.prefix, astPrinter.isLast)
+	astPrinter.writeTreeNode(newPrefix, false, "parameters")
+	parametersPrefix := astPrinter.calculateNewPrefix(newPrefix, false)
+	for i, parameter := range function.parameters {
+		astPrinter.writeTreeNode(parametersPrefix, i == len(function.parameters)-1, parameter.Lexeme)
+	}
+	astPrinter.writeTreeNode(newPrefix, false, "body")
+	astPrinter.printStmt(function.body, parametersPrefix, true)
+	return nil, nil
+}
+
+func (astPrinter *AstPrinter) visitReturnStmt(returnStmt *ReturnStmt) (interface{}, error) {
+	astPrinter.writeTreeNode(astPrinter.prefix, astPrinter.isLast, "ReturnStmt")
+	newPrefix := astPrinter.calculateNewPrefix(astPrinter.prefix, astPrinter.isLast)
+	astPrinter.printExpr(returnStmt.value, newPrefix, true)
 	return nil, nil
 }
 

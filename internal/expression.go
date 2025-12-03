@@ -11,6 +11,7 @@ const (
 	VARIABLE ExprType = "VARIABLE"
 	ASSIGNMENT ExprType = "ASSIGNMENT"
 	LOGICAL ExprType = "LOGICAL"
+	CALL ExprType = "CALL"
 )
 
 type Expr interface{
@@ -26,6 +27,7 @@ type ExprVisitor interface{
 	visitVariable(variable *Variable) (interface{}, error)
 	visitAssignment(assignment *Assignment) (interface{}, error)
 	visitLogical(logical *Logical) (interface{}, error)
+	visitCall(call *Call) (interface{}, error)
 }
 
 type BinaryExp struct {
@@ -116,4 +118,18 @@ func (logical *Logical) Accept(visitor ExprVisitor) (interface{}, error) {
 
 func (logical *Logical) Type() ExprType {
 	return LOGICAL
+}
+
+type Call struct {
+	callee Expr
+	arguments []Expr
+	closingParen Token
+}
+
+func (call *Call) Accept(visitor ExprVisitor) (interface{}, error) {
+	return visitor.visitCall(call)
+}
+
+func (call *Call) Type() ExprType {
+	return CALL
 }

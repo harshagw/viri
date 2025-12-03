@@ -120,11 +120,93 @@ func (p *Parser) parseStmt() (Stmt, error) {
 		}
 		return stmt, nil
 	}
+	if p.match(FUN){
+		stmt, err := p.parseFunction()
+		if err != nil {
+			return nil, err
+		}
+		return stmt, nil
+	}
+	if p.match(RETURN){
+		stmt, err := p.parseReturnStmt()
+		if err != nil {
+			return nil, err
+		}
+		return stmt, nil
+	}
+
 	stmts, err := p.parseExprStmt()
 	if err != nil {
 		return nil, err
 	}
 	return stmts, nil
+}
+
+func (p *Parser) parseReturnStmt() (Stmt, error) {
+	keyword := p.peekPrevious()
+	var value Expr
+	var err error
+
+	if !p.check(SEMICOLON){
+		value, err = p.parseExpr()
+		if err != nil {
+			return nil, err
+		}
+	}
+	
+	_, err = p.consume(SEMICOLON, "Expect ';' after return statement.")
+	if err != nil {
+		return nil, err
+	}
+	return &ReturnStmt{
+		keyword: *keyword,
+		value: value,
+	}, nil
+}
+
+func (p *Parser) parseFunction() (Stmt, error) {
+	name, err := p.consume(IDENTIFIER, "Expect function name.")
+	if err != nil {
+		return nil, err
+	}
+	_, err = p.consume(LEFT_PAREN, "Expect '(' after function name.")
+	if err != nil {
+		return nil, err
+	}
+	parameters := make([]Token, 0)
+	if !p.check(RIGHT_PAREN) {
+		for {
+			if len(parameters) >= 255 {
+				return nil, p.error(p.peekPrevious(), "Can't have more than 255 parameters.")
+			}
+
+			parameter, err := p.consume(IDENTIFIER, "Expect parameter name.")
+			if err != nil {
+				return nil, err
+			}
+			parameters = append(parameters, *parameter)
+			if !p.match(COMMA) {
+				break
+			}
+		}
+	}	
+	_, err = p.consume(RIGHT_PAREN, "Expect ')' after parameters.")
+	if err != nil {
+		return nil, err
+	}
+	_, err = p.consume(LEFT_BRACE, "Expect '{' before block.")
+	if err != nil {
+		return nil, err
+	}
+	body, err := p.parseBlockStmt()
+	if err != nil {
+		return nil, err
+	}
+	return &Function{
+		token: *name,
+		parameters: parameters,
+		body: body,
+	}, nil
 }
 
 func (p *Parser) parseWhileStmt() (Stmt, error){
@@ -253,7 +335,7 @@ func (p *Parser) parseIfStmt() (Stmt, error){
 	}, nil
 }
 
-func (p *Parser) parseBlockStmt() (Stmt, error){
+func (p *Parser) parseBlockStmt() (*Block, error){
 	statements := []Stmt{}
 	for !p.isAtEnd() && !p.check(RIGHT_BRACE) {
 		stmt := p.parseDeclaration()
@@ -475,7 +557,50 @@ func (p *Parser) parseUnary() (Expr, error) {
 			Expr: right,
 		}, nil
 	}
-	return p.parsePrimary()
+	return p.parseCall()
+}
+
+func (p *Parser) parseCall() (Expr, error) {
+	expr, err := p.parsePrimary()
+	if err != nil {
+		return nil, err
+	}
+	for p.match(LEFT_PAREN) {
+		expr, err = p.parseFinishCall(expr)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return expr, nil
+}
+
+func (p *Parser) parseFinishCall(expr Expr) (Expr, error) {
+	arguments := make([]Expr, 0)
+		
+	if !p.check(RIGHT_PAREN) {
+		for {
+			if len(arguments) >= 255 {
+				return nil, p.error(p.peekPrevious(), "Can't have more than 255 arguments.")
+			}
+			expr, err := p.parseExpr()
+			if err != nil {
+				return nil, err
+			}
+			arguments = append(arguments, expr)
+			if !p.match(COMMA) {
+				break
+			}
+		}
+	}
+	_, err := p.consume(RIGHT_PAREN, "Expect ')' after arguments.")
+	if err != nil {
+		return nil, err
+	}
+	return &Call{
+		callee: expr,
+		arguments: arguments,
+		closingParen: *p.peekPrevious(),
+	}, nil
 }
 
 func (p *Parser) parsePrimary() (Expr, error) {

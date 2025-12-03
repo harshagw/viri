@@ -6,12 +6,15 @@ greeting = "what is this";
 
 var count = 0;
 
-print "Counting from 0 to 5:";
+clock();
 
+print "Counting from 0 to 5:";
 while (count <= 5) {
     print count;
     count = count + 1;
 }
+
+clock();
 
 print "Multiples of 2 up to 10:";
 
@@ -33,3 +36,42 @@ if (result > 20) {
 } else {
     print "Result is 20 or less.";
 }
+
+fun sayHi(first, last) {
+  print "Hi, " + first + " " + last + "!";
+}
+
+sayHi("Dear", "Reader");
+
+fun fib(n) {
+  if (n <= 1) return n;
+  return fib(n - 2) + fib(n - 1);
+}
+
+for (var i = 0; i < 20; i = i + 1) {
+  print fib(i);
+}
+
+fun count(n) {
+  while (n < 100) {
+    if (n == 3) return n; // <--
+    print n;
+    n = n + 1;
+  }
+}
+
+count(1);
+
+fun makeCounter() {
+  var i = 0;
+  fun count() {
+    i = i + 1;
+    print i;
+  }
+
+  return count;
+}
+
+var counter = makeCounter();
+counter();
+counter();
