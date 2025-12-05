@@ -93,9 +93,37 @@ func (i *Interpreter) visitFunction(function *ast.FunctionStmt) (objects.Object,
 
 func (i *Interpreter) visitClass(class *ast.ClassStmt) (objects.Object, error) {
 	i.environment.Define(class.Name.Lexeme, objects.NewNil())
-	methods := objects.BuildMethods(class.Methods, i.environment)
-	classObj := objects.NewClass(class.Name.Lexeme, methods)
-	if err := i.environment.Assign(class.Name.Lexeme, classObj); err != nil {
+
+	var superclass objects.Object
+	var err error
+ 	methodEnvironment := i.environment
+
+	if class.SuperClass != nil {
+		superclass, err = i.evalExpr(class.SuperClass)
+		if err != nil {
+			return nil, err
+		}
+		if superclass.Type() != objects.TypeClass {
+			return nil, errors.New("superclass must be a class at line")
+		}
+	}
+
+	var superClassObj *objects.Class
+	if superclass != nil {
+		superClassObj = superclass.(*objects.Class)
+		methodEnvironment = objects.NewEnvironment(i.environment)
+		methodEnvironment.Define("super", superClassObj)
+	}
+
+	methods := make(map[string]*objects.Function)
+	for _, method := range class.Methods {
+		function := objects.NewFunction(method, methodEnvironment, method.Name.Lexeme == "init")
+		methods[method.Name.Lexeme] = function
+	}
+
+	classObj := objects.NewClass(class.Name.Lexeme, superClassObj, methods)
+
+	if err := methodEnvironment.Assign(class.Name.Lexeme, classObj); err != nil {
 		return nil, err
 	}
 	return nil, nil
@@ -201,6 +229,8 @@ func (i *Interpreter) evalExpr(expr ast.Expr) (objects.Object, error) {
 		return i.visitSetExpr(e)
 	case *ast.ThisExpr:
 		return i.visitThisExpr(e)
+	case *ast.SuperExpr:
+		return i.visitSuperExpr(e)
 	default:
 		return nil, nil
 	}
@@ -381,6 +411,38 @@ func (i *Interpreter) visitSetExpr(set *ast.SetExpr) (objects.Object, error) {
 		return nil, err
 	}
 	return value, nil
+}
+
+func (i *Interpreter) visitSuperExpr(super *ast.SuperExpr) (objects.Object, error) {
+	dist, ok := i.locals[super];
+	if !ok {
+		return nil, errors.New("superclass not found")
+	}
+	superClassObject, err := i.environment.GetAt(dist, "super")
+	if err != nil {
+		return nil, err
+	}
+	superclass, ok := superClassObject.(*objects.Class)
+	if !ok {
+		return nil, errors.New("superclass must be a class")
+	}
+	method, ok := superclass.LookupMethod(super.Method.Lexeme)
+	if !ok {
+		return nil, errors.New("method not found")
+	}
+	if method == nil {
+		return nil, errors.New("undefined property '" + super.Method.Lexeme + "'")
+	}
+
+	thisInstance, err := i.environment.GetAt(dist - 1, "this")
+	if err != nil {
+		return nil, err
+	}
+	subClassInstance, ok := thisInstance.(*objects.ClassInstance)
+	if !ok {
+		return nil, errors.New("this instance must be a class instance")
+	}
+	return method.Bind(subClassInstance), nil
 }
 
 // Utilities

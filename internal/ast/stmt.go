@@ -70,6 +70,7 @@ func (*ReturnStmt) stmtNode() {}
 
 type ClassStmt struct {
 	Name    token.Token
+	SuperClass *VariableExpr
 	Methods []*FunctionStmt
 }
 

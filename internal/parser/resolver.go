@@ -30,6 +30,7 @@ type ClassType int
 const (
 	ClassTypeNone ClassType = iota
 	ClassTypeClass
+	ClassTypeSubclass
 )
 
 type Resolver struct {
@@ -53,9 +54,11 @@ func NewResolver(diagnosticHandler objects.DiagnosticHandler) *Resolver {
 }
 
 func (r *Resolver) Resolve(stmts []ast.Stmt) (map[ast.Expr]int, error) {
+	r.beginScope()
 	for _, stmt := range stmts {
 		r.resolveStmt(stmt)
 	}
+	r.endScope()
 	if r.hadError {
 		return r.locals, ErrResolve
 	}
@@ -115,6 +118,8 @@ func (r *Resolver) resolveExpr(expr ast.Expr) {
 		r.resolveExpr(e.Object)
 	case *ast.ThisExpr:
 		r.visitThisExpr(e)
+	case *ast.SuperExpr:
+		r.visitSuperExpr(e)
 	}
 }
 
@@ -142,13 +147,13 @@ func (r *Resolver) visitVariable(variable *ast.VariableExpr) {
 		}
 	}
 	r.resolveLocal(variable, variable.Name)
-	r.markVariableUsed(variable.Name.Lexeme)
+	r.markVariableUsed(variable.Name)
 }
 
 func (r *Resolver) visitAssignment(assignment *ast.AssignExpr) {
 	r.resolveExpr(assignment.Value)
 	r.resolveLocal(assignment, assignment.Name)
-	r.markVariableUsed(assignment.Name.Lexeme)
+	r.markVariableUsed(assignment.Name)
 }
 
 func (r *Resolver) resolveLocal(expr ast.Expr, name token.Token) {
@@ -165,7 +170,7 @@ func (r *Resolver) visitFunction(function *ast.FunctionStmt) {
 	r.define(function.Name)
 
 	newFunctionType := FunctionTypeFunction
-	if function.Name.Lexeme == "init" {
+	if r.currentClass != ClassTypeNone && function.Name.Lexeme == "init" {
 		newFunctionType = FunctionTypeInitializer
 	}
 	r.resolveFunction(function, newFunctionType)
@@ -174,8 +179,26 @@ func (r *Resolver) visitFunction(function *ast.FunctionStmt) {
 func (r *Resolver) visitClass(class *ast.ClassStmt) {
 	r.declare(class.Name)
 	r.define(class.Name)
+
 	previousClassType := r.currentClass
 	r.currentClass = ClassTypeClass
+
+	if class.SuperClass != nil {
+		if class.SuperClass.Name.Lexeme == class.Name.Lexeme {
+			r.reportError(class.SuperClass.Name, "A class cannot inherit from itself.")
+			return
+		}
+
+		r.resolveExpr(class.SuperClass)
+		
+		r.beginScope()
+
+		r.currentClass = ClassTypeSubclass
+
+		superToken := token.New(token.SUPER, "super", nil, class.SuperClass.Name.Line)
+		r.declare(superToken)
+		r.define(superToken)
+	}
 
 	r.beginScope()
 	thisToken := token.New(token.THIS, "this", nil, class.Name.Line)
@@ -187,6 +210,11 @@ func (r *Resolver) visitClass(class *ast.ClassStmt) {
 	}
 
 	r.endScope()
+
+	if class.SuperClass != nil {
+		r.endScope()
+	}
+
 	r.currentClass = previousClassType
 }
 
@@ -249,6 +277,18 @@ func (r *Resolver) visitThisExpr(this *ast.ThisExpr) {
 	r.resolveLocal(this, this.Keyword)
 }
 
+func (r *Resolver) visitSuperExpr(super *ast.SuperExpr) {
+	if r.currentClass == ClassTypeNone {
+		r.reportError(super.Keyword, "Can't use 'super' outside of a class.")
+		return
+	}
+	if r.currentClass != ClassTypeSubclass {
+		r.reportError(super.Keyword, "Can't use 'super' in a class with no superclass.")
+		return
+	}
+	r.resolveLocal(super, super.Keyword)
+}
+
 // Scope utilities
 
 func (r *Resolver) beginScope() {
@@ -262,7 +302,7 @@ func (r *Resolver) endScope() {
 
 	scope := r.scopes[len(r.scopes)-1]
 	for name, info := range scope {
-		if info.defined && !info.used && name != "this" {
+		if info.defined && !info.used && name != "this" && name != "super" {
 			r.reportWarn(info.token, "Local variable '"+name+"' is declared but never used.")
 		}
 	}
@@ -304,9 +344,9 @@ func (r *Resolver) define(tok token.Token) {
 	}
 }
 
-func (r *Resolver) markVariableUsed(name string) {
+func (r *Resolver) markVariableUsed(tok token.Token) {
 	for i := len(r.scopes) - 1; i >= 0; i-- {
-		if info, ok := r.scopes[i][name]; ok {
+		if info, ok := r.scopes[i][tok.Lexeme]; ok {
 			info.used = true
 			return
 		}

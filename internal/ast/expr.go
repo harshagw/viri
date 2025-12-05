@@ -83,3 +83,10 @@ type ThisExpr struct {
 }
 
 func (*ThisExpr) exprNode() {}
+
+type SuperExpr struct {
+	Keyword token.Token
+	Method  token.Token
+}
+
+func (*SuperExpr) exprNode() {}

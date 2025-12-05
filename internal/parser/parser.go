@@ -138,6 +138,16 @@ func (p *Parser) parseClass() (ast.Stmt, error) {
 	if err != nil {
 		return nil, err
 	}
+	var superclass *ast.VariableExpr
+	if p.match(token.LESS) {
+		superClassName, err := p.consume(token.IDENTIFIER, "Expect superclass name.")
+		if err != nil {
+			return nil, err
+		}
+		superclass = &ast.VariableExpr{
+			Name: *superClassName,
+		}
+	}
 	if _, err = p.consume(token.LEFT_BRACE, "Expect '{' before class body."); err != nil {
 		return nil, err
 	}
@@ -155,6 +165,7 @@ func (p *Parser) parseClass() (ast.Stmt, error) {
 	return &ast.ClassStmt{
 		Name:    *name,
 		Methods: methods,
+		SuperClass: superclass,
 	}, nil
 }
 
@@ -624,6 +635,20 @@ func (p *Parser) parsePrimary() (ast.Expr, error) {
 	if p.match(token.THIS) {
 		return &ast.ThisExpr{
 			Keyword: *p.peekPrevious(),
+		}, nil
+	}
+	if p.match(token.SUPER){
+		superToken := p.peekPrevious()
+		if _, err := p.consume(token.DOT, "Expect '.' after 'super'."); err != nil {
+			return nil, err
+		}
+		ident, err := p.consume(token.IDENTIFIER, "Expect superclass method name.")
+		if err != nil {
+			return nil, err
+		}
+		return &ast.SuperExpr{
+			Keyword: *superToken,
+			Method:  *ident,
 		}, nil
 	}
 	if p.match(token.LEFT_PAREN) {
