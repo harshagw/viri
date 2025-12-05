@@ -4,21 +4,21 @@ import "fmt"
 
 type Environment struct {
 	enclosing *Environment
-	values    map[string]interface{}
+	values    map[string]Object
 }
 
 func NewEnvironment(enclosing *Environment) *Environment {
 	return &Environment{
 		enclosing: enclosing,
-		values:    make(map[string]interface{}),
+		values:    make(map[string]Object),
 	}
 }
 
-func (e *Environment) Define(name string, value interface{}) {
+func (e *Environment) Define(name string, value Object) {
 	e.values[name] = value
 }
 
-func (e *Environment) Assign(name string, value interface{}) error {
+func (e *Environment) Assign(name string, value Object) error {
 	if _, ok := e.values[name]; !ok {
 		if e.enclosing != nil {
 			return e.enclosing.Assign(name, value)
@@ -29,7 +29,7 @@ func (e *Environment) Assign(name string, value interface{}) error {
 	return nil
 }
 
-func (e *Environment) Get(name string) (interface{}, error) {
+func (e *Environment) Get(name string) (Object, error) {
 	value, ok := e.values[name]
 	if !ok {
 		if e.enclosing != nil {
@@ -40,7 +40,7 @@ func (e *Environment) Get(name string) (interface{}, error) {
 	return value, nil
 }
 
-func (e *Environment) GetAt(distance int, name string) (interface{}, error) {
+func (e *Environment) GetAt(distance int, name string) (Object, error) {
 	env := e.ancestor(distance)
 	value, ok := env.values[name]
 	if !ok {
@@ -49,7 +49,7 @@ func (e *Environment) GetAt(distance int, name string) (interface{}, error) {
 	return value, nil
 }
 
-func (e *Environment) AssignAt(distance int, name string, value interface{}) error {
+func (e *Environment) AssignAt(distance int, name string, value Object) error {
 	e.ancestor(distance).values[name] = value
 	return nil
 }

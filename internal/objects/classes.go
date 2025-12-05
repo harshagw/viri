@@ -7,20 +7,24 @@ import (
 	"github.com/harshagw/viri/internal/token"
 )
 
-type CallableClass struct {
+// Class represents a user-defined class.
+type Class struct {
 	name    string
-	methods map[string]*CallableFunction
+	methods map[string]*Function
 }
 
-func NewCallableClass(name string, methods map[string]*CallableFunction) *CallableClass {
-	return &CallableClass{name: name, methods: methods}
+func NewClass(name string, methods map[string]*Function) *Class {
+	return &Class{name: name, methods: methods}
 }
 
-func (cc *CallableClass) String() string {
+func (cc *Class) String() string {
 	return "<class " + cc.name + ">"
 }
 
-func (cc *CallableClass) Arity() int {
+func (cc *Class) Inspect() string { return cc.String() }
+func (cc *Class) Type() Type      { return TypeClass }
+
+func (cc *Class) Arity() int {
 	initializer := cc.methods["init"]
 	if initializer != nil {
 		return initializer.Arity()
@@ -28,29 +32,34 @@ func (cc *CallableClass) Arity() int {
 	return 0
 }
 
-func (cc *CallableClass) Call(exec BlockExecutor, arguments []interface{}) (interface{}, error) {
+func (cc *Class) Call(exec BlockExecutor, arguments []Object) (Object, error) {
 	newInstance := NewClassInstance(cc)
 	initializer := cc.methods["init"]
 	if initializer != nil {
-		_, _ = initializer.Bind(newInstance).Call(exec, arguments)
+		if _, err := initializer.Bind(newInstance).Call(exec, arguments); err != nil {
+			return nil, err
+		}
 	}
 	return newInstance, nil
 }
 
 type ClassInstance struct {
-	class  *CallableClass
-	fields map[string]interface{}
+	class  *Class
+	fields map[string]Object
 }
 
-func NewClassInstance(class *CallableClass) *ClassInstance {
-	return &ClassInstance{class: class, fields: make(map[string]interface{})}
+func NewClassInstance(class *Class) *ClassInstance {
+	return &ClassInstance{class: class, fields: make(map[string]Object)}
 }
 
 func (ci *ClassInstance) String() string {
 	return "<instance " + ci.class.name + ">"
 }
 
-func (ci *ClassInstance) Get(name token.Token) (interface{}, error) {
+func (ci *ClassInstance) Inspect() string { return ci.String() }
+func (ci *ClassInstance) Type() Type      { return TypeInstance }
+
+func (ci *ClassInstance) Get(name token.Token) (Object, error) {
 	if value, ok := ci.fields[name.Lexeme]; ok {
 		return value, nil
 	}
@@ -60,27 +69,27 @@ func (ci *ClassInstance) Get(name token.Token) (interface{}, error) {
 	return nil, errors.New("instance does not have field " + name.Lexeme)
 }
 
-func (ci *ClassInstance) Set(name token.Token, value interface{}) error {
+func (ci *ClassInstance) Set(name token.Token, value Object) error {
 	ci.fields[name.Lexeme] = value
 	return nil
 }
 
 // BindMethod resolves a method name to a bound callable.
-func (ci *ClassInstance) BindMethod(method *CallableFunction) *CallableFunction {
+func (ci *ClassInstance) BindMethod(method *Function) *Function {
 	return method.Bind(ci)
 }
 
 // LookupMethod finds a method by name on the class (without binding).
-func (cc *CallableClass) LookupMethod(name string) (*CallableFunction, bool) {
+func (cc *Class) LookupMethod(name string) (*Function, bool) {
 	m, ok := cc.methods[name]
 	return m, ok
 }
 
 // BuildMethods constructs callable functions from AST method declarations.
-func BuildMethods(methods []*ast.FunctionStmt, closure *Environment) map[string]*CallableFunction {
-	result := make(map[string]*CallableFunction)
+func BuildMethods(methods []*ast.FunctionStmt, closure *Environment) map[string]*Function {
+	result := make(map[string]*Function)
 	for _, method := range methods {
-		function := NewCallableFunction(method, closure, method.Name.Lexeme == "init")
+		function := NewFunction(method, closure, method.Name.Lexeme == "init")
 		result[method.Name.Lexeme] = function
 	}
 	return result

@@ -8,8 +8,8 @@ func NewClock() *Clock {
 	return &Clock{}
 }
 
-func (c *Clock) Call(exec BlockExecutor, arguments []interface{}) (interface{}, error) {
-	return float64(time.Now().Unix()), nil
+func (c *Clock) Call(exec BlockExecutor, arguments []Object) (Object, error) {
+	return NewNumber(float64(time.Now().Unix())), nil
 }
 
 func (c *Clock) Arity() int {
@@ -19,3 +19,6 @@ func (c *Clock) Arity() int {
 func (c *Clock) String() string {
 	return "<native_fun clock>"
 }
+
+func (c *Clock) Inspect() string { return c.String() }
+func (c *Clock) Type() Type      { return TypeNativeFun }

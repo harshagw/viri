@@ -2,17 +2,18 @@ package objects
 
 import "github.com/harshagw/viri/internal/ast"
 
-type CallableFunction struct {
+// Function represents a user-defined function value.
+type Function struct {
 	declaration   *ast.FunctionStmt
 	closure       *Environment
 	isInitializer bool
 }
 
-func NewCallableFunction(declaration *ast.FunctionStmt, closure *Environment, isInitializer bool) *CallableFunction {
-	return &CallableFunction{declaration: declaration, closure: closure, isInitializer: isInitializer}
+func NewFunction(declaration *ast.FunctionStmt, closure *Environment, isInitializer bool) *Function {
+	return &Function{declaration: declaration, closure: closure, isInitializer: isInitializer}
 }
 
-func (cf *CallableFunction) Call(exec BlockExecutor, arguments []interface{}) (interface{}, error) {
+func (cf *Function) Call(exec BlockExecutor, arguments []Object) (Object, error) {
 	environment := NewEnvironment(cf.closure)
 	for idx, parameter := range cf.declaration.Params {
 		environment.Define(parameter.Lexeme, arguments[idx])
@@ -33,16 +34,24 @@ func (cf *CallableFunction) Call(exec BlockExecutor, arguments []interface{}) (i
 	return result, nil
 }
 
-func (cf *CallableFunction) Arity() int {
+func (cf *Function) Arity() int {
 	return len(cf.declaration.Params)
 }
 
-func (cf *CallableFunction) String() string {
+func (cf *Function) String() string {
 	return "<fun " + cf.declaration.Name.Lexeme + ">"
 }
 
-func (cf *CallableFunction) Bind(instance *ClassInstance) *CallableFunction {
+func (cf *Function) Bind(instance *ClassInstance) *Function {
 	environment := NewEnvironment(cf.closure)
 	environment.Define("this", instance)
-	return NewCallableFunction(cf.declaration, environment, cf.isInitializer)
+	return NewFunction(cf.declaration, environment, cf.isInitializer)
+}
+
+func (cf *Function) Type() Type {
+	return TypeFunction
+}
+
+func (cf *Function) Inspect() string {
+	return cf.String()
 }

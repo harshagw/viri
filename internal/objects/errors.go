@@ -2,7 +2,7 @@ package objects
 
 // ReturnError is used for function return control flow.
 type ReturnError struct {
-	Value interface{}
+	Value Object
 }
 
 func (e *ReturnError) Error() string { return "return" }
