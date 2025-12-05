@@ -21,6 +21,7 @@ func NewInterpreter(globals *objects.Environment) *Interpreter {
 		globals = objects.NewEnvironment(nil)
 	}
 	globals.Define("clock", objects.NewClock())
+	globals.Define("len", objects.NewLen())
 	return &Interpreter{
 		environment: globals,
 		globals:     globals,
@@ -81,7 +82,7 @@ func (i *Interpreter) evalStmt(stmt ast.Stmt) (objects.Object, error) {
 	case *ast.BreakStmt:
 		return nil, &objects.BreakError{}
 	default:
-		return nil, nil
+		return nil, errors.New("invalid statement")
 	}
 }
 
@@ -96,7 +97,7 @@ func (i *Interpreter) visitClass(class *ast.ClassStmt) (objects.Object, error) {
 
 	var superclass objects.Object
 	var err error
- 	methodEnvironment := i.environment
+	methodEnvironment := i.environment
 
 	if class.SuperClass != nil {
 		superclass, err = i.evalExpr(class.SuperClass)
@@ -104,7 +105,7 @@ func (i *Interpreter) visitClass(class *ast.ClassStmt) (objects.Object, error) {
 			return nil, err
 		}
 		if superclass.Type() != objects.TypeClass {
-			return nil, errors.New("superclass must be a class at line")
+			return nil, i.runtimeError(class.SuperClass.Name, "Superclass must be a class.")
 		}
 	}
 
@@ -124,7 +125,7 @@ func (i *Interpreter) visitClass(class *ast.ClassStmt) (objects.Object, error) {
 	classObj := objects.NewClass(class.Name.Lexeme, superClassObj, methods)
 
 	if err := methodEnvironment.Assign(class.Name.Lexeme, classObj); err != nil {
-		return nil, err
+		return nil, i.runtimeError(class.Name, err.Error())
 	}
 	return nil, nil
 }
@@ -232,7 +233,7 @@ func (i *Interpreter) evalExpr(expr ast.Expr) (objects.Object, error) {
 	case *ast.SuperExpr:
 		return i.visitSuperExpr(e)
 	default:
-		return nil, nil
+		return nil, errors.New("invalid expression")
 	}
 }
 
@@ -263,12 +264,12 @@ func (i *Interpreter) visitBinaryExpr(exp *ast.BinaryExpr) (objects.Object, erro
 				return objects.NewString(l.Value + fmt.Sprintf("%g", r.Value)), nil
 			}
 		}
-		return nil, fmt.Errorf("operands to '+' must both be numbers or both be strings (left: %T, right: %T)", left, right)
+		return nil, i.runtimeError(exp.Operator, fmt.Sprintf("Operands to '+' must both be numbers or both be strings or one string and other number (left: %T, right: %T).", left, right))
 	case token.MINUS, token.STAR, token.SLASH, token.GREATER, token.GREATER_EQUAL, token.LESS, token.LESS_EQUAL:
 		lf, lok := left.(*objects.Number)
 		rf, rok := right.(*objects.Number)
 		if !lok || !rok {
-			return nil, errors.New("operand must be a number")
+			return nil, i.runtimeError(exp.Operator, "Operands must be numbers.")
 		}
 		switch exp.Operator.Type {
 		case token.MINUS:
@@ -277,7 +278,7 @@ func (i *Interpreter) visitBinaryExpr(exp *ast.BinaryExpr) (objects.Object, erro
 			return objects.NewNumber(lf.Value * rf.Value), nil
 		case token.SLASH:
 			if rf.Value == 0 {
-				return nil, errors.New("division by zero")
+				return nil, i.runtimeError(exp.Operator, "Division by zero.")
 			}
 			return objects.NewNumber(lf.Value / rf.Value), nil
 		case token.GREATER:
@@ -294,7 +295,7 @@ func (i *Interpreter) visitBinaryExpr(exp *ast.BinaryExpr) (objects.Object, erro
 	case token.BANG_EQUAL:
 		return objects.NewBool(!objects.IsEqual(left, right)), nil
 	}
-	return nil, errors.New("invalid operator")
+	return nil, i.runtimeError(exp.Operator, "Invalid operator.")
 }
 
 func (i *Interpreter) visitUnaryExpr(unary *ast.UnaryExpr) (objects.Object, error) {
@@ -306,13 +307,13 @@ func (i *Interpreter) visitUnaryExpr(unary *ast.UnaryExpr) (objects.Object, erro
 	case token.MINUS:
 		num, ok := right.(*objects.Number)
 		if !ok {
-			return nil, errors.New("operand must be a number")
+			return nil, i.runtimeError(unary.Operator, "Operand must be a number.")
 		}
 		return objects.NewNumber(-num.Value), nil
 	case token.BANG:
 		return objects.NewBool(!objects.IsTruthy(right)), nil
 	}
-	return nil, errors.New("invalid operator")
+	return nil, i.runtimeError(unary.Operator, "Invalid operator.")
 }
 
 func (i *Interpreter) visitVariableExpr(variable *ast.VariableExpr) (objects.Object, error) {
@@ -325,9 +326,17 @@ func (i *Interpreter) visitThisExpr(t *ast.ThisExpr) (objects.Object, error) {
 
 func (i *Interpreter) findVariable(expr ast.Expr, name token.Token) (objects.Object, error) {
 	if dist, ok := i.locals[expr]; ok {
-		return i.environment.GetAt(dist, name.Lexeme)
+		val, err := i.environment.GetAt(dist, name.Lexeme)
+		if err != nil {
+			return nil, i.runtimeError(name, err.Error())
+		}
+		return val, nil
 	}
-	return i.globals.Get(name.Lexeme)
+	val, err := i.globals.Get(name.Lexeme)
+	if err != nil {
+		return nil, i.runtimeError(name, err.Error())
+	}
+	return val, nil
 }
 
 func (i *Interpreter) visitAssignExpr(assign *ast.AssignExpr) (objects.Object, error) {
@@ -337,11 +346,11 @@ func (i *Interpreter) visitAssignExpr(assign *ast.AssignExpr) (objects.Object, e
 	}
 	if dist, ok := i.locals[assign]; ok {
 		if err := i.environment.AssignAt(dist, assign.Name.Lexeme, value); err != nil {
-			return nil, err
+			return nil, i.runtimeError(assign.Name, err.Error())
 		}
 	} else {
 		if err := i.globals.Assign(assign.Name.Lexeme, value); err != nil {
-			return nil, err
+			return nil, i.runtimeError(assign.Name, err.Error())
 		}
 	}
 	return value, nil
@@ -374,12 +383,16 @@ func (i *Interpreter) visitCallExpr(call *ast.CallExpr) (objects.Object, error) 
 	}
 	callable, ok := callee.(objects.Callable)
 	if !ok {
-		return nil, errors.New("can only call functions or classes")
+		return nil, i.runtimeError(call.ClosingParen, "Can only call functions or classes.")
 	}
 	if callable.Arity() != len(args) {
-		return nil, errors.New("expected " + strconv.Itoa(callable.Arity()) + " arguments but got " + strconv.Itoa(len(args)))
+		return nil, i.runtimeError(call.ClosingParen, "Expected "+strconv.Itoa(callable.Arity())+" arguments but got "+strconv.Itoa(len(args))+".")
 	}
-	return callable.Call(i, args)
+	result, err := callable.Call(i, args)
+	if err != nil {
+		return nil, i.runtimeError(call.ClosingParen, err.Error())
+	}
+	return result, nil
 }
 
 func (i *Interpreter) visitGetExpr(get *ast.GetExpr) (objects.Object, error) {
@@ -389,9 +402,13 @@ func (i *Interpreter) visitGetExpr(get *ast.GetExpr) (objects.Object, error) {
 	}
 	instance, ok := object.(*objects.ClassInstance)
 	if !ok {
-		return nil, errors.New("object is not a class instance")
+		return nil, i.runtimeError(get.Name, "Only instances have properties.")
 	}
-	return instance.Get(get.Name)
+	value, err := instance.Get(get.Name)
+	if err != nil {
+		return nil, i.runtimeError(get.Name, err.Error())
+	}
+	return value, nil
 }
 
 func (i *Interpreter) visitSetExpr(set *ast.SetExpr) (objects.Object, error) {
@@ -401,46 +418,46 @@ func (i *Interpreter) visitSetExpr(set *ast.SetExpr) (objects.Object, error) {
 	}
 	instance, ok := object.(*objects.ClassInstance)
 	if !ok {
-		return nil, errors.New("object is not a class instance")
+		return nil, i.runtimeError(set.Name, "Only instances have fields.")
 	}
 	value, err := i.evalExpr(set.Value)
 	if err != nil {
 		return nil, err
 	}
 	if err := instance.Set(set.Name, value); err != nil {
-		return nil, err
+		return nil, i.runtimeError(set.Name, err.Error())
 	}
 	return value, nil
 }
 
 func (i *Interpreter) visitSuperExpr(super *ast.SuperExpr) (objects.Object, error) {
-	dist, ok := i.locals[super];
+	dist, ok := i.locals[super]
 	if !ok {
-		return nil, errors.New("superclass not found")
+		return nil, i.runtimeError(super.Keyword, "Superclass not found.")
 	}
 	superClassObject, err := i.environment.GetAt(dist, "super")
 	if err != nil {
-		return nil, err
+		return nil, i.runtimeError(super.Keyword, err.Error())
 	}
 	superclass, ok := superClassObject.(*objects.Class)
 	if !ok {
-		return nil, errors.New("superclass must be a class")
+		return nil, i.runtimeError(super.Keyword, "Superclass must be a class.")
 	}
 	method, ok := superclass.LookupMethod(super.Method.Lexeme)
 	if !ok {
-		return nil, errors.New("method not found")
+		return nil, i.runtimeError(super.Method, "Undefined property '"+super.Method.Lexeme+"'.")
 	}
 	if method == nil {
-		return nil, errors.New("undefined property '" + super.Method.Lexeme + "'")
+		return nil, i.runtimeError(super.Method, "Undefined property '"+super.Method.Lexeme+"'.")
 	}
 
-	thisInstance, err := i.environment.GetAt(dist - 1, "this")
+	thisInstance, err := i.environment.GetAt(dist-1, "this")
 	if err != nil {
-		return nil, err
+		return nil, i.runtimeError(super.Keyword, err.Error())
 	}
 	subClassInstance, ok := thisInstance.(*objects.ClassInstance)
 	if !ok {
-		return nil, errors.New("this instance must be a class instance")
+		return nil, i.runtimeError(super.Keyword, "'this' must be a class instance.")
 	}
 	return method.Bind(subClassInstance), nil
 }
@@ -475,5 +492,12 @@ func literalToObject(v interface{}) objects.Object {
 		return objects.NewString(val)
 	default:
 		panic(fmt.Sprintf("unsupported literal conversion for type %T", v))
+	}
+}
+
+func (i *Interpreter) runtimeError(tok token.Token, message string) error {
+	return &objects.RuntimeError{
+		Token:   tok,
+		Message: message,
 	}
 }

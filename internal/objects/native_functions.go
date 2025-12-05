@@ -1,6 +1,9 @@
 package objects
 
-import "time"
+import (
+	"errors"
+	"time"
+)
 
 type Clock struct{}
 
@@ -22,3 +25,29 @@ func (c *Clock) String() string {
 
 func (c *Clock) Inspect() string { return c.String() }
 func (c *Clock) Type() Type      { return TypeNativeFun }
+
+type Len struct{}
+
+func NewLen() *Len {
+	return &Len{}
+}
+
+func (l *Len) Call(exec BlockExecutor, arguments []Object) (Object, error) {
+	value := arguments[0]
+	switch value.Type() {
+	case TypeString:
+		return NewNumber(float64(len(value.Inspect()))), nil
+	}
+	return nil, errors.New("invalid argument type for len function: " + string(value.Type()))
+}
+
+func (l *Len) Arity() int {
+	return 1
+}
+
+func (l *Len) String() string {
+	return "<native_fun len>"
+}
+
+func (l *Len) Inspect() string { return l.String() }
+func (l *Len) Type() Type      { return TypeNativeFun }

@@ -13,3 +13,11 @@ class B < A {
 
 var b = B();
 b.bar();
+
+var a = "fasdfs";
+
+print a = a + 123;
+
+print len(1232);
+
+print len;

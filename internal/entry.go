@@ -90,7 +90,11 @@ func (v *Viri) Run(bytes *bytes.Buffer) {
 	interpreter.SetLocals(locals)
 
 	if err := interpreter.Interpret(statements); err != nil {
-		fmt.Println("Error interpreting expression:", err)
+		if runtimeErr, ok := err.(*objects.RuntimeError); ok {
+			color.New(color.FgRed).Fprintf(color.Error, "Runtime error at line %d: %s\n", runtimeErr.Token.Line, runtimeErr.Message)
+		} else {
+			fmt.Println("Runtime error:", err)
+		}
 		v.hasErrors = true
 		return
 	}
