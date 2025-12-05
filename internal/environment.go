@@ -6,13 +6,13 @@ import (
 
 type Environment struct {
 	enclosing *Environment
-	values map[string]interface{}
+	values    map[string]interface{}
 }
 
 func NewEnvironment(enclosing *Environment) *Environment {
 	return &Environment{
 		enclosing: enclosing,
-		values: make(map[string]interface{}),
+		values:    make(map[string]interface{}),
 	}
 }
 
@@ -54,7 +54,7 @@ func (e *Environment) getAt(distance int, name string) (interface{}, error) {
 func (e *Environment) assignAt(distance int, name string, value interface{}) error {
 	e.ancestor(distance).values[name] = value
 
-	return nil;
+	return nil
 }
 
 func (e *Environment) ancestor(distance int) *Environment {
@@ -64,5 +64,3 @@ func (e *Environment) ancestor(distance int) *Environment {
 	}
 	return environment
 }
-
-

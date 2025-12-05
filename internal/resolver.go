@@ -1,5 +1,7 @@
 package internal
 
+import "errors"
+
 type VariableInfo struct {
 	defined bool
 	used    bool
@@ -11,21 +13,32 @@ type FunctionType int
 const (
 	FunctionTypeNone FunctionType = iota
 	FunctionTypeFunction
+	FunctionTypeMethod
+	FunctionTypeInitializer
+)
+
+type ClassType int
+
+const (
+	ClassTypeNone ClassType = iota
+	ClassTypeClass
 )
 
 type Resolver struct {
-	viri *Viri
-	interpreter *Interpreter
+	viri                *Viri
+	interpreter         *Interpreter
 	currentFunctionType FunctionType
-	scopes []map[string]*VariableInfo
+	currentClassType    ClassType
+	scopes              []map[string]*VariableInfo
 }
 
 func NewResolver(viri *Viri, interpreter *Interpreter) *Resolver {
 	return &Resolver{
-		viri: viri, 
-		interpreter: interpreter, 
-		scopes: []map[string]*VariableInfo{}, 
+		viri:                viri,
+		interpreter:         interpreter,
+		scopes:              []map[string]*VariableInfo{},
 		currentFunctionType: FunctionTypeNone,
+		currentClassType:    ClassTypeNone,
 	}
 }
 
@@ -65,6 +78,7 @@ func (r *Resolver) visitVariable(variable *Variable) (interface{}, error) {
 	if len(r.scopes) > 0 {
 		if info, ok := r.scopes[len(r.scopes)-1][variable.Name.Lexeme]; ok && !info.defined {
 			r.viri.Error(variable.Name, "Can't read local variable in its own initializer.")
+			return nil, nil
 		}
 	}
 	r.resolveLocal(variable, variable.Name.Lexeme)
@@ -82,7 +96,7 @@ func (r *Resolver) visitAssignment(assignment *Assignment) (interface{}, error) 
 func (r *Resolver) resolveLocal(expr Expr, name string) {
 	for i := len(r.scopes) - 1; i >= 0; i-- {
 		if _, ok := r.scopes[i][name]; ok {
-			r.interpreter.resolve(expr, len(r.scopes) - i - 1)
+			r.interpreter.resolve(expr, len(r.scopes)-i-1)
 			return
 		}
 	}
@@ -92,8 +106,34 @@ func (r *Resolver) visitFunction(function *Function) (interface{}, error) {
 	r.declare(function.token)
 	r.define(function.token)
 
+	newFunctionType := FunctionTypeFunction
+	if function.token.Lexeme == "init" {
+		newFunctionType = FunctionTypeInitializer
+	}
+	r.resolveFunction(function, newFunctionType)
+	return nil, nil
+}
+
+func (r *Resolver) visitClass(class *Class) (interface{}, error) {
+	r.declare(class.name)
+	r.define(class.name)
+	previousClassType := r.currentClassType
+	r.currentClassType = ClassTypeClass
+	r.beginScope()
+	thisToken := NewToken(THIS, "this", nil, class.name.Line)
+	r.declare(thisToken)
+	r.define(thisToken)
+	for _, method := range class.methods {
+		r.resolveFunction(method, FunctionTypeMethod)
+	}
+	r.endScope()
+	r.currentClassType = previousClassType
+	return nil, nil
+}
+
+func (r *Resolver) resolveFunction(function *Function, functionType FunctionType) {
 	previousFunctionType := r.currentFunctionType
-	r.currentFunctionType = FunctionTypeFunction
+	r.currentFunctionType = functionType
 	r.beginScope()
 	for _, param := range function.parameters {
 		r.declare(param)
@@ -106,8 +146,6 @@ func (r *Resolver) visitFunction(function *Function) (interface{}, error) {
 	}
 	r.endScope()
 	r.currentFunctionType = previousFunctionType
-	
-	return nil, nil
 }
 
 func (r *Resolver) visitExprStmt(exprStmt *ExprStmt) (interface{}, error) {
@@ -140,9 +178,13 @@ func (r *Resolver) visitBreakStmt(breakStmt *BreakStmt) (interface{}, error) {
 }
 
 func (r *Resolver) visitReturnStmt(returnStmt *ReturnStmt) (interface{}, error) {
-	if (r.currentFunctionType == FunctionTypeNone) {
-		r.viri.Error(returnStmt.keyword, "Can't return from top-level code.");
-	  }
+	if r.currentFunctionType == FunctionTypeNone {
+		r.viri.Error(returnStmt.keyword, "Can't return from top-level code.")
+	}
+
+	if r.currentFunctionType == FunctionTypeInitializer && returnStmt.value != nil {
+		r.viri.Error(returnStmt.keyword, "Can't return a value from an initializer.")
+	}
 
 	if returnStmt.value != nil {
 		r.resolveExpr(returnStmt.value)
@@ -178,13 +220,33 @@ func (r *Resolver) visitCall(call *Call) (interface{}, error) {
 	return nil, nil
 }
 
+func (r *Resolver) visitGet(get *Get) (interface{}, error) {
+	r.resolveExpr(get.object)
+	return nil, nil
+}
+
+func (r *Resolver) visitSet(set *Set) (interface{}, error) {
+	r.resolveExpr(set.value)
+	r.resolveExpr(set.object)
+	return nil, nil
+}
+
 func (r *Resolver) visitLogical(logical *Logical) (interface{}, error) {
 	r.resolveExpr(logical.Left)
 	r.resolveExpr(logical.Right)
 	return nil, nil
 }
 
-// Scope utility functions 
+func (r *Resolver) visitThisExpr(this *This) (interface{}, error) {
+	if r.currentClassType == ClassTypeNone {
+		r.viri.Error(this.keyword, "Can't use 'this' outside of a class.")
+		return nil, errors.New("can't use 'this' outside of a class")
+	}
+	r.resolveLocal(this, this.keyword.Lexeme)
+	return nil, nil
+}
+
+// Scope utility functions
 
 // Adds a new scope to the stack
 func (r *Resolver) beginScope() {
@@ -200,7 +262,7 @@ func (r *Resolver) endScope() {
 	// Check for unused variables before removing the scope
 	scope := r.scopes[len(r.scopes)-1]
 	for name, info := range scope {
-		if info.defined && !info.used {
+		if info.defined && !info.used && name != "this" {
 			r.viri.Warn(info.token, "Local variable '"+name+"' is declared but never used.")
 		}
 	}

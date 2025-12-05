@@ -1,25 +1,27 @@
 package internal
 
-
 type ExprType string
 
 const (
-	BINARY_EXP ExprType = "BINARY_EXP"
-	GROUPING ExprType = "GROUPING"
-	LITERAL ExprType = "LITERAL"
-	UNARY ExprType = "UNARY"
-	VARIABLE ExprType = "VARIABLE"
-	ASSIGNMENT ExprType = "ASSIGNMENT"
-	LOGICAL ExprType = "LOGICAL"
-	CALL ExprType = "CALL"
+	BINARY_EXP   ExprType = "BINARY_EXP"
+	GROUPING     ExprType = "GROUPING"
+	LITERAL      ExprType = "LITERAL"
+	UNARY        ExprType = "UNARY"
+	VARIABLE     ExprType = "VARIABLE"
+	ASSIGNMENT   ExprType = "ASSIGNMENT"
+	LOGICAL      ExprType = "LOGICAL"
+	CALL         ExprType = "CALL"
+	GET          ExprType = "GET"
+	SET          ExprType = "SET"
+	ExprTypeTHIS ExprType = "THIS"
 )
 
-type Expr interface{
+type Expr interface {
 	Accept(visitor ExprVisitor) (interface{}, error)
 	Type() ExprType
 }
 
-type ExprVisitor interface{
+type ExprVisitor interface {
 	visitBinaryExp(binaryExp *BinaryExp) (interface{}, error)
 	visitGrouping(grouping *Grouping) (interface{}, error)
 	visitLiteral(literal *Literal) (interface{}, error)
@@ -28,11 +30,14 @@ type ExprVisitor interface{
 	visitAssignment(assignment *Assignment) (interface{}, error)
 	visitLogical(logical *Logical) (interface{}, error)
 	visitCall(call *Call) (interface{}, error)
+	visitGet(get *Get) (interface{}, error)
+	visitSet(set *Set) (interface{}, error)
+	visitThisExpr(this *This) (interface{}, error)
 }
 
 type BinaryExp struct {
-	Left Expr
-	Right Expr
+	Left     Expr
+	Right    Expr
 	Operator Token
 }
 
@@ -70,7 +75,7 @@ func (literal *Literal) Type() ExprType {
 
 type Unary struct {
 	Operator Token
-	Expr Expr
+	Expr     Expr
 }
 
 func (unary *Unary) Accept(visitor ExprVisitor) (interface{}, error) {
@@ -94,7 +99,7 @@ func (variable *Variable) Type() ExprType {
 }
 
 type Assignment struct {
-	Name Token
+	Name  Token
 	Value Expr
 }
 
@@ -107,9 +112,9 @@ func (assignment *Assignment) Type() ExprType {
 }
 
 type Logical struct {
-	Left Expr
+	Left     Expr
 	Operator Token
-	Right Expr
+	Right    Expr
 }
 
 func (logical *Logical) Accept(visitor ExprVisitor) (interface{}, error) {
@@ -121,8 +126,8 @@ func (logical *Logical) Type() ExprType {
 }
 
 type Call struct {
-	callee Expr
-	arguments []Expr
+	callee       Expr
+	arguments    []Expr
 	closingParen Token
 }
 
@@ -132,4 +137,43 @@ func (call *Call) Accept(visitor ExprVisitor) (interface{}, error) {
 
 func (call *Call) Type() ExprType {
 	return CALL
+}
+
+type Get struct {
+	object Expr
+	name   Token
+}
+
+func (get *Get) Accept(visitor ExprVisitor) (interface{}, error) {
+	return visitor.visitGet(get)
+}
+
+func (get *Get) Type() ExprType {
+	return GET
+}
+
+type Set struct {
+	object Expr
+	name   Token
+	value  Expr
+}
+
+func (set *Set) Accept(visitor ExprVisitor) (interface{}, error) {
+	return visitor.visitSet(set)
+}
+
+func (set *Set) Type() ExprType {
+	return SET
+}
+
+type This struct {
+	keyword Token
+}
+
+func (t *This) Accept(visitor ExprVisitor) (interface{}, error) {
+	return visitor.visitThisExpr(t)
+}
+
+func (t *This) Type() ExprType {
+	return ExprTypeTHIS
 }

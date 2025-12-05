@@ -14,10 +14,10 @@ const (
 	DOT
 	MINUS
 	PLUS
-	SEMICOLON 
-	SLASH 
+	SEMICOLON
+	SLASH
 	STAR
-  
+
 	// One or two character tokens.
 	BANG
 	BANG_EQUAL
@@ -27,12 +27,12 @@ const (
 	GREATER_EQUAL
 	LESS
 	LESS_EQUAL
-  
+
 	// Literals.
 	IDENTIFIER
 	STRING
 	NUMBER
-  
+
 	// Keywords.
 	AND
 	OR
@@ -54,7 +54,7 @@ const (
 	SUPER
 	THIS
 	BREAK
-	
+
 	EOF
 )
 
@@ -147,17 +147,17 @@ func (tt TokenType) String() string {
 
 type Token struct {
 	TokenType TokenType
-	Lexeme string
-	Literal interface{}
-	Line int
+	Lexeme    string
+	Literal   interface{}
+	Line      int
 }
 
 func NewToken(tokenType TokenType, lexeme string, literal interface{}, line int) Token {
 	return Token{
 		TokenType: tokenType,
-		Lexeme: lexeme,
-		Literal: literal,
-		Line: line,
+		Lexeme:    lexeme,
+		Literal:   literal,
+		Line:      line,
 	}
 }
 

@@ -23,24 +23,24 @@ func (e *ReturnError) Error() string {
 }
 
 type Interpreter struct {
-	viri *Viri
+	viri        *Viri
 	environment *Environment
-	globals *Environment
-	localMap map[Expr]int
+	globals     *Environment
+	localMap    map[Expr]int
 }
 
 func NewInterpreter(viri *Viri) *Interpreter {
 	globals := NewEnvironment(nil)
 	globals.define("clock", NewClock())
 	return &Interpreter{
-		viri: viri,
+		viri:        viri,
 		environment: globals,
-		globals: globals,
-		localMap: make(map[Expr]int),
+		globals:     globals,
+		localMap:    make(map[Expr]int),
 	}
 }
 
-func (i *Interpreter) Interpret(stmts []Stmt) (error) {
+func (i *Interpreter) Interpret(stmts []Stmt) error {
 	for _, stmt := range stmts {
 		_, err := stmt.Accept(i)
 		if err != nil {
@@ -75,22 +75,40 @@ func (i *Interpreter) executeBlock(block *Block, environment *Environment) (inte
 }
 
 func (i *Interpreter) visitFunction(function *Function) (interface{}, error) {
-	callableFunction := NewCallableFunction(function, i.environment)
+	callableFunction := NewCallableFunction(function, i.environment, false)
 	i.environment.define(function.token.Lexeme, callableFunction)
+	return nil, nil
+}
+
+func (i *Interpreter) visitClass(class *Class) (interface{}, error) {
+	i.environment.define(class.name.Lexeme, nil)
+
+	methods := make(map[string]*CallableFunction)
+
+	for _, method := range class.methods {
+		function := NewCallableFunction(method, i.environment, method.token.Lexeme == "init")
+		i.environment.define(method.token.Lexeme, function)
+		methods[method.token.Lexeme] = function
+	}
+
+	callableClass := NewCallableClass(class.name.Lexeme, methods)
+
+	i.environment.assign(class.name.Lexeme, callableClass)
+
 	return nil, nil
 }
 
 func (i *Interpreter) visitReturnStmt(returnStmt *ReturnStmt) (interface{}, error) {
 	var value interface{}
 
-	if(returnStmt.value != nil){
+	if returnStmt.value != nil {
 		var err error
 		value, err = i.evaluateExpr(returnStmt.value)
 		if err != nil {
 			return nil, err
 		}
 	}
-	
+
 	return value, &ReturnError{value: value}
 }
 
@@ -134,7 +152,7 @@ func (i *Interpreter) visitIfStmt(ifStmt *IfStmt) (interface{}, error) {
 	}
 	if i.isTruthy(value) {
 		return i.evaluateStmt(ifStmt.ifBranch)
-	}else if ifStmt.elseBranch != nil {
+	} else if ifStmt.elseBranch != nil {
 		return i.evaluateStmt(ifStmt.elseBranch)
 	}
 	return nil, nil
@@ -170,18 +188,17 @@ func (i *Interpreter) evaluateStmt(stmt Stmt) (interface{}, error) {
 	}
 	return result, err
 }
-	
 
 func (i *Interpreter) evaluateExpr(expr Expr) (interface{}, error) {
 	return expr.Accept(i)
 }
 
 func (i *Interpreter) visitBinaryExp(binaryExp *BinaryExp) (interface{}, error) {
-	rightExp, err := i.evaluateExpr(binaryExp.Right);
+	rightExp, err := i.evaluateExpr(binaryExp.Right)
 	if err != nil {
 		return nil, err
 	}
-	leftExp, err := i.evaluateExpr(binaryExp.Left);
+	leftExp, err := i.evaluateExpr(binaryExp.Left)
 	if err != nil {
 		return nil, err
 	}
@@ -195,7 +212,7 @@ func (i *Interpreter) visitBinaryExp(binaryExp *BinaryExp) (interface{}, error) 
 		if leftIsNum && rightIsNum {
 			return leftNum + rightNum, nil
 		} else if leftIsStr && rightIsStr {
-			return leftStr + rightStr,nil
+			return leftStr + rightStr, nil
 		} else {
 			return nil, fmt.Errorf("operands to '+' must both be numbers or both be strings (left: %T=%v, right: %T=%v)", leftExp, leftExp, rightExp, rightExp)
 		}
@@ -244,22 +261,21 @@ func (i *Interpreter) visitBinaryExp(binaryExp *BinaryExp) (interface{}, error) 
 			i.viri.Error(binaryExp.Operator, "Operand must be a number")
 			return nil, errors.New("operand must be a number")
 		}
-		return leftExp.(float64) <= rightExp.(float64), nil	
+		return leftExp.(float64) <= rightExp.(float64), nil
 	case EQUAL_EQUAL:
 		return i.isEqual(leftExp, rightExp), nil
 	case BANG_EQUAL:
-		return !i.isEqual(leftExp, rightExp), nil	
+		return !i.isEqual(leftExp, rightExp), nil
 	}
 	return nil, errors.New("invalid operator")
 }
-
 
 func (i *Interpreter) visitGrouping(grouping *Grouping) (interface{}, error) {
 	return i.evaluateExpr(grouping.Expr)
 }
 
 func (i *Interpreter) visitLiteral(literal *Literal) (interface{}, error) {
-	return literal.Value, nil;
+	return literal.Value, nil
 }
 
 func (i *Interpreter) visitUnary(unary *Unary) (interface{}, error) {
@@ -277,10 +293,18 @@ func (i *Interpreter) visitUnary(unary *Unary) (interface{}, error) {
 }
 
 func (i *Interpreter) visitVariable(variable *Variable) (interface{}, error) {
-	if dist, ok := i.localMap[variable]; ok {
-		return i.environment.getAt(dist, variable.Name.Lexeme)
+	return i.findVariable(variable, variable.Name)
+}
+
+func (i *Interpreter) visitThisExpr(this *This) (interface{}, error) {
+	return i.findVariable(this, this.keyword)
+}
+
+func (i *Interpreter) findVariable(expr Expr, token Token) (interface{}, error) {
+	if dist, ok := i.localMap[expr]; ok {
+		return i.environment.getAt(dist, token.Lexeme)
 	}
-	return i.globals.get(variable.Name.Lexeme)
+	return i.globals.get(token.Lexeme)
 }
 
 func (i *Interpreter) visitAssignment(assignment *Assignment) (interface{}, error) {
@@ -309,7 +333,7 @@ func (i *Interpreter) visitLogical(logical *Logical) (interface{}, error) {
 	}
 	if (logical.Operator.TokenType == OR && i.isTruthy(left)) || (logical.Operator.TokenType == AND && !i.isTruthy(left)) {
 		// short circuit
-		return left, nil;
+		return left, nil
 	}
 
 	return i.evaluateExpr(logical.Right)
@@ -334,13 +358,46 @@ func (i *Interpreter) visitCall(call *Call) (interface{}, error) {
 
 	if !ok {
 		return nil, errors.New("can only call which is a function")
-	}	
-	
+	}
+
 	if callable.Arity() != len(arguments) {
 		return nil, errors.New("expected " + strconv.Itoa(callable.Arity()) + " arguments but got " + strconv.Itoa(len(arguments)))
 	}
 
 	return callable.Call(i, arguments)
+}
+
+func (i *Interpreter) visitGet(get *Get) (interface{}, error) {
+	object, err := i.evaluateExpr(get.object)
+	if err != nil {
+		return nil, err
+	}
+	instance, ok := object.(*ClassInstance)
+	if !ok {
+		return nil, errors.New("object is not a class instance")
+	}
+
+	return instance.Get(get.name)
+}
+
+func (i *Interpreter) visitSet(set *Set) (interface{}, error) {
+	object, err := i.evaluateExpr(set.object)
+	if err != nil {
+		return nil, err
+	}
+	instance, ok := object.(*ClassInstance)
+	if !ok {
+		return nil, errors.New("object is not a class instance")
+	}
+	value, err := i.evaluateExpr(set.value)
+	if err != nil {
+		return nil, err
+	}
+	err = instance.Set(set.name, value)
+	if err != nil {
+		return nil, err
+	}
+	return value, nil
 }
 
 // Utility functions
@@ -355,12 +412,10 @@ func (i *Interpreter) isTruthy(value interface{}) bool {
 	return true
 }
 
-
 func (i *Interpreter) isNumber(value interface{}) bool {
 	_, ok := value.(float64)
 	return ok
 }
-
 
 func (i *Interpreter) isEqual(a interface{}, b interface{}) bool {
 	if a == nil && b == nil {

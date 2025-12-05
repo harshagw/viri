@@ -4,7 +4,7 @@ import (
 	"time"
 )
 
-type Clock struct {}
+type Clock struct{}
 
 func NewClock() *Clock {
 	return &Clock{}

@@ -7,12 +7,13 @@ type Callable interface {
 }
 
 type CallableFunction struct {
-	declaration *Function
-	closure *Environment
+	declaration   *Function
+	closure       *Environment
+	isInitializer bool
 }
 
-func NewCallableFunction(declaration *Function, closure *Environment) *CallableFunction {
-	return &CallableFunction{declaration: declaration, closure: closure}
+func NewCallableFunction(declaration *Function, closure *Environment, isInitializer bool) *CallableFunction {
+	return &CallableFunction{declaration: declaration, closure: closure, isInitializer: isInitializer}
 }
 
 func (cf *CallableFunction) Call(i *Interpreter, arguments []interface{}) (interface{}, error) {
@@ -27,6 +28,9 @@ func (cf *CallableFunction) Call(i *Interpreter, arguments []interface{}) (inter
 		}
 		return nil, err
 	}
+	if cf.isInitializer {
+		return cf.closure.getAt(0, "this")
+	}
 	return result, nil
 }
 
@@ -36,4 +40,10 @@ func (cf *CallableFunction) Arity() int {
 
 func (cf *CallableFunction) ToString() string {
 	return "<fun " + cf.declaration.token.Lexeme + ">"
+}
+
+func (cf *CallableFunction) Bind(instance *ClassInstance) *CallableFunction {
+	environment := NewEnvironment(cf.closure)
+	environment.define("this", instance)
+	return NewCallableFunction(cf.declaration, environment, cf.isInitializer)
 }

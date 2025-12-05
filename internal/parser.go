@@ -8,23 +8,22 @@ var (
 	ErrParse = errors.New("parse error")
 )
 
-
 type Parser struct {
-	viri *Viri
-	tokens []Token
-	current int
+	viri      *Viri
+	tokens    []Token
+	current   int
 	loopDepth int
 }
 
 func NewParser(tokens []Token, viri *Viri) *Parser {
 	return &Parser{
-		tokens: tokens,
+		tokens:  tokens,
 		current: 0,
-		viri: viri,
+		viri:    viri,
 	}
 }
 
-func (p *Parser) parse() ([]Stmt) {
+func (p *Parser) parse() []Stmt {
 	statements := []Stmt{}
 	for !p.isAtEnd() {
 		stmt := p.parseDeclaration()
@@ -35,13 +34,17 @@ func (p *Parser) parse() ([]Stmt) {
 	return statements
 }
 
-func (p *Parser) parseDeclaration() (Stmt) {
+func (p *Parser) parseDeclaration() Stmt {
 	var (
 		stmt Stmt
 		err  error
 	)
 	if p.match(VAR) {
 		stmt, err = p.parseVarDecl()
+	} else if p.match(FUN) {
+		stmt, err = p.parseFunction()
+	} else if p.match(CLASS) {
+		stmt, err = p.parseClass()
 	} else {
 		stmt, err = p.parseStmt()
 	}
@@ -57,7 +60,7 @@ func (p *Parser) parseVarDecl() (Stmt, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	var initializer Expr
 	if p.match(EQUAL) {
 		initializer, err = p.parseExpr()
@@ -65,14 +68,14 @@ func (p *Parser) parseVarDecl() (Stmt, error) {
 			return nil, err
 		}
 	}
-	
+
 	_, err = p.consume(SEMICOLON, "Expect ';' after variable declaration.")
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return &VarDeclStmt{
-		token: *name,
+		token:       *name,
 		initializer: initializer,
 	}, nil
 }
@@ -83,51 +86,44 @@ func (p *Parser) parseStmt() (Stmt, error) {
 		if err != nil {
 			return nil, err
 		}
-		return stmt, nil	
+		return stmt, nil
 	}
-	if p.match(LEFT_BRACE){
+	if p.match(LEFT_BRACE) {
 		stmt, err := p.parseBlockStmt()
 		if err != nil {
 			return nil, err
 		}
 		return stmt, nil
 	}
-	if p.match(IF){
+	if p.match(IF) {
 		stmt, err := p.parseIfStmt()
 		if err != nil {
 			return nil, err
 		}
 		return stmt, nil
 	}
-	if p.match(WHILE){
+	if p.match(WHILE) {
 		stmt, err := p.parseWhileStmt()
 		if err != nil {
 			return nil, err
 		}
 		return stmt, nil
 	}
-	if p.match(FOR){
+	if p.match(FOR) {
 		stmt, err := p.parseForStmt()
 		if err != nil {
 			return nil, err
 		}
 		return stmt, nil
 	}
-	if p.match(BREAK){
+	if p.match(BREAK) {
 		stmt, err := p.parseBreakStmt()
 		if err != nil {
 			return nil, err
 		}
 		return stmt, nil
 	}
-	if p.match(FUN){
-		stmt, err := p.parseFunction()
-		if err != nil {
-			return nil, err
-		}
-		return stmt, nil
-	}
-	if p.match(RETURN){
+	if p.match(RETURN) {
 		stmt, err := p.parseReturnStmt()
 		if err != nil {
 			return nil, err
@@ -147,20 +143,47 @@ func (p *Parser) parseReturnStmt() (Stmt, error) {
 	var value Expr
 	var err error
 
-	if !p.check(SEMICOLON){
+	if !p.check(SEMICOLON) {
 		value, err = p.parseExpr()
 		if err != nil {
 			return nil, err
 		}
 	}
-	
+
 	_, err = p.consume(SEMICOLON, "Expect ';' after return statement.")
 	if err != nil {
 		return nil, err
 	}
 	return &ReturnStmt{
 		keyword: *keyword,
-		value: value,
+		value:   value,
+	}, nil
+}
+
+func (p *Parser) parseClass() (Stmt, error) {
+	name, err := p.consume(IDENTIFIER, "Expect class name.")
+	if err != nil {
+		return nil, err
+	}
+	_, err = p.consume(LEFT_BRACE, "Expect '{' before class body.")
+	if err != nil {
+		return nil, err
+	}
+	methods := make([]*Function, 0)
+	for !p.isAtEnd() && !p.check(RIGHT_BRACE) {
+		method, err := p.parseFunction()
+		if err != nil {
+			return nil, err
+		}
+		methods = append(methods, method.(*Function))
+	}
+	_, err = p.consume(RIGHT_BRACE, "Expect '}' after class body.")
+	if err != nil {
+		return nil, err
+	}
+	return &Class{
+		name:    *name,
+		methods: methods,
 	}, nil
 }
 
@@ -189,7 +212,7 @@ func (p *Parser) parseFunction() (Stmt, error) {
 				break
 			}
 		}
-	}	
+	}
 	_, err = p.consume(RIGHT_PAREN, "Expect ')' after parameters.")
 	if err != nil {
 		return nil, err
@@ -203,13 +226,13 @@ func (p *Parser) parseFunction() (Stmt, error) {
 		return nil, err
 	}
 	return &Function{
-		token: *name,
+		token:      *name,
 		parameters: parameters,
-		body: body,
+		body:       body,
 	}, nil
 }
 
-func (p *Parser) parseWhileStmt() (Stmt, error){
+func (p *Parser) parseWhileStmt() (Stmt, error) {
 	_, err := p.consume(LEFT_PAREN, "Expect '(' after while.")
 	if err != nil {
 		return nil, err
@@ -230,24 +253,24 @@ func (p *Parser) parseWhileStmt() (Stmt, error){
 	}
 	return &WhileStmt{
 		condition: condition,
-		body: body,
+		body:      body,
 	}, nil
 }
 
-func (p *Parser) parseForStmt() (Stmt, error){
+func (p *Parser) parseForStmt() (Stmt, error) {
 	_, err := p.consume(LEFT_PAREN, "Expect '(' after for.")
 	if err != nil {
 		return nil, err
 	}
-	
-	var intializer Stmt;
 
-	if p.match(VAR){
+	var intializer Stmt
+
+	if p.match(VAR) {
 		intializer, err = p.parseVarDecl()
 		if err != nil {
 			return nil, err
 		}
-	} else if p.match(SEMICOLON){
+	} else if p.match(SEMICOLON) {
 		intializer = nil
 	} else {
 		intializer, err = p.parseExprStmt()
@@ -255,10 +278,10 @@ func (p *Parser) parseForStmt() (Stmt, error){
 			return nil, err
 		}
 	}
-	
-	var condition Expr;
 
-	if !p.check(SEMICOLON){
+	var condition Expr
+
+	if !p.check(SEMICOLON) {
 		condition, err = p.parseExpr()
 		if err != nil {
 			return nil, err
@@ -270,13 +293,13 @@ func (p *Parser) parseForStmt() (Stmt, error){
 		return nil, err
 	}
 
-	var increment Expr;
-	if !p.check(RIGHT_PAREN){
+	var increment Expr
+	if !p.check(RIGHT_PAREN) {
 		increment, err = p.parseExpr()
 		if err != nil {
 			return nil, err
 		}
-		
+
 	}
 
 	_, err = p.consume(RIGHT_PAREN, "Expect ')' after for.")
@@ -291,16 +314,16 @@ func (p *Parser) parseForStmt() (Stmt, error){
 		return nil, err
 	}
 
-	return &Block{ statements: []Stmt{intializer, &WhileStmt{
+	return &Block{statements: []Stmt{intializer, &WhileStmt{
 		condition: condition,
 		body: &Block{
-				statements: []Stmt{body, &ExprStmt{Expr: increment}},
-			},
-		}},
+			statements: []Stmt{body, &ExprStmt{Expr: increment}},
+		},
+	}},
 	}, nil
 }
 
-func (p *Parser) parseIfStmt() (Stmt, error){
+func (p *Parser) parseIfStmt() (Stmt, error) {
 	_, err := p.consume(LEFT_PAREN, "Expect '(' after if.")
 	if err != nil {
 		return nil, err
@@ -317,10 +340,10 @@ func (p *Parser) parseIfStmt() (Stmt, error){
 	if err != nil {
 		return nil, err
 	}
-	if !p.match(ELSE){
+	if !p.match(ELSE) {
 		return &IfStmt{
-			condition: condition,
-			ifBranch: ifStmt,
+			condition:  condition,
+			ifBranch:   ifStmt,
 			elseBranch: nil,
 		}, nil
 	}
@@ -329,13 +352,13 @@ func (p *Parser) parseIfStmt() (Stmt, error){
 		return nil, err
 	}
 	return &IfStmt{
-		condition: condition,
-		ifBranch: ifStmt,
+		condition:  condition,
+		ifBranch:   ifStmt,
 		elseBranch: elseStmt,
 	}, nil
 }
 
-func (p *Parser) parseBlockStmt() (*Block, error){
+func (p *Parser) parseBlockStmt() (*Block, error) {
 	statements := []Stmt{}
 	for !p.isAtEnd() && !p.check(RIGHT_BRACE) {
 		stmt := p.parseDeclaration()
@@ -399,7 +422,7 @@ func (p *Parser) parseExpr() (Expr, error) {
 }
 
 func (p *Parser) parseAssignment() (Expr, error) {
-	expr,err := p.parseLogicOr()
+	expr, err := p.parseLogicOr()
 	if err != nil {
 		return nil, err
 	}
@@ -411,15 +434,22 @@ func (p *Parser) parseAssignment() (Expr, error) {
 			return nil, err
 		}
 
-		if expr.Type() != VARIABLE {
-			return nil, p.error(assignment, "Expect variable name.")
+		if expr.Type() == VARIABLE {
+			variable := expr.(*Variable)
+			return &Assignment{
+				Name:  variable.Name,
+				Value: value,
+			}, nil
+		} else if expr.Type() == GET {
+			get := expr.(*Get)
+			return &Set{
+				object: get.object,
+				name:   get.name,
+				value:  value,
+			}, nil
 		}
 
-		variable := expr.(*Variable)
-		return &Assignment{
-			Name: variable.Name,
-			Value: value,
-		}, nil
+		return nil, p.error(assignment, "Invalid assignment target")
 	}
 
 	return expr, nil
@@ -437,9 +467,9 @@ func (p *Parser) parseLogicOr() (Expr, error) {
 			return nil, err
 		}
 		expr = &Logical{
-			Left: expr,
+			Left:     expr,
 			Operator: *operator,
-			Right: right,
+			Right:    right,
 		}
 	}
 	return expr, nil
@@ -457,32 +487,32 @@ func (p *Parser) parseLogicAnd() (Expr, error) {
 			return nil, err
 		}
 		expr = &Logical{
-			Left: expr,
+			Left:     expr,
 			Operator: *operator,
-			Right: right,
+			Right:    right,
 		}
 	}
 	return expr, nil
 }
 
 func (p *Parser) parseEquality() (Expr, error) {
-		expr, err := p.parseComparison()
+	expr, err := p.parseComparison()
+	if err != nil {
+		return nil, err
+	}
+	for p.match(EQUAL_EQUAL, BANG_EQUAL) {
+		operator := p.peekPrevious()
+		right, err := p.parseComparison()
 		if err != nil {
 			return nil, err
 		}
-		for p.match(EQUAL_EQUAL, BANG_EQUAL) {
-			operator := p.peekPrevious()
-			right, err := p.parseComparison()
-			if err != nil {
-				return nil, err
-			}
-			expr = &BinaryExp{
-				Left: expr,
-				Right: right,
-				Operator: *operator,
-			}
+		expr = &BinaryExp{
+			Left:     expr,
+			Right:    right,
+			Operator: *operator,
 		}
-		return expr, nil
+	}
+	return expr, nil
 }
 
 func (p *Parser) parseComparison() (Expr, error) {
@@ -497,8 +527,8 @@ func (p *Parser) parseComparison() (Expr, error) {
 			return nil, err
 		}
 		expr = &BinaryExp{
-			Left: expr,
-			Right: right,
+			Left:     expr,
+			Right:    right,
 			Operator: *operator,
 		}
 	}
@@ -517,8 +547,8 @@ func (p *Parser) parseTerm() (Expr, error) {
 			return nil, err
 		}
 		expr = &BinaryExp{
-			Left: expr,
-			Right: right,
+			Left:     expr,
+			Right:    right,
 			Operator: *operator,
 		}
 	}
@@ -537,8 +567,8 @@ func (p *Parser) parseFactor() (Expr, error) {
 			return nil, err
 		}
 		expr = &BinaryExp{
-			Left: expr,
-			Right: right,
+			Left:     expr,
+			Right:    right,
 			Operator: *operator,
 		}
 	}
@@ -554,7 +584,7 @@ func (p *Parser) parseUnary() (Expr, error) {
 		}
 		return &Unary{
 			Operator: *operator,
-			Expr: right,
+			Expr:     right,
 		}, nil
 	}
 	return p.parseCall()
@@ -565,10 +595,23 @@ func (p *Parser) parseCall() (Expr, error) {
 	if err != nil {
 		return nil, err
 	}
-	for p.match(LEFT_PAREN) {
-		expr, err = p.parseFinishCall(expr)
-		if err != nil {
-			return nil, err
+	for {
+		if p.match(LEFT_PAREN) {
+			expr, err = p.parseFinishCall(expr)
+			if err != nil {
+				return nil, err
+			}
+		} else if p.match(DOT) {
+			ident, err := p.consume(IDENTIFIER, "Expect property name after '.'.")
+			if err != nil {
+				return nil, err
+			}
+			expr = &Get{
+				object: expr,
+				name:   *ident,
+			}
+		} else {
+			break
 		}
 	}
 	return expr, nil
@@ -576,7 +619,7 @@ func (p *Parser) parseCall() (Expr, error) {
 
 func (p *Parser) parseFinishCall(expr Expr) (Expr, error) {
 	arguments := make([]Expr, 0)
-		
+
 	if !p.check(RIGHT_PAREN) {
 		for {
 			if len(arguments) >= 255 {
@@ -597,8 +640,8 @@ func (p *Parser) parseFinishCall(expr Expr) (Expr, error) {
 		return nil, err
 	}
 	return &Call{
-		callee: expr,
-		arguments: arguments,
+		callee:       expr,
+		arguments:    arguments,
 		closingParen: *p.peekPrevious(),
 	}, nil
 }
@@ -607,11 +650,16 @@ func (p *Parser) parsePrimary() (Expr, error) {
 	if p.match(NUMBER, STRING, TRUE, FALSE, NIL) {
 		return &Literal{
 			Value: p.peekPrevious().Literal,
-		},nil	
+		}, nil
 	}
-	if (p.match(IDENTIFIER)) {
+	if p.match(IDENTIFIER) {
 		return &Variable{
 			Name: *p.peekPrevious(),
+		}, nil
+	}
+	if p.match(THIS) {
+		return &This{
+			keyword: *p.peekPrevious(),
 		}, nil
 	}
 	if p.match(LEFT_PAREN) {
@@ -670,7 +718,7 @@ func (p *Parser) peekPrevious() *Token {
 	if p.current == 0 {
 		return nil
 	}
-	return &p.tokens[p.current - 1]
+	return &p.tokens[p.current-1]
 }
 
 // Advance the current token
@@ -702,20 +750,20 @@ func (p *Parser) error(token *Token, message string) error {
 func (p *Parser) synchronize() {
 	// First, advance past the token that caused the error
 	p.advance()
-	
+
 	// Discard tokens until we find a synchronization point
 	for !p.isAtEnd() {
 		// If we just passed a semicolon, we're synchronized
 		if p.peekPrevious().TokenType == SEMICOLON {
 			return
 		}
-		
+
 		// If we see a statement-starting token, we're synchronized
 		switch p.peekCurrent().TokenType {
 		case CLASS, FOR, FUN, IF, PRINT, RETURN, VAR, WHILE:
 			return
 		}
-		
+
 		p.advance()
 	}
 }

@@ -90,3 +90,26 @@ var a = "global";
 {
   var a = 12312;
 }
+
+class Thing {
+  getCallback() {
+    fun localFunction() {
+      print this;
+    }
+
+    return localFunction;
+  }
+}
+
+var callback = Thing().getCallback();
+callback();
+
+class Foo {
+  init() {
+    return;
+  }
+}
+
+var bar = Foo();
+
+print bar;

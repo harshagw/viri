@@ -95,9 +95,31 @@ func (astPrinter *AstPrinter) visitCall(call *Call) (interface{}, error) {
 		argumentIsLast := i == len(call.arguments)-1
 		astPrinter.printExpr(argument, argumentsPrefix, argumentIsLast)
 	}
-	if len(call.arguments) == 0{
+	if len(call.arguments) == 0 {
 		astPrinter.writeTreeNode(argumentsPrefix, true, "nil")
 	}
+	return nil, nil
+}
+
+func (astPrinter *AstPrinter) visitGet(get *Get) (interface{}, error) {
+	astPrinter.writeTreeNode(astPrinter.prefix, astPrinter.isLast, "Get")
+	newPrefix := astPrinter.calculateNewPrefix(astPrinter.prefix, astPrinter.isLast)
+	astPrinter.printExpr(get.object, newPrefix, false)
+	astPrinter.writeTreeNode(newPrefix, true, "field ("+get.name.Lexeme+")")
+	return nil, nil
+}
+
+func (astPrinter *AstPrinter) visitSet(set *Set) (interface{}, error) {
+	astPrinter.writeTreeNode(astPrinter.prefix, astPrinter.isLast, "Set")
+	newPrefix := astPrinter.calculateNewPrefix(astPrinter.prefix, astPrinter.isLast)
+	astPrinter.printExpr(set.object, newPrefix, false)
+	astPrinter.writeTreeNode(newPrefix, true, "field ("+set.name.Lexeme+")")
+	astPrinter.printExpr(set.value, newPrefix, true)
+	return nil, nil
+}
+
+func (astPrinter *AstPrinter) visitThisExpr(this *This) (interface{}, error) {
+	astPrinter.writeTreeNode(astPrinter.prefix, astPrinter.isLast, "This")
 	return nil, nil
 }
 
@@ -184,6 +206,17 @@ func (astPrinter *AstPrinter) visitReturnStmt(returnStmt *ReturnStmt) (interface
 	astPrinter.writeTreeNode(astPrinter.prefix, astPrinter.isLast, "ReturnStmt")
 	newPrefix := astPrinter.calculateNewPrefix(astPrinter.prefix, astPrinter.isLast)
 	astPrinter.printExpr(returnStmt.value, newPrefix, true)
+	return nil, nil
+}
+
+func (astPrinter *AstPrinter) visitClass(class *Class) (interface{}, error) {
+	astPrinter.writeTreeNode(astPrinter.prefix, astPrinter.isLast, "Class ("+class.name.Lexeme+")")
+	newPrefix := astPrinter.calculateNewPrefix(astPrinter.prefix, astPrinter.isLast)
+	astPrinter.writeTreeNode(newPrefix, false, "methods")
+	methodsPrefix := astPrinter.calculateNewPrefix(newPrefix, false)
+	for i, method := range class.methods {
+		astPrinter.writeTreeNode(methodsPrefix, i == len(class.methods)-1, method.token.Lexeme)
+	}
 	return nil, nil
 }
 

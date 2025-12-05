@@ -33,7 +33,7 @@ func main() {
 	}
 
 	config := &internal.ViriRuntimeConfig{
-		DebugMode: debugMode,
+		DebugMode:      debugMode,
 		DisableWarning: !showWarning,
 	}
 	viri := internal.NewViriRuntime(config)

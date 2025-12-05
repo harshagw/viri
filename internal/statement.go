@@ -8,7 +8,7 @@ type Stmt interface {
 	Accept(visitor StmtVisitor) (interface{}, error)
 }
 
-type StmtVisitor interface{
+type StmtVisitor interface {
 	visitExprStmt(exprStmt *ExprStmt) (interface{}, error)
 	visitPrintStmt(printStmt *PrintStmt) (interface{}, error)
 	visitVarDeclStmt(varDeclStmt *VarDeclStmt) (interface{}, error)
@@ -18,6 +18,7 @@ type StmtVisitor interface{
 	visitBreakStmt(breakStmt *BreakStmt) (interface{}, error)
 	visitFunction(function *Function) (interface{}, error)
 	visitReturnStmt(returnStmt *ReturnStmt) (interface{}, error)
+	visitClass(class *Class) (interface{}, error)
 }
 
 type ExprStmt struct {
@@ -32,15 +33,21 @@ type PrintStmt struct {
 	Expr Expr
 }
 
+type Printable interface {
+	ToString() string
+}
+
 func (printStmt *PrintStmt) Accept(visitor StmtVisitor) (interface{}, error) {
 	return visitor.visitPrintStmt(printStmt)
 }
 
 func (ps *PrintStmt) Print(value interface{}) error {
 	// based on the type print the value
-	switch value.(type) {
+	switch value := value.(type) {
 	case string, int, int64, bool, float64, Callable:
 		fmt.Println(value)
+	case Printable:
+		fmt.Println(value.ToString())
 	default:
 		return fmt.Errorf("print doesn't support the expression - %T", value)
 	}
@@ -48,7 +55,7 @@ func (ps *PrintStmt) Print(value interface{}) error {
 }
 
 type VarDeclStmt struct {
-	token Token
+	token       Token
 	initializer Expr
 }
 
@@ -65,8 +72,8 @@ func (block *Block) Accept(visitor StmtVisitor) (interface{}, error) {
 }
 
 type IfStmt struct {
-	condition Expr
-	ifBranch Stmt
+	condition  Expr
+	ifBranch   Stmt
 	elseBranch Stmt
 }
 
@@ -76,7 +83,7 @@ func (ifStmt *IfStmt) Accept(visitor StmtVisitor) (interface{}, error) {
 
 type WhileStmt struct {
 	condition Expr
-	body Stmt
+	body      Stmt
 }
 
 func (whileStmt *WhileStmt) Accept(visitor StmtVisitor) (interface{}, error) {
@@ -92,9 +99,9 @@ func (breakStmt *BreakStmt) Accept(visitor StmtVisitor) (interface{}, error) {
 }
 
 type Function struct {
-	token Token
+	token      Token
 	parameters []Token
-	body *Block
+	body       *Block
 }
 
 func (function *Function) Accept(visitor StmtVisitor) (interface{}, error) {
@@ -103,9 +110,18 @@ func (function *Function) Accept(visitor StmtVisitor) (interface{}, error) {
 
 type ReturnStmt struct {
 	keyword Token
-	value Expr
+	value   Expr
 }
 
 func (returnStmt *ReturnStmt) Accept(visitor StmtVisitor) (interface{}, error) {
 	return visitor.visitReturnStmt(returnStmt)
+}
+
+type Class struct {
+	name    Token
+	methods []*Function
+}
+
+func (class *Class) Accept(visitor StmtVisitor) (interface{}, error) {
+	return visitor.visitClass(class)
 }

@@ -8,20 +8,20 @@ import (
 )
 
 type Scanner struct {
-	source *bytes.Buffer
+	source  *bytes.Buffer
 	current int
-	start int
-	line int
-	tokens []Token
+	start   int
+	line    int
+	tokens  []Token
 }
 
 func NewScanner(source *bytes.Buffer) *Scanner {
 	return &Scanner{
-		source: source,
+		source:  source,
 		current: 0,
-		start: 0,
-		line: 1,
-		tokens: []Token{},
+		start:   0,
+		line:    1,
+		tokens:  []Token{},
 	}
 }
 
@@ -101,7 +101,7 @@ func (s *Scanner) scanToken() error {
 	case '\t':
 	case '\r':
 	case ' ':
-		break;
+		break
 	case '\n':
 		s.line++
 	case '"':
@@ -215,7 +215,7 @@ func (s *Scanner) scanIdentifier() {
 	tokenType := s.identifierType(text)
 	if tokenType == TRUE {
 		s.addTokenWithLiteral(TRUE, true)
-	} else if tokenType == FALSE{
+	} else if tokenType == FALSE {
 		s.addTokenWithLiteral(FALSE, false)
 	} else if tokenType == IDENTIFIER {
 		s.addTokenWithLiteral(IDENTIFIER, text)
@@ -251,8 +251,6 @@ func (s *Scanner) identifierType(text string) TokenType {
 	return IDENTIFIER
 }
 
-
-
 func (s *Scanner) addToken(tokenType TokenType) {
 	s.addTokenWithLiteral(tokenType, nil)
 }
@@ -262,7 +260,7 @@ func (s *Scanner) addTokenWithLiteral(tokenType TokenType, literal interface{}) 
 	s.tokens = append(s.tokens, NewToken(tokenType, text, literal, s.line))
 }
 
-// Returns the string starting from start to current 
+// Returns the string starting from start to current
 func (s *Scanner) getLexeme() string {
 	buf := s.source.Bytes()
 	if s.start < 0 || s.current > len(buf) || s.start > s.current {

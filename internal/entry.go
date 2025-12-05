@@ -6,25 +6,25 @@ import (
 )
 
 type ViriRuntimeConfig struct {
-	DebugMode bool
+	DebugMode      bool
 	DisableWarning bool
 }
 
 type Viri struct {
 	hasErrors bool
-	config *ViriRuntimeConfig
+	config    *ViriRuntimeConfig
 }
 
 func NewViriRuntime(config *ViriRuntimeConfig) *Viri {
 	if config == nil {
 		config = &ViriRuntimeConfig{
-			DebugMode: false,
+			DebugMode:      false,
 			DisableWarning: false,
 		}
 	}
 	return &Viri{
 		hasErrors: false,
-		config: config,
+		config:    config,
 	}
 }
 
@@ -45,7 +45,7 @@ func (v *Viri) Warn(token Token, message string) {
 }
 
 func (v *Viri) Run(bytes *bytes.Buffer) {
-	scanner := NewScanner(bytes);
+	scanner := NewScanner(bytes)
 	tokens, err := scanner.scan()
 	if err != nil {
 		fmt.Println("Error parsing tokens:", err)
@@ -53,11 +53,11 @@ func (v *Viri) Run(bytes *bytes.Buffer) {
 		return
 	}
 
-	parser := NewParser(tokens, v);
-	statements := parser.parse();
-	
-	if v.hasErrors{
-		return;
+	parser := NewParser(tokens, v)
+	statements := parser.parse()
+
+	if v.hasErrors {
+		return
 	}
 
 	if v.config.DebugMode {
