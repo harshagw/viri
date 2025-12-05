@@ -113,3 +113,37 @@ class Foo {
 var bar = Foo();
 
 print bar;
+
+class Person {
+  init(name, age) {
+    this.name = name;
+    this.age = age;
+  }
+
+  greet() {
+    print "Hello, I'm " + this.name + " and I'm " + this.age + " years old.";
+  }
+
+  haveBirthday() {
+    this.age = this.age + 1;
+    print this.name + " is now " + this.age + " years old!";
+  }
+
+  getInfo() {
+    return this.name + " (" + this.age + ")";
+  }
+}
+
+var alice = Person("Alice", 25);
+var bob = Person("Bob", 30);
+
+alice.greet();
+bob.greet();
+
+alice.haveBirthday();
+print "Info: " + alice.getInfo();
+
+// Field access
+print "Bob's age: " + bob.age;
+bob.age = 31;
+bob.greet();

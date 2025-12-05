@@ -213,6 +213,10 @@ func (i *Interpreter) visitBinaryExp(binaryExp *BinaryExp) (interface{}, error) 
 			return leftNum + rightNum, nil
 		} else if leftIsStr && rightIsStr {
 			return leftStr + rightStr, nil
+		} else if leftIsStr && rightIsNum {
+			return leftStr + fmt.Sprintf("%g", rightNum), nil
+		} else if leftIsNum && rightIsStr {
+			return fmt.Sprintf("%g", leftNum) + rightStr, nil
 		} else {
 			return nil, fmt.Errorf("operands to '+' must both be numbers or both be strings (left: %T=%v, right: %T=%v)", leftExp, leftExp, rightExp, rightExp)
 		}
