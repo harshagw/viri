@@ -1,10 +1,12 @@
-package internal
+package scanner
 
 import (
 	"bytes"
 	"errors"
 	"strconv"
 	"unicode"
+
+	"github.com/harshagw/viri/internal/token"
 )
 
 type Scanner struct {
@@ -12,20 +14,20 @@ type Scanner struct {
 	current int
 	start   int
 	line    int
-	tokens  []Token
+	tokens  []token.Token
 }
 
-func NewScanner(source *bytes.Buffer) *Scanner {
+func New(source *bytes.Buffer) *Scanner {
 	return &Scanner{
 		source:  source,
 		current: 0,
 		start:   0,
 		line:    1,
-		tokens:  []Token{},
+		tokens:  []token.Token{},
 	}
 }
 
-func (s *Scanner) scan() ([]Token, error) {
+func (s *Scanner) Scan() ([]token.Token, error) {
 	for !s.isAtEnd() {
 		s.start = s.current
 		if err := s.scanToken(); err != nil {
@@ -34,7 +36,7 @@ func (s *Scanner) scan() ([]Token, error) {
 	}
 
 	s.start = s.current
-	s.addToken(EOF)
+	s.addToken(token.EOF)
 	return s.tokens, nil
 }
 
@@ -47,48 +49,48 @@ func (s *Scanner) scanToken() error {
 
 	switch c {
 	case '(':
-		s.addToken(LEFT_PAREN)
+		s.addToken(token.LEFT_PAREN)
 	case ')':
-		s.addToken(RIGHT_PAREN)
+		s.addToken(token.RIGHT_PAREN)
 	case '{':
-		s.addToken(LEFT_BRACE)
+		s.addToken(token.LEFT_BRACE)
 	case '}':
-		s.addToken(RIGHT_BRACE)
+		s.addToken(token.RIGHT_BRACE)
 	case ',':
-		s.addToken(COMMA)
+		s.addToken(token.COMMA)
 	case '.':
-		s.addToken(DOT)
+		s.addToken(token.DOT)
 	case '-':
-		s.addToken(MINUS)
+		s.addToken(token.MINUS)
 	case '+':
-		s.addToken(PLUS)
+		s.addToken(token.PLUS)
 	case ';':
-		s.addToken(SEMICOLON)
+		s.addToken(token.SEMICOLON)
 	case '*':
-		s.addToken(STAR)
+		s.addToken(token.STAR)
 	case '!':
 		if s.match('=') {
-			s.addToken(BANG_EQUAL)
+			s.addToken(token.BANG_EQUAL)
 		} else {
-			s.addToken(BANG)
+			s.addToken(token.BANG)
 		}
 	case '=':
 		if s.match('=') {
-			s.addToken(EQUAL_EQUAL)
+			s.addToken(token.EQUAL_EQUAL)
 		} else {
-			s.addToken(EQUAL)
+			s.addToken(token.EQUAL)
 		}
 	case '<':
 		if s.match('=') {
-			s.addToken(LESS_EQUAL)
+			s.addToken(token.LESS_EQUAL)
 		} else {
-			s.addToken(LESS)
+			s.addToken(token.LESS)
 		}
 	case '>':
 		if s.match('=') {
-			s.addToken(GREATER_EQUAL)
+			s.addToken(token.GREATER_EQUAL)
 		} else {
-			s.addToken(GREATER)
+			s.addToken(token.GREATER)
 		}
 	case '/':
 		if s.match('/') {
@@ -96,12 +98,9 @@ func (s *Scanner) scanToken() error {
 				s.advance()
 			}
 		} else {
-			s.addToken(SLASH)
+			s.addToken(token.SLASH)
 		}
-	case '\t':
-	case '\r':
-	case ' ':
-		break
+	case '\t', '\r', ' ':
 	case '\n':
 		s.line++
 	case '"':
@@ -120,14 +119,14 @@ func (s *Scanner) scanToken() error {
 	return nil
 }
 
-// Returns the current character and advances the current pointer
+// Returns the current character and advances the current pointer.
 func (s *Scanner) advance() byte {
 	c := s.source.Bytes()[s.current]
 	s.current++
 	return c
 }
 
-// Matches the current character with the expected character and the advances the current pointer if it is match
+// Matches the current character with the expected character and then advances the pointer if it matches.
 func (s *Scanner) match(expected byte) bool {
 	if s.isAtEnd() {
 		return false
@@ -139,7 +138,7 @@ func (s *Scanner) match(expected byte) bool {
 	return true
 }
 
-// Returns the current character without advancing the current pointer
+// Returns the current character without advancing the pointer.
 func (s *Scanner) peek() byte {
 	if s.isAtEnd() {
 		return '\000'
@@ -147,7 +146,7 @@ func (s *Scanner) peek() byte {
 	return s.source.Bytes()[s.current]
 }
 
-// Returns the character after the current one without advancing
+// Returns the character after the current one without advancing.
 func (s *Scanner) peekNext() byte {
 	if s.current+1 >= s.source.Len() {
 		return '\000'
@@ -174,36 +173,32 @@ func (s *Scanner) scanString() error {
 
 	// Trim the surrounding quotes
 	value := string(s.source.Bytes()[s.start+1 : s.current-1])
-	s.addTokenWithLiteral(STRING, value)
+	s.addTokenWithLiteral(token.STRING, value)
 	return nil
 }
 
 func (s *Scanner) scanNumber() {
-	// Consume digits before decimal point
 	for unicode.IsDigit(rune(s.peek())) {
 		s.advance()
 	}
 
 	// Look for a fractional part
 	if s.peek() == '.' && unicode.IsDigit(rune(s.peekNext())) {
-		// Consume the '.'
 		s.advance()
 
-		// Consume digits after decimal point
 		for unicode.IsDigit(rune(s.peek())) {
 			s.advance()
 		}
 	}
 
 	text := s.getLexeme()
-	// Parse as float64 to handle both integers and floats
 	var value interface{}
 	if len(text) > 0 {
 		if num, err := strconv.ParseFloat(text, 64); err == nil {
 			value = num
 		}
 	}
-	s.addTokenWithLiteral(NUMBER, value)
+	s.addTokenWithLiteral(token.NUMBER, value)
 }
 
 func (s *Scanner) scanIdentifier() {
@@ -212,55 +207,28 @@ func (s *Scanner) scanIdentifier() {
 	}
 
 	text := s.getLexeme()
-	tokenType := s.identifierType(text)
-	if tokenType == TRUE {
-		s.addTokenWithLiteral(TRUE, true)
-	} else if tokenType == FALSE {
-		s.addTokenWithLiteral(FALSE, false)
-	} else if tokenType == IDENTIFIER {
-		s.addTokenWithLiteral(IDENTIFIER, text)
+	tokenType := token.LookupKeyword(text)
+	if tokenType == token.TRUE {
+		s.addTokenWithLiteral(token.TRUE, true)
+	} else if tokenType == token.FALSE {
+		s.addTokenWithLiteral(token.FALSE, false)
+	} else if tokenType == token.IDENTIFIER {
+		s.addTokenWithLiteral(token.IDENTIFIER, text)
 	} else {
 		s.addToken(tokenType)
 	}
 }
 
-func (s *Scanner) identifierType(text string) TokenType {
-	keywords := map[string]TokenType{
-		"and":    AND,
-		"or":     OR,
-		"var":    VAR,
-		"print":  PRINT,
-		"if":     IF,
-		"else":   ELSE,
-		"for":    FOR,
-		"while":  WHILE,
-		"true":   TRUE,
-		"false":  FALSE,
-		"nil":    NIL,
-		"fun":    FUN,
-		"class":  CLASS,
-		"return": RETURN,
-		"super":  SUPER,
-		"this":   THIS,
-		"break":  BREAK,
-	}
-
-	if tokenType, ok := keywords[text]; ok {
-		return tokenType
-	}
-	return IDENTIFIER
-}
-
-func (s *Scanner) addToken(tokenType TokenType) {
+func (s *Scanner) addToken(tokenType token.Type) {
 	s.addTokenWithLiteral(tokenType, nil)
 }
 
-func (s *Scanner) addTokenWithLiteral(tokenType TokenType, literal interface{}) {
+func (s *Scanner) addTokenWithLiteral(tokenType token.Type, literal interface{}) {
 	text := s.getLexeme()
-	s.tokens = append(s.tokens, NewToken(tokenType, text, literal, s.line))
+	s.tokens = append(s.tokens, token.New(tokenType, text, literal, s.line))
 }
 
-// Returns the string starting from start to current
+// Returns the string starting from start to current.
 func (s *Scanner) getLexeme() string {
 	buf := s.source.Bytes()
 	if s.start < 0 || s.current > len(buf) || s.start > s.current {

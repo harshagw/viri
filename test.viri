@@ -6,7 +6,7 @@ greeting = "what is this";
 
 var count = 0;
 
-clock();
+var startTime = clock();
 
 print "Counting from 0 to 5:";
 while (count <= 5) {
@@ -14,7 +14,9 @@ while (count <= 5) {
     count = count + 1;
 }
 
-clock();
+var endTime = clock();
+
+print "difference is " + (endTime - startTime);
 
 print "Multiples of 2 up to 10:";
 

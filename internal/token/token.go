@@ -1,12 +1,13 @@
-package internal
+package token
 
 import "fmt"
 
-type TokenType int
+// Type represents a lexical token type.
+type Type int
 
 const (
 	// Single-character tokens.
-	LEFT_PAREN = iota
+	LEFT_PAREN Type = iota
 	RIGHT_PAREN
 	LEFT_BRACE
 	RIGHT_BRACE
@@ -58,7 +59,7 @@ const (
 	EOF
 )
 
-func (tt TokenType) String() string {
+func (tt Type) String() string {
 	switch tt {
 	case LEFT_PAREN:
 		return "LEFT_PAREN"
@@ -145,22 +146,23 @@ func (tt TokenType) String() string {
 	}
 }
 
+// Token is a lexical token produced by the scanner.
 type Token struct {
-	TokenType TokenType
-	Lexeme    string
-	Literal   interface{}
-	Line      int
+	Type    Type
+	Lexeme  string
+	Literal interface{}
+	Line    int
 }
 
-func NewToken(tokenType TokenType, lexeme string, literal interface{}, line int) Token {
+func New(tt Type, lexeme string, literal interface{}, line int) Token {
 	return Token{
-		TokenType: tokenType,
-		Lexeme:    lexeme,
-		Literal:   literal,
-		Line:      line,
+		Type:    tt,
+		Lexeme:  lexeme,
+		Literal: literal,
+		Line:    line,
 	}
 }
 
-func (t *Token) ToString() string {
-	return fmt.Sprintf("%s %s %v %v", t.TokenType.String(), t.Lexeme, t.Literal, t.Line)
+func (t *Token) String() string {
+	return fmt.Sprintf("%s %s %v %v", t.Type.String(), t.Lexeme, t.Literal, t.Line)
 }

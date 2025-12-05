@@ -1,8 +1,6 @@
-package internal
+package objects
 
-import (
-	"fmt"
-)
+import "fmt"
 
 type Environment struct {
 	enclosing *Environment
@@ -16,14 +14,14 @@ func NewEnvironment(enclosing *Environment) *Environment {
 	}
 }
 
-func (e *Environment) define(name string, value interface{}) {
+func (e *Environment) Define(name string, value interface{}) {
 	e.values[name] = value
 }
 
-func (e *Environment) assign(name string, value interface{}) error {
+func (e *Environment) Assign(name string, value interface{}) error {
 	if _, ok := e.values[name]; !ok {
 		if e.enclosing != nil {
-			return e.enclosing.assign(name, value)
+			return e.enclosing.Assign(name, value)
 		}
 		return fmt.Errorf("'%s' variable not found", name)
 	}
@@ -31,18 +29,18 @@ func (e *Environment) assign(name string, value interface{}) error {
 	return nil
 }
 
-func (e *Environment) get(name string) (interface{}, error) {
+func (e *Environment) Get(name string) (interface{}, error) {
 	value, ok := e.values[name]
 	if !ok {
 		if e.enclosing != nil {
-			return e.enclosing.get(name)
+			return e.enclosing.Get(name)
 		}
 		return nil, fmt.Errorf("'%s' variable not found", name)
 	}
 	return value, nil
 }
 
-func (e *Environment) getAt(distance int, name string) (interface{}, error) {
+func (e *Environment) GetAt(distance int, name string) (interface{}, error) {
 	env := e.ancestor(distance)
 	value, ok := env.values[name]
 	if !ok {
@@ -51,9 +49,8 @@ func (e *Environment) getAt(distance int, name string) (interface{}, error) {
 	return value, nil
 }
 
-func (e *Environment) assignAt(distance int, name string, value interface{}) error {
+func (e *Environment) AssignAt(distance int, name string, value interface{}) error {
 	e.ancestor(distance).values[name] = value
-
 	return nil
 }
 
