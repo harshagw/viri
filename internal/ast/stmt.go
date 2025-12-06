@@ -47,11 +47,26 @@ type WhileStmt struct {
 
 func (*WhileStmt) stmtNode() {}
 
+type ForStmt struct {
+	Initializer Stmt
+	Condition   Expr
+	Increment   Expr
+	Body        Stmt
+}
+
+func (*ForStmt) stmtNode() {}
+
 type BreakStmt struct {
 	Keyword *token.Token
 }
 
 func (*BreakStmt) stmtNode() {}
+
+type ContinueStmt struct {
+	Keyword *token.Token
+}
+
+func (*ContinueStmt) stmtNode() {}
 
 type FunctionStmt struct {
 	Name   *token.Token

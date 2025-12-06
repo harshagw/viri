@@ -109,14 +109,14 @@ func (p *Printer) printExpr(expr Expr) {
 		p.writeNode("Index")
 		newPrefix := p.childPrefix()
 		p.withPrefix(newPrefix, false, func() { p.printExpr(n.Object) })
-		p.withPrefix(newPrefix, true, func() { 
+		p.withPrefix(newPrefix, true, func() {
 			p.writeNode("index")
 			p.withPrefix(p.childPrefix(), true, func() { p.printExpr(n.Index) })
 		})
 	case *SetIndexExpr:
 		p.writeNode("SetIndex")
 		newPrefix := p.childPrefix()
-		p.withPrefix(newPrefix, false, func() { 
+		p.withPrefix(newPrefix, false, func() {
 			p.writeNode("object")
 			p.withPrefix(p.childPrefix(), true, func() { p.printExpr(n.Object) })
 		})
@@ -124,10 +124,10 @@ func (p *Printer) printExpr(expr Expr) {
 			p.writeNode("index")
 			p.withPrefix(p.childPrefix(), true, func() { p.printExpr(n.Index) })
 		})
-		p.withPrefix(newPrefix, true, func() { 
+		p.withPrefix(newPrefix, true, func() {
 			p.writeNode("value")
 			p.withPrefix(p.childPrefix(), true, func() { p.printExpr(n.Value) })
-		 })
+		})
 	case *HashLiteralExpr:
 		p.writeNode("HashLiteral")
 		newPrefix := p.childPrefix()
@@ -191,8 +191,41 @@ func (p *Printer) printStmt(stmt Stmt) {
 			p.writeNode("body")
 			p.withPrefix(p.childPrefix(), true, func() { p.printStmt(n.Body) })
 		})
+	case *ForStmt:
+		p.writeNode("For")
+		newPrefix := p.childPrefix()
+		p.withPrefix(newPrefix, false, func() {
+			p.writeNode("initializer")
+			if n.Initializer != nil {
+				p.withPrefix(p.childPrefix(), true, func() { p.printStmt(n.Initializer) })
+			} else {
+				p.withPrefix(p.childPrefix(), true, func() { p.writeNode("nil") })
+			}
+		})
+		p.withPrefix(newPrefix, false, func() {
+			p.writeNode("condition")
+			if n.Condition != nil {
+				p.withPrefix(p.childPrefix(), true, func() { p.printExpr(n.Condition) })
+			} else {
+				p.withPrefix(p.childPrefix(), true, func() { p.writeNode("nil") })
+			}
+		})
+		p.withPrefix(newPrefix, false, func() {
+			p.writeNode("increment")
+			if n.Increment != nil {
+				p.withPrefix(p.childPrefix(), true, func() { p.printExpr(n.Increment) })
+			} else {
+				p.withPrefix(p.childPrefix(), true, func() { p.writeNode("nil") })
+			}
+		})
+		p.withPrefix(newPrefix, true, func() {
+			p.writeNode("body")
+			p.withPrefix(p.childPrefix(), true, func() { p.printStmt(n.Body) })
+		})
 	case *BreakStmt:
 		p.writeNode("Break")
+	case *ContinueStmt:
+		p.writeNode("Continue")
 	case *FunctionStmt:
 		p.writeNode("Function (" + n.Name.Lexeme + ")")
 		newPrefix := p.childPrefix()

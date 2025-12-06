@@ -14,6 +14,11 @@ type BreakError struct{}
 
 func (e *BreakError) Error() string { return "break" }
 
+// ContinueError is used for continue control flow in loops.
+type ContinueError struct{}
+
+func (e *ContinueError) Error() string { return "continue" }
+
 // RuntimeError is used for runtime errors.
 type RuntimeError struct {
 	Token   *token.Token

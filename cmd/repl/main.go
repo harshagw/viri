@@ -19,7 +19,7 @@ import (
 
 func main() {
 	debugMode := false
-	showWarning := true
+	showWarning := false
 
 	for _, arg := range os.Args[1:] {
 		switch arg {
@@ -76,10 +76,21 @@ func main() {
 		}
 
 		interpreter.SetLocals(locals)
-		if err := interpreter.Interpret(stmts); err != nil {
+		results, err := interpreter.Interpret(stmts)
+		if err != nil {
 			color.New(color.FgRed).Fprintf(color.Error, "Runtime error: %v\n", err)
 			program = program[:len(program)-len(stmts)]
 			return
+		}
+		for idx, result := range results {
+			if result == nil {
+				continue
+			}
+			if _, ok := stmts[idx].(*ast.PrintStmt); ok {
+				// Print statements already output the value; avoid duplicating.
+				continue
+			}
+			fmt.Println(result.Inspect())
 		}
 	}
 

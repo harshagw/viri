@@ -33,13 +33,16 @@ func (i *Interpreter) SetLocals(locals map[ast.Expr]int) {
 	i.locals = locals
 }
 
-func (i *Interpreter) Interpret(stmts []ast.Stmt) error {
+func (i *Interpreter) Interpret(stmts []ast.Stmt) ([]objects.Object, error) {
+	results := make([]objects.Object, 0, len(stmts))
 	for _, stmt := range stmts {
-		if _, err := i.evalStmt(stmt); err != nil {
-			return err
+		result, err := i.evalStmt(stmt)
+		if err != nil {
+			return results, err
 		}
+		results = append(results, result)
 	}
-	return nil
+	return results, nil
 }
 
 // ExecuteBlock executes a block in a provided environment.
@@ -79,8 +82,12 @@ func (i *Interpreter) evalStmt(stmt ast.Stmt) (objects.Object, error) {
 		return i.visitIfStmt(s)
 	case *ast.WhileStmt:
 		return i.visitWhileStmt(s)
+	case *ast.ForStmt:
+		return i.visitForStmt(s)
 	case *ast.BreakStmt:
 		return nil, &objects.BreakError{}
+	case *ast.ContinueStmt:
+		return nil, &objects.ContinueError{}
 	default:
 		return nil, errors.New("invalid statement")
 	}
@@ -195,12 +202,55 @@ func (i *Interpreter) visitWhileStmt(whileStmt *ast.WhileStmt) (objects.Object, 
 			break
 		}
 		if _, err = i.evalStmt(whileStmt.Body); err != nil {
-			if _, ok := err.(*objects.BreakError); ok {
-				break
+			switch err.(type) {
+			case *objects.BreakError:
+				return nil, nil
+			case *objects.ContinueError:
+				continue
+			default:
+				return nil, err
 			}
+		}
+	}
+	return nil, nil
+}
+
+func (i *Interpreter) visitForStmt(forStmt *ast.ForStmt) (objects.Object, error) {
+	if forStmt.Initializer != nil {
+		if _, err := i.evalStmt(forStmt.Initializer); err != nil {
 			return nil, err
 		}
 	}
+
+	for {
+		if forStmt.Condition != nil {
+			cond, err := i.evalExpr(forStmt.Condition)
+			if err != nil {
+				return nil, err
+			}
+			if !objects.IsTruthy(cond) {
+				break
+			}
+		}
+
+		if _, err := i.evalStmt(forStmt.Body); err != nil {
+			switch err.(type) {
+			case *objects.BreakError:
+				return nil, nil
+			case *objects.ContinueError:
+				// skip to increment
+			default:
+				return nil, err
+			}
+		}
+
+		if forStmt.Increment != nil {
+			if _, err := i.evalExpr(forStmt.Increment); err != nil {
+				return nil, err
+			}
+		}
+	}
+
 	return nil, nil
 }
 

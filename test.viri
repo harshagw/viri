@@ -1,14 +1,18 @@
-var items = ["routers", "switches", "cables"];
-print items[0];         
-items[2] = "fiber cables";
-print items[2];        
-print len(items);      
-var shelves = [["A1", "A2", "A3"], ["B1", "B2", "B3"]];
-print shelves[1][0]; 
+// continue in while: skip 3, sum others (1+2+4+5 = 12)
+var i = 0;
+var sum = 0;
+while (i < 5) {
+  i = i + 1;
+  if (i == 3) continue; else print "i is " + i;
+  sum = sum + i;
+}
+print "total sum is " + sum;
+print "-------------------";
 
-var user = {"name": "guest", "scores": [12, 24, 36]};
-print user["name"];           
-user["name"] = "alice";
-print user["name"];          
-print len(user); 
-print user["scores"][1];                  
+// continue in for: skip 2, accumulate others (0+1+3+4 = 8)
+var total = 0;
+for (var j = 0; j < 5; j = j + 1) {
+  if (j == 2) continue;
+  total = total + j;
+}
+print total;

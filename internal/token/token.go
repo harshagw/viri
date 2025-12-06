@@ -57,6 +57,7 @@ const (
 	RETURN
 	SUPER
 	THIS
+	CONTINUE
 	BREAK
 
 	EOF
@@ -146,6 +147,8 @@ func (tt Type) String() string {
 		return "SUPER"
 	case THIS:
 		return "THIS"
+	case CONTINUE:
+		return "CONTINUE"
 	case BREAK:
 		return "BREAK"
 	case EOF:

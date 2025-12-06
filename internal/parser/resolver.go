@@ -84,9 +84,15 @@ func (r *Resolver) resolveStmt(stmt ast.Stmt) {
 		r.visitIfStmt(s)
 	case *ast.WhileStmt:
 		r.visitWhileStmt(s)
+	case *ast.ForStmt:
+		r.visitForStmt(s)
 	case *ast.BreakStmt:
 		if r.loopDepth == 0 {
 			r.reportError(s.Keyword, "break statement must be inside a loop.")
+		}
+	case *ast.ContinueStmt:
+		if r.loopDepth == 0 {
+			r.reportError(s.Keyword, "continue statement must be inside a loop.")
 		}
 	case *ast.ReturnStmt:
 		r.visitReturnStmt(s)
@@ -270,6 +276,21 @@ func (r *Resolver) visitWhileStmt(whileStmt *ast.WhileStmt) {
 	r.loopDepth++
 	r.resolveStmt(whileStmt.Body)
 	r.loopDepth--
+}
+
+func (r *Resolver) visitForStmt(forStmt *ast.ForStmt) {
+	if forStmt.Initializer != nil {
+		r.resolveStmt(forStmt.Initializer)
+	}
+	if forStmt.Condition != nil {
+		r.resolveExpr(forStmt.Condition)
+	}
+	r.loopDepth++
+	r.resolveStmt(forStmt.Body)
+	r.loopDepth--
+	if forStmt.Increment != nil {
+		r.resolveExpr(forStmt.Increment)
+	}
 }
 
 func (r *Resolver) visitReturnStmt(returnStmt *ast.ReturnStmt) {

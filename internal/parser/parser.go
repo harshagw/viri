@@ -105,6 +105,9 @@ func (p *Parser) parseStmt() (ast.Stmt, error) {
 	if p.match(token.BREAK) {
 		return p.parseBreakStmt()
 	}
+	if p.match(token.CONTINUE) {
+		return p.parseContinueStmt()
+	}
 	if p.match(token.RETURN) {
 		return p.parseReturnStmt()
 	}
@@ -283,31 +286,12 @@ func (p *Parser) parseForStmt() (ast.Stmt, error) {
 		return nil, err
 	}
 
-	if increment != nil {
-		body = &ast.BlockStmt{
-			Statements: []ast.Stmt{
-				body,
-				&ast.ExprStmt{Expr: increment},
-			},
-		}
-	}
-
-	if condition == nil {
-		condition = &ast.LiteralExpr{Value: true}
-	}
-
-	body = &ast.WhileStmt{
-		Condition: condition,
-		Body:      body,
-	}
-
-	if initializer != nil {
-		body = &ast.BlockStmt{
-			Statements: []ast.Stmt{initializer, body},
-		}
-	}
-
-	return body, nil
+	return &ast.ForStmt{
+		Initializer: initializer,
+		Condition:   condition,
+		Increment:   increment,
+		Body:        body,
+	}, nil
 }
 
 func (p *Parser) parseIfStmt() (ast.Stmt, error) {
@@ -377,6 +361,16 @@ func (p *Parser) parseBreakStmt() (ast.Stmt, error) {
 		return nil, err
 	}
 	return &ast.BreakStmt{
+		Keyword: keyword,
+	}, nil
+}
+
+func (p *Parser) parseContinueStmt() (ast.Stmt, error) {
+	keyword := p.peekPrevious()
+	if _, err := p.consume(token.SEMICOLON, "Expect ';' after continue."); err != nil {
+		return nil, err
+	}
+	return &ast.ContinueStmt{
 		Keyword: keyword,
 	}, nil
 }
