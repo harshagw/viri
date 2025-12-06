@@ -11,6 +11,8 @@ const (
 	RIGHT_PAREN
 	LEFT_BRACE
 	RIGHT_BRACE
+	LEFT_BRACKET
+	RIGHT_BRACKET
 	COMMA
 	DOT
 	MINUS
@@ -69,6 +71,10 @@ func (tt Type) String() string {
 		return "LEFT_BRACE"
 	case RIGHT_BRACE:
 		return "RIGHT_BRACE"
+	case LEFT_BRACKET:
+		return "LEFT_BRACKET"
+	case RIGHT_BRACKET:
+		return "RIGHT_BRACKET"
 	case COMMA:
 		return "COMMA"
 	case DOT:

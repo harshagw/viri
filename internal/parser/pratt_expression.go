@@ -38,6 +38,7 @@ var infixPrecedence = map[token.Type]precedence{
 	token.STAR:          precFactor,
 	token.LEFT_PAREN:    precCall,
 	token.DOT:           precCall,
+	token.LEFT_BRACKET:  precCall,
 }
 
 func infixBindingPower(tt token.Type) precedence {
@@ -112,6 +113,24 @@ func (p *Parser) parsePrefix(tok *token.Token) (ast.Expr, error) {
 			return nil, err
 		}
 		return &ast.GroupingExpr{Expr: expr}, nil
+	case token.LEFT_BRACKET:
+		elements := make([]ast.Expr, 0)
+		if !p.check(token.RIGHT_BRACKET) {
+			for {
+				element, err := p.parseExpression(precNone)
+				if err != nil {
+					return nil, err
+				}
+				elements = append(elements, element)
+				if !p.match(token.COMMA) {
+					break
+				}
+			}
+		}
+		if _, err := p.consume(token.RIGHT_BRACKET, "Expected ']' after expression."); err != nil {
+			return nil, err
+		}
+		return &ast.ArrayLiteralExpr{Elements: elements}, nil
 	default:
 		return nil, p.error(tok, "Expect expression.")
 	}
@@ -137,6 +156,8 @@ func (p *Parser) parseInfix(left ast.Expr, operator *token.Token) (ast.Expr, err
 			return &ast.AssignExpr{Name: target.Name, Value: right}, nil
 		case *ast.GetExpr:
 			return &ast.SetExpr{Object: target.Object, Name: target.Name, Value: right}, nil
+		case *ast.IndexExpr:
+			return &ast.SetIndexExpr{Object: target.Object, Index: target.Index, Value: right, Bracket: target.Bracket}, nil
 		default:
 			return nil, p.error(operator, "Invalid assignment target")
 		}
@@ -154,6 +175,16 @@ func (p *Parser) parseInfix(left ast.Expr, operator *token.Token) (ast.Expr, err
 			return nil, err
 		}
 		return &ast.BinaryExpr{Left: left, Right: right, Operator: *operator}, nil
+	case token.LEFT_BRACKET:
+		right, err := p.parseExpression(precNone)
+		if err != nil {
+			return nil, err
+		}
+		closing, err := p.consume(token.RIGHT_BRACKET, "Expect ']' after expression.");
+		if  err != nil {
+			return nil, err
+		}
+		return &ast.IndexExpr{Object: left, Index: right, Bracket: *closing}, nil
 	default:
 		return left, nil
 	}

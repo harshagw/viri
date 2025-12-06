@@ -214,12 +214,16 @@ func (i *Interpreter) evalExpr(expr ast.Expr) (objects.Object, error) {
 		return i.evalExpr(e.Expr)
 	case *ast.LiteralExpr:
 		return literalToObject(e.Value), nil
+	case *ast.ArrayLiteralExpr:
+		return i.visitArrayLiteralExpr(e)
 	case *ast.UnaryExpr:
 		return i.visitUnaryExpr(e)
 	case *ast.VariableExpr:
 		return i.visitVariableExpr(e)
 	case *ast.AssignExpr:
 		return i.visitAssignExpr(e)
+	case *ast.SetIndexExpr:
+		return i.visitSetIndexExpr(e)
 	case *ast.LogicalExpr:
 		return i.visitLogicalExpr(e)
 	case *ast.CallExpr:
@@ -228,6 +232,8 @@ func (i *Interpreter) evalExpr(expr ast.Expr) (objects.Object, error) {
 		return i.visitGetExpr(e)
 	case *ast.SetExpr:
 		return i.visitSetExpr(e)
+	case *ast.IndexExpr:
+		return i.visitIndexExpr(e)
 	case *ast.ThisExpr:
 		return i.visitThisExpr(e)
 	case *ast.SuperExpr:
@@ -354,6 +360,77 @@ func (i *Interpreter) visitAssignExpr(assign *ast.AssignExpr) (objects.Object, e
 		}
 	}
 	return value, nil
+}
+
+func (i *Interpreter) visitArrayLiteralExpr(array *ast.ArrayLiteralExpr) (objects.Object, error) {
+	items := make([]objects.Object, 0, len(array.Elements))
+	for _, el := range array.Elements {
+		val, err := i.evalExpr(el)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, val)
+	}
+	return &objects.Array{Elements: items}, nil
+}
+
+func (i *Interpreter) visitIndexExpr(idx *ast.IndexExpr) (objects.Object, error) {
+	obj, err := i.evalExpr(idx.Object)
+	if err != nil {
+		return nil, err
+	}
+	arr, ok := obj.(*objects.Array)
+	if !ok {
+		return nil, i.runtimeError(idx.Bracket, "Indexing target must be an array.")
+	}
+	indexVal, err := i.evalExpr(idx.Index)
+	if err != nil {
+		return nil, err
+	}
+	indexNum, ok := indexVal.(*objects.Number)
+	if !ok {
+		return nil, i.runtimeError(idx.Bracket, "Index must be a number.")
+	}
+	intIndex := int(indexNum.Value)
+	if float64(intIndex) != indexNum.Value {
+		return nil, i.runtimeError(idx.Bracket, "Index must be an integer.")
+	}
+	val, err := arr.Get(intIndex)
+	if err != nil {
+		return nil, i.runtimeError(idx.Bracket, err.Error())
+	}
+	return val, nil
+}
+
+func (i *Interpreter) visitSetIndexExpr(setIdx *ast.SetIndexExpr) (objects.Object, error) {
+	obj, err := i.evalExpr(setIdx.Object)
+	if err != nil {
+		return nil, err
+	}
+	arr, ok := obj.(*objects.Array)
+	if !ok {
+		return nil, i.runtimeError(setIdx.Bracket, "Index assignment target must be an array.")
+	}
+	indexVal, err := i.evalExpr(setIdx.Index)
+	if err != nil {
+		return nil, err
+	}
+	indexNum, ok := indexVal.(*objects.Number)
+	if !ok {
+		return nil, i.runtimeError(setIdx.Bracket, "Index must be a number.")
+	}
+	intIndex := int(indexNum.Value)
+	if float64(intIndex) != indexNum.Value {
+		return nil, i.runtimeError(setIdx.Bracket, "Index must be an integer.")
+	}
+	val, err := i.evalExpr(setIdx.Value)
+	if err != nil {
+		return nil, err
+	}
+	if err := arr.Set(intIndex, val); err != nil {
+		return nil, i.runtimeError(setIdx.Bracket, err.Error())
+	}
+	return val, nil
 }
 
 func (i *Interpreter) visitLogicalExpr(logical *ast.LogicalExpr) (objects.Object, error) {

@@ -95,6 +95,31 @@ func (p *Printer) printExpr(expr Expr) {
 		})
 	case *ThisExpr:
 		p.writeNode("This")
+	case *ArrayLiteralExpr:
+		p.writeNode("ArrayLiteral")
+		newPrefix := p.childPrefix()
+		p.withPrefix(newPrefix, true, func() {
+			p.writeNode("elements")
+			elementsPrefix := p.childPrefix()
+			for i, element := range n.Elements {
+				p.withPrefix(elementsPrefix, i == len(n.Elements)-1, func() { p.printExpr(element) })
+			}
+		})
+	case *IndexExpr:
+		p.writeNode("Index")
+		newPrefix := p.childPrefix()
+		p.withPrefix(newPrefix, false, func() { p.printExpr(n.Object) })
+		p.withPrefix(newPrefix, true, func() { p.writeNode("index") })
+		p.withPrefix(p.childPrefix(), true, func() { p.printExpr(n.Index) })
+	case *SetIndexExpr:
+		p.writeNode("SetIndex")
+		newPrefix := p.childPrefix()
+		p.withPrefix(newPrefix, false, func() { p.printExpr(n.Object) })
+		p.withPrefix(newPrefix, false, func() {
+			p.writeNode("index")
+			p.withPrefix(p.childPrefix(), true, func() { p.printExpr(n.Index) })
+		})
+		p.withPrefix(newPrefix, true, func() { p.printExpr(n.Value) })
 	default:
 		p.writeNode("Unknown Expr")
 	}

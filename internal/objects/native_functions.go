@@ -37,6 +37,10 @@ func (l *Len) Call(exec BlockExecutor, arguments []Object) (Object, error) {
 	switch value.Type() {
 	case TypeString:
 		return NewNumber(float64(len(value.Inspect()))), nil
+	case TypeArray:
+		if arr, ok := value.(*Array); ok {
+			return NewNumber(float64(len(arr.Elements))), nil
+		}
 	}
 	return nil, errors.New("invalid argument type for len function: " + string(value.Type()))
 }

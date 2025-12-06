@@ -2,6 +2,7 @@ package parser
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/harshagw/viri/internal/ast"
 	"github.com/harshagw/viri/internal/objects"
@@ -89,6 +90,8 @@ func (r *Resolver) resolveStmt(stmt ast.Stmt) {
 		}
 	case *ast.ReturnStmt:
 		r.visitReturnStmt(s)
+	default:
+		panic(fmt.Sprintf("unknown statement type: %T", s))
 	}
 }
 
@@ -100,12 +103,20 @@ func (r *Resolver) resolveExpr(expr ast.Expr) {
 	case *ast.GroupingExpr:
 		r.resolveExpr(e.Expr)
 	case *ast.LiteralExpr:
+	case *ast.ArrayLiteralExpr:
+		for _, el := range e.Elements {
+			r.resolveExpr(el)
+		}
 	case *ast.UnaryExpr:
 		r.resolveExpr(e.Expr)
 	case *ast.VariableExpr:
 		r.visitVariable(e)
 	case *ast.AssignExpr:
 		r.visitAssignment(e)
+	case *ast.SetIndexExpr:
+		r.resolveExpr(e.Object)
+		r.resolveExpr(e.Index)
+		r.resolveExpr(e.Value)
 	case *ast.LogicalExpr:
 		r.resolveExpr(e.Left)
 		r.resolveExpr(e.Right)
@@ -120,6 +131,11 @@ func (r *Resolver) resolveExpr(expr ast.Expr) {
 		r.visitThisExpr(e)
 	case *ast.SuperExpr:
 		r.visitSuperExpr(e)
+	case *ast.IndexExpr:
+		r.resolveExpr(e.Object)
+		r.resolveExpr(e.Index)
+	default:
+		panic(fmt.Sprintf("unknown expression type: %T", e))
 	}
 }
 

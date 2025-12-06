@@ -12,6 +12,7 @@ const (
 	TypeClass     Type = "CLASS"
 	TypeInstance  Type = "INSTANCE"
 	TypeNativeFun Type = "NATIVE_FUNCTION"
+	TypeArray Type = "ARRAY"
 )
 
 // Object is a runtime value.

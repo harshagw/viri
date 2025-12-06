@@ -1,5 +1,6 @@
-var a = 123;
-var b = 12312;
-var c = 12312;
-a = b + c;
--a * b;
+var nums = [1, 2, 3];
+print nums[0];          // 1
+nums[1] = nums[0] + 10;
+print nums[1];          // 11
+print len(nums);        // 3
+print [true, false, 42][2]; // 42

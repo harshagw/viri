@@ -90,3 +90,26 @@ type SuperExpr struct {
 }
 
 func (*SuperExpr) exprNode() {}
+
+type ArrayLiteralExpr struct {
+	Elements []Expr
+}
+
+func (*ArrayLiteralExpr) exprNode() {}
+
+type IndexExpr struct {
+	Object Expr
+	Index  Expr
+	Bracket token.Token
+}
+
+func (*IndexExpr) exprNode() {}
+
+type SetIndexExpr struct {
+	Object Expr
+	Index  Expr
+	Value  Expr
+	Bracket token.Token
+}
+
+func (*SetIndexExpr) exprNode() {}
