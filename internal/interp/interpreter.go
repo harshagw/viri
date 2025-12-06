@@ -116,7 +116,7 @@ func (i *Interpreter) visitClass(class *ast.ClassStmt) (objects.Object, error) {
 		methodEnvironment.Define("super", superClassObj)
 	}
 
-	methods := make(map[string]*objects.Function)
+	methods := make(map[string]*objects.Function, len(class.Methods))
 	for _, method := range class.Methods {
 		function := objects.NewFunction(method, methodEnvironment, method.Name.Lexeme == "init")
 		methods[method.Name.Lexeme] = function
@@ -332,7 +332,7 @@ func (i *Interpreter) visitThisExpr(t *ast.ThisExpr) (objects.Object, error) {
 	return i.findVariable(t, t.Keyword)
 }
 
-func (i *Interpreter) findVariable(expr ast.Expr, name token.Token) (objects.Object, error) {
+func (i *Interpreter) findVariable(expr ast.Expr, name *token.Token) (objects.Object, error) {
 	if dist, ok := i.locals[expr]; ok {
 		val, err := i.environment.GetAt(dist, name.Lexeme)
 		if err != nil {
@@ -625,7 +625,7 @@ func literalToObject(v interface{}) objects.Object {
 	}
 }
 
-func (i *Interpreter) runtimeError(tok token.Token, message string) error {
+func (i *Interpreter) runtimeError(tok *token.Token, message string) error {
 	return &objects.RuntimeError{
 		Token:   tok,
 		Message: message,

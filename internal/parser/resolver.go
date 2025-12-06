@@ -14,7 +14,7 @@ var ErrResolve = errors.New("resolve error")
 type VariableInfo struct {
 	defined bool
 	used    bool
-	token   token.Token
+	token   *token.Token
 }
 
 type FunctionType int
@@ -177,8 +177,11 @@ func (r *Resolver) visitAssignment(assignment *ast.AssignExpr) {
 	r.markVariableUsed(assignment.Name)
 }
 
-func (r *Resolver) resolveLocal(expr ast.Expr, name token.Token) {
+func (r *Resolver) resolveLocal(expr ast.Expr, name *token.Token) {
 	for i := len(r.scopes) - 1; i >= 0; i-- {
+		if name == nil {
+			continue
+		}
 		if _, ok := r.scopes[i][name.Lexeme]; ok {
 			r.locals[expr] = len(r.scopes) - i - 1
 			return
@@ -217,14 +220,14 @@ func (r *Resolver) visitClass(class *ast.ClassStmt) {
 		r.currentClass = ClassTypeSubclass
 
 		superToken := token.New(token.SUPER, "super", nil, class.SuperClass.Name.Line)
-		r.declare(superToken)
-		r.define(superToken)
+		r.declare(&superToken)
+		r.define(&superToken)
 	}
 
 	r.beginScope()
 	thisToken := token.New(token.THIS, "this", nil, class.Name.Line)
-	r.declare(thisToken)
-	r.define(thisToken)
+	r.declare(&thisToken)
+	r.define(&thisToken)
 
 	for _, method := range class.Methods {
 		r.resolveFunction(method, FunctionTypeMethod)
@@ -323,7 +326,7 @@ func (r *Resolver) endScope() {
 
 	scope := r.scopes[len(r.scopes)-1]
 	for name, info := range scope {
-		if info.defined && !info.used && name != "this" && name != "super" {
+		if info.defined && !info.used && name != "this" && name != "super" && info.token != nil {
 			r.reportWarn(info.token, "Local variable '"+name+"' is declared but never used.")
 		}
 	}
@@ -331,8 +334,11 @@ func (r *Resolver) endScope() {
 	r.scopes = r.scopes[:len(r.scopes)-1]
 }
 
-func (r *Resolver) declare(tok token.Token) {
+func (r *Resolver) declare(tok *token.Token) {
 	if len(r.scopes) == 0 {
+		return
+	}
+	if tok == nil {
 		return
 	}
 
@@ -349,8 +355,12 @@ func (r *Resolver) declare(tok token.Token) {
 	}
 }
 
-func (r *Resolver) define(tok token.Token) {
+func (r *Resolver) define(tok *token.Token) {
 	if len(r.scopes) == 0 {
+		return
+	}
+
+	if tok == nil {
 		return
 	}
 
@@ -365,7 +375,10 @@ func (r *Resolver) define(tok token.Token) {
 	}
 }
 
-func (r *Resolver) markVariableUsed(tok token.Token) {
+func (r *Resolver) markVariableUsed(tok *token.Token) {
+	if tok == nil {
+		return
+	}
 	for i := len(r.scopes) - 1; i >= 0; i-- {
 		if info, ok := r.scopes[i][tok.Lexeme]; ok {
 			info.used = true
@@ -374,15 +387,15 @@ func (r *Resolver) markVariableUsed(tok token.Token) {
 	}
 }
 
-func (r *Resolver) reportError(tok token.Token, message string) {
+func (r *Resolver) reportError(tok *token.Token, message string) {
 	r.hadError = true
-	if r.diagnosticHandler != nil {
-		r.diagnosticHandler.Error(tok, message)
+	if r.diagnosticHandler != nil && tok != nil {
+		r.diagnosticHandler.Error(*tok, message)
 	}
 }
 
-func (r *Resolver) reportWarn(tok token.Token, message string) {
-	if r.diagnosticHandler != nil {
-		r.diagnosticHandler.Warn(tok, message)
+func (r *Resolver) reportWarn(tok *token.Token, message string) {
+	if r.diagnosticHandler != nil && tok != nil {
+		r.diagnosticHandler.Warn(*tok, message)
 	}
 }

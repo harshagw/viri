@@ -8,9 +8,9 @@ import (
 
 // Class represents a user-defined class.
 type Class struct {
-	name    string
+	name       string
 	superClass *Class
-	methods map[string]*Function
+	methods    map[string]*Function
 }
 
 func NewClass(name string, superClass *Class, methods map[string]*Function) *Class {
@@ -59,7 +59,7 @@ func (ci *ClassInstance) String() string {
 func (ci *ClassInstance) Inspect() string { return ci.String() }
 func (ci *ClassInstance) Type() Type      { return TypeInstance }
 
-func (ci *ClassInstance) Get(name token.Token) (Object, error) {
+func (ci *ClassInstance) Get(name *token.Token) (Object, error) {
 	if value, ok := ci.fields[name.Lexeme]; ok {
 		return value, nil
 	}
@@ -69,7 +69,7 @@ func (ci *ClassInstance) Get(name token.Token) (Object, error) {
 	return nil, errors.New("instance does not have field " + name.Lexeme)
 }
 
-func (ci *ClassInstance) Set(name token.Token, value Object) error {
+func (ci *ClassInstance) Set(name *token.Token, value Object) error {
 	ci.fields[name.Lexeme] = value
 	return nil
 }

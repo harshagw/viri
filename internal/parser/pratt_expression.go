@@ -86,9 +86,9 @@ func (p *Parser) parsePrefix(tok *token.Token) (ast.Expr, error) {
 	case token.NUMBER, token.STRING, token.TRUE, token.FALSE, token.NIL:
 		return &ast.LiteralExpr{Value: tok.Literal}, nil
 	case token.IDENTIFIER:
-		return &ast.VariableExpr{Name: *tok}, nil
+		return &ast.VariableExpr{Name: tok}, nil
 	case token.THIS:
-		return &ast.ThisExpr{Keyword: *tok}, nil
+		return &ast.ThisExpr{Keyword: tok}, nil
 	case token.SUPER:
 		if _, err := p.consume(token.DOT, "Expect '.' after 'super'."); err != nil {
 			return nil, err
@@ -97,13 +97,13 @@ func (p *Parser) parsePrefix(tok *token.Token) (ast.Expr, error) {
 		if err != nil {
 			return nil, err
 		}
-		return &ast.SuperExpr{Keyword: *tok, Method: *method}, nil
+		return &ast.SuperExpr{Keyword: tok, Method: method}, nil
 	case token.BANG, token.MINUS:
 		right, err := p.parseExpression(precUnary)
 		if err != nil {
 			return nil, err
 		}
-		return &ast.UnaryExpr{Operator: *tok, Expr: right}, nil
+		return &ast.UnaryExpr{Operator: tok, Expr: right}, nil
 	case token.LEFT_PAREN:
 		expr, err := p.parseExpression(precNone)
 		if err != nil {
@@ -158,7 +158,7 @@ func (p *Parser) parsePrefix(tok *token.Token) (ast.Expr, error) {
 		if _, err := p.consume(token.RIGHT_BRACE, "Expect '}' after hash literal."); err != nil {
 			return nil, err
 		}
-		return &ast.HashLiteralExpr{Pairs: pairs, Brace: *tok}, nil
+		return &ast.HashLiteralExpr{Pairs: pairs, Brace: tok}, nil
 	default:
 		return nil, p.error(tok, "Expect expression.")
 	}
@@ -173,7 +173,7 @@ func (p *Parser) parseInfix(left ast.Expr, operator *token.Token) (ast.Expr, err
 		if err != nil {
 			return nil, err
 		}
-		return &ast.GetExpr{Object: left, Name: *ident}, nil
+		return &ast.GetExpr{Object: left, Name: ident}, nil
 	case token.EQUAL:
 		right, err := p.parseExpression(infixBindingPower(operator.Type) - 1) // -1 because equal is right associative
 		if err != nil {
@@ -194,7 +194,7 @@ func (p *Parser) parseInfix(left ast.Expr, operator *token.Token) (ast.Expr, err
 		if err != nil {
 			return nil, err
 		}
-		return &ast.LogicalExpr{Left: left, Operator: *operator, Right: right}, nil
+		return &ast.LogicalExpr{Left: left, Operator: operator, Right: right}, nil
 	case token.EQUAL_EQUAL, token.BANG_EQUAL,
 		token.GREATER, token.GREATER_EQUAL, token.LESS, token.LESS_EQUAL,
 		token.MINUS, token.PLUS, token.SLASH, token.STAR:
@@ -202,7 +202,7 @@ func (p *Parser) parseInfix(left ast.Expr, operator *token.Token) (ast.Expr, err
 		if err != nil {
 			return nil, err
 		}
-		return &ast.BinaryExpr{Left: left, Right: right, Operator: *operator}, nil
+		return &ast.BinaryExpr{Left: left, Right: right, Operator: operator}, nil
 	case token.LEFT_BRACKET:
 		right, err := p.parseExpression(precNone)
 		if err != nil {
@@ -212,7 +212,7 @@ func (p *Parser) parseInfix(left ast.Expr, operator *token.Token) (ast.Expr, err
 		if err != nil {
 			return nil, err
 		}
-		return &ast.IndexExpr{Object: left, Index: right, Bracket: *closing}, nil
+		return &ast.IndexExpr{Object: left, Index: right, Bracket: closing}, nil
 	default:
 		return left, nil
 	}
@@ -244,6 +244,6 @@ func (p *Parser) finishCall(callee ast.Expr) (ast.Expr, error) {
 	return &ast.CallExpr{
 		Callee:       callee,
 		Arguments:    arguments,
-		ClosingParen: *p.peekPrevious(),
+		ClosingParen: p.peekPrevious(),
 	}, nil
 }

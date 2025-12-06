@@ -20,7 +20,7 @@ type PrintStmt struct {
 func (*PrintStmt) stmtNode() {}
 
 type VarDeclStmt struct {
-	Name        token.Token
+	Name        *token.Token
 	Initializer Expr
 }
 
@@ -48,30 +48,30 @@ type WhileStmt struct {
 func (*WhileStmt) stmtNode() {}
 
 type BreakStmt struct {
-	Keyword token.Token
+	Keyword *token.Token
 }
 
 func (*BreakStmt) stmtNode() {}
 
 type FunctionStmt struct {
-	Name   token.Token
-	Params []token.Token
+	Name   *token.Token
+	Params []*token.Token
 	Body   *BlockStmt
 }
 
 func (*FunctionStmt) stmtNode() {}
 
 type ReturnStmt struct {
-	Keyword token.Token
+	Keyword *token.Token
 	Value   Expr
 }
 
 func (*ReturnStmt) stmtNode() {}
 
 type ClassStmt struct {
-	Name    token.Token
+	Name       *token.Token
 	SuperClass *VariableExpr
-	Methods []*FunctionStmt
+	Methods    []*FunctionStmt
 }
 
 func (*ClassStmt) stmtNode() {}

@@ -16,7 +16,7 @@ func (e *BreakError) Error() string { return "break" }
 
 // RuntimeError is used for runtime errors.
 type RuntimeError struct {
-	Token   token.Token
+	Token   *token.Token
 	Message string
 }
 

@@ -91,7 +91,11 @@ func (v *Viri) Run(bytes *bytes.Buffer) {
 
 	if err := interpreter.Interpret(statements); err != nil {
 		if runtimeErr, ok := err.(*objects.RuntimeError); ok {
-			color.New(color.FgRed).Fprintf(color.Error, "Runtime error at line %d: %s\n", runtimeErr.Token.Line, runtimeErr.Message)
+			if runtimeErr.Token != nil {
+				color.New(color.FgRed).Fprintf(color.Error, "Runtime error at line %d: %s\n", runtimeErr.Token.Line, runtimeErr.Message)
+			} else {
+				color.New(color.FgRed).Fprintln(color.Error, "Runtime error:", runtimeErr.Message)
+			}
 		} else {
 			fmt.Println("Runtime error:", err)
 		}

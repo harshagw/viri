@@ -81,7 +81,7 @@ func (p *Parser) parseVarDecl() (ast.Stmt, error) {
 	}
 
 	return &ast.VarDeclStmt{
-		Name:        *name,
+		Name:        name,
 		Initializer: initializer,
 	}, nil
 }
@@ -128,7 +128,7 @@ func (p *Parser) parseReturnStmt() (ast.Stmt, error) {
 		return nil, err
 	}
 	return &ast.ReturnStmt{
-		Keyword: *keyword,
+		Keyword: keyword,
 		Value:   value,
 	}, nil
 }
@@ -145,7 +145,7 @@ func (p *Parser) parseClass() (ast.Stmt, error) {
 			return nil, err
 		}
 		superclass = &ast.VariableExpr{
-			Name: *superClassName,
+			Name: superClassName,
 		}
 	}
 	if _, err = p.consume(token.LEFT_BRACE, "Expect '{' before class body."); err != nil {
@@ -163,7 +163,7 @@ func (p *Parser) parseClass() (ast.Stmt, error) {
 		return nil, err
 	}
 	return &ast.ClassStmt{
-		Name:       *name,
+		Name:       name,
 		Methods:    methods,
 		SuperClass: superclass,
 	}, nil
@@ -177,7 +177,7 @@ func (p *Parser) parseFunction() (ast.Stmt, error) {
 	if _, err = p.consume(token.LEFT_PAREN, "Expect '(' after function name."); err != nil {
 		return nil, err
 	}
-	parameters := make([]token.Token, 0)
+	parameters := make([]*token.Token, 0)
 	if !p.check(token.RIGHT_PAREN) {
 		for {
 			if len(parameters) >= 255 {
@@ -188,7 +188,7 @@ func (p *Parser) parseFunction() (ast.Stmt, error) {
 			if err != nil {
 				return nil, err
 			}
-			parameters = append(parameters, *parameter)
+			parameters = append(parameters, parameter)
 			if !p.match(token.COMMA) {
 				break
 			}
@@ -205,7 +205,7 @@ func (p *Parser) parseFunction() (ast.Stmt, error) {
 		return nil, err
 	}
 	return &ast.FunctionStmt{
-		Name:   *name,
+		Name:   name,
 		Params: parameters,
 		Body:   body,
 	}, nil
@@ -377,7 +377,7 @@ func (p *Parser) parseBreakStmt() (ast.Stmt, error) {
 		return nil, err
 	}
 	return &ast.BreakStmt{
-		Keyword: *keyword,
+		Keyword: keyword,
 	}, nil
 }
 
