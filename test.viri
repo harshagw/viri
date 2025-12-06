@@ -1,6 +1,14 @@
-var nums = [1, 2, 3];
-print nums[0];          // 1
-nums[1] = nums[0] + 10;
-print nums[1];          // 11
-print len(nums);        // 3
-print [true, false, 42][2]; // 42
+var items = ["routers", "switches", "cables"];
+print items[0];         
+items[2] = "fiber cables";
+print items[2];        
+print len(items);      
+var shelves = [["A1", "A2", "A3"], ["B1", "B2", "B3"]];
+print shelves[1][0]; 
+
+var user = {"name": "guest", "scores": [12, 24, 36]};
+print user["name"];           
+user["name"] = "alice";
+print user["name"];          
+print len(user); 
+print user["scores"][1];                  

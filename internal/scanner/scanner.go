@@ -62,6 +62,8 @@ func (s *Scanner) scanToken() error {
 		s.addToken(token.RIGHT_BRACKET)
 	case ',':
 		s.addToken(token.COMMA)
+	case ':':
+		s.addToken(token.COLON)
 	case '.':
 		s.addToken(token.DOT)
 	case '-':

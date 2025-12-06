@@ -107,6 +107,11 @@ func (r *Resolver) resolveExpr(expr ast.Expr) {
 		for _, el := range e.Elements {
 			r.resolveExpr(el)
 		}
+	case *ast.HashLiteralExpr:
+		for _, pair := range e.Pairs {
+			r.resolveExpr(pair.Key)
+			r.resolveExpr(pair.Value)
+		}
 	case *ast.UnaryExpr:
 		r.resolveExpr(e.Expr)
 	case *ast.VariableExpr:
@@ -206,7 +211,7 @@ func (r *Resolver) visitClass(class *ast.ClassStmt) {
 		}
 
 		r.resolveExpr(class.SuperClass)
-		
+
 		r.beginScope()
 
 		r.currentClass = ClassTypeSubclass

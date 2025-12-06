@@ -131,6 +131,34 @@ func (p *Parser) parsePrefix(tok *token.Token) (ast.Expr, error) {
 			return nil, err
 		}
 		return &ast.ArrayLiteralExpr{Elements: elements}, nil
+	case token.LEFT_BRACE:
+		pairs := make([]ast.HashPair, 0)
+		if !p.check(token.RIGHT_BRACE) {
+			for {
+				keyExpr, err := p.parseExpression(precNone)
+				if err != nil {
+					return nil, err
+				}
+				if _, err := p.consume(token.COLON, "Expect ':' after hash key."); err != nil {
+					return nil, err
+				}
+				valueExpr, err := p.parseExpression(precNone)
+				if err != nil {
+					return nil, err
+				}
+				pairs = append(pairs, ast.HashPair{
+					Key:   keyExpr,
+					Value: valueExpr,
+				})
+				if !p.match(token.COMMA) {
+					break
+				}
+			}
+		}
+		if _, err := p.consume(token.RIGHT_BRACE, "Expect '}' after hash literal."); err != nil {
+			return nil, err
+		}
+		return &ast.HashLiteralExpr{Pairs: pairs, Brace: *tok}, nil
 	default:
 		return nil, p.error(tok, "Expect expression.")
 	}
@@ -180,8 +208,8 @@ func (p *Parser) parseInfix(left ast.Expr, operator *token.Token) (ast.Expr, err
 		if err != nil {
 			return nil, err
 		}
-		closing, err := p.consume(token.RIGHT_BRACKET, "Expect ']' after expression.");
-		if  err != nil {
+		closing, err := p.consume(token.RIGHT_BRACKET, "Expect ']' after expression.")
+		if err != nil {
 			return nil, err
 		}
 		return &ast.IndexExpr{Object: left, Index: right, Bracket: *closing}, nil

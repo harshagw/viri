@@ -109,17 +109,36 @@ func (p *Printer) printExpr(expr Expr) {
 		p.writeNode("Index")
 		newPrefix := p.childPrefix()
 		p.withPrefix(newPrefix, false, func() { p.printExpr(n.Object) })
-		p.withPrefix(newPrefix, true, func() { p.writeNode("index") })
-		p.withPrefix(p.childPrefix(), true, func() { p.printExpr(n.Index) })
+		p.withPrefix(newPrefix, true, func() { 
+			p.writeNode("index")
+			p.withPrefix(p.childPrefix(), true, func() { p.printExpr(n.Index) })
+		})
 	case *SetIndexExpr:
 		p.writeNode("SetIndex")
 		newPrefix := p.childPrefix()
-		p.withPrefix(newPrefix, false, func() { p.printExpr(n.Object) })
+		p.withPrefix(newPrefix, false, func() { 
+			p.writeNode("object")
+			p.withPrefix(p.childPrefix(), true, func() { p.printExpr(n.Object) })
+		})
 		p.withPrefix(newPrefix, false, func() {
 			p.writeNode("index")
 			p.withPrefix(p.childPrefix(), true, func() { p.printExpr(n.Index) })
 		})
-		p.withPrefix(newPrefix, true, func() { p.printExpr(n.Value) })
+		p.withPrefix(newPrefix, true, func() { 
+			p.writeNode("value")
+			p.withPrefix(p.childPrefix(), true, func() { p.printExpr(n.Value) })
+		 })
+	case *HashLiteralExpr:
+		p.writeNode("HashLiteral")
+		newPrefix := p.childPrefix()
+		p.withPrefix(newPrefix, true, func() {
+			p.writeNode("pairs")
+			pairsPrefix := p.childPrefix()
+			for i, pair := range n.Pairs {
+				p.withPrefix(pairsPrefix, i == len(n.Pairs)-1, func() { p.printExpr(pair.Key) })
+				p.withPrefix(pairsPrefix, true, func() { p.printExpr(pair.Value) })
+			}
+		})
 	default:
 		p.writeNode("Unknown Expr")
 	}

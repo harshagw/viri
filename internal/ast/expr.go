@@ -97,19 +97,32 @@ type ArrayLiteralExpr struct {
 
 func (*ArrayLiteralExpr) exprNode() {}
 
+type HashPair struct {
+	Key   Expr
+	Value Expr
+}
+
+type HashLiteralExpr struct {
+	Pairs []HashPair
+	Brace token.Token
+}
+
+func (*HashLiteralExpr) exprNode() {}
+
 type IndexExpr struct {
-	Object Expr
-	Index  Expr
+	Object  Expr
+	Index   Expr
 	Bracket token.Token
 }
 
 func (*IndexExpr) exprNode() {}
 
 type SetIndexExpr struct {
-	Object Expr
-	Index  Expr
-	Value  Expr
+	Object  Expr
+	Index   Expr
+	Value   Expr
 	Bracket token.Token
 }
 
 func (*SetIndexExpr) exprNode() {}
+

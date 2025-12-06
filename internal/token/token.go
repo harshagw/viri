@@ -20,6 +20,7 @@ const (
 	SEMICOLON
 	SLASH
 	STAR
+	COLON
 
 	// One or two character tokens.
 	BANG
@@ -89,6 +90,8 @@ func (tt Type) String() string {
 		return "SLASH"
 	case STAR:
 		return "STAR"
+	case COLON:
+		return "COLON"
 	case BANG:
 		return "BANG"
 	case BANG_EQUAL:
