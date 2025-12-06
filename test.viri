@@ -1,23 +1,5 @@
-class A {
-  foo(){
-    print this.name;
-  }
-}
-
-class B < A {
-  bar(){
-    this.name = "bar";
-    super.foo();
-  }
-}
-
-var b = B();
-b.bar();
-
-var a = "fasdfs";
-
-print a = a + 123;
-
-print len(1232);
-
-print len;
+var a = 123;
+var b = 12312;
+var c = 12312;
+a = b + c;
+-a * b;
