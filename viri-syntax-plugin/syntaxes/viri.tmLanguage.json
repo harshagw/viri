@@ -1,0 +1,179 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Viri",
+  "scopeName": "source.viri",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#strings" },
+    { "include": "#numbers" },
+    { "include": "#keywords" },
+    { "include": "#function-declarations" },
+    { "include": "#class-declarations" },
+    { "include": "#booleans" },
+    { "include": "#nil" },
+    { "include": "#this-super" },
+    { "include": "#builtins" },
+    { "include": "#operators" },
+    { "include": "#punctuation" },
+    { "include": "#hash-keys" },
+    { "include": "#identifiers" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.viri",
+          "begin": "//",
+          "beginCaptures": {
+            "0": { "name": "punctuation.definition.comment.viri" }
+          },
+          "end": "$",
+          "patterns": [
+            {
+              "name": "comment.note.viri",
+              "match": "\\b(?:TODO|FIXME|NOTE)\\b"
+            }
+          ]
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.viri",
+          "begin": "\"",
+          "beginCaptures": {
+            "0": { "name": "punctuation.definition.string.begin.viri" }
+          },
+          "end": "\"",
+          "endCaptures": {
+            "0": { "name": "punctuation.definition.string.end.viri" }
+          },
+          "patterns": [
+            {
+              "name": "constant.character.escape.viri",
+              "match": "\\\\."
+            }
+          ]
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.viri",
+          "match": "\\b\\d+(?:\\.\\d+)?\\b"
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.viri",
+          "match": "\\b(?:and|or|if|else|for|while|return|break)\\b"
+        },
+        {
+          "name": "storage.type.var.viri",
+          "match": "\\bvar\\b"
+        },
+        {
+          "name": "support.function.print.viri",
+          "match": "\\bprint\\b"
+        }
+      ]
+    },
+    "function-declarations": {
+      "patterns": [
+        {
+          "name": "meta.function.declaration.viri",
+          "match": "\\b(fun)\\b\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
+          "captures": {
+            "1": { "name": "keyword.declaration.function.viri" },
+            "2": { "name": "entity.name.function.viri" }
+          }
+        }
+      ]
+    },
+    "class-declarations": {
+      "patterns": [
+        {
+          "name": "meta.class.declaration.viri",
+          "match": "\\b(class)\\b\\s+([a-zA-Z_][a-zA-Z0-9_]*)(?:\\s*<\\s*([a-zA-Z_][a-zA-Z0-9_]*))?",
+          "captures": {
+            "1": { "name": "keyword.declaration.class.viri" },
+            "2": { "name": "entity.name.type.class.viri" },
+            "3": { "name": "entity.other.inherited-class.viri" }
+          }
+        }
+      ]
+    },
+    "booleans": {
+      "patterns": [
+        {
+          "name": "constant.language.boolean.viri",
+          "match": "\\b(?:true|false)\\b"
+        }
+      ]
+    },
+    "nil": {
+      "patterns": [
+        {
+          "name": "constant.language.null.viri",
+          "match": "\\bnil\\b"
+        }
+      ]
+    },
+    "this-super": {
+      "patterns": [
+        {
+          "name": "variable.language.viri",
+          "match": "\\b(?:this|super)\\b"
+        }
+      ]
+    },
+    "builtins": {
+      "patterns": [
+        {
+          "name": "support.function.builtin.viri",
+          "match": "\\b(?:len)\\b"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.viri",
+          "match": "(?:==|!=|<=|>=|=|!|<|>|\\+|-|\\*|/|\\.|:)"
+        }
+      ]
+    },
+    "punctuation": {
+      "patterns": [
+        {
+          "name": "punctuation.section.viri",
+          "match": "[\\[\\]\\(\\)\\{\\},;]"
+        }
+      ]
+    },
+    "hash-keys": {
+      "patterns": [
+        {
+          "name": "support.type.property-name.viri",
+          "match": "(?:\"([^\"]+)\")\\s*:|\\b([a-zA-Z_][a-zA-Z0-9_]*)\\s*:",
+          "captures": {
+            "1": { "name": "string.unquoted.property.viri" },
+            "2": { "name": "variable.other.property.viri" }
+          }
+        }
+      ]
+    },
+    "identifiers": {
+      "patterns": [
+        {
+          "name": "variable.other.viri",
+          "match": "\\b[a-zA-Z_][a-zA-Z0-9_]*\\b"
+        }
+      ]
+    }
+  }
+}

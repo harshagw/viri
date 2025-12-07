@@ -1,0 +1,46 @@
+{
+  "name": "viri-syntax",
+  "displayName": "Viri Syntax",
+  "description": "Syntax highlighting for the Viri language.",
+  "version": "0.0.1",
+  "publisher": "local",
+  "main": "./extension.js",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/harshagw/viri"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "viri",
+        "aliases": [
+          "Viri",
+          "viri"
+        ],
+        "extensions": [
+          ".viri"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "viri",
+        "scopeName": "source.viri",
+        "path": "./syntaxes/viri.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "viri",
+        "path": "./snippets/viri.json"
+      }
+    ]
+  }
+}

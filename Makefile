@@ -11,3 +11,6 @@ tidy:
 
 test:
 	go test ./...
+
+build-plugin:
+	cd /Users/harsh/code/viri/viri-syntax-plugin && vsce package

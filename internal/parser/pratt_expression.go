@@ -53,7 +53,8 @@ func (p *Parser) parseExpr() (ast.Expr, error) {
 	return p.parseExpression(precNone)
 }
 
-// parseExpression implements a Pratt parser for expressions.
+// parseExpression() takes a precedence — a number that tells which expressions can be parsed by that call.
+// any expression which has precedence lower than we allow, we stop parsing and returns the expression.
 func (p *Parser) parseExpression(minPrec precedence) (ast.Expr, error) {
 	tok := p.peekCurrent()
 	p.advance()
@@ -63,15 +64,15 @@ func (p *Parser) parseExpression(minPrec precedence) (ast.Expr, error) {
 	}
 
 	for {
-		next := p.peekCurrent() // this usually gives out operator token
-		nextPrec := infixBindingPower(next.Type)
+		op := p.peekCurrent() // this usually gives out operator token
+		if op == nil {
+			break;
+		}
+		nextPrec := infixBindingPower(op.Type)
 		if minPrec >= nextPrec {
 			break
 		}
-		op := p.advance() // op = next actually
-		if op == nil {
-			break
-		}
+		p.advance()
 		left, err = p.parseInfix(left, op)
 		if err != nil {
 			return nil, err

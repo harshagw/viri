@@ -1,3 +1,4 @@
 docs/*
 test.viri
 .gocache/*
+viri-syntax-plugin/*.vsix
