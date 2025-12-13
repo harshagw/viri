@@ -3,6 +3,8 @@ package parser
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
+	"strings"
 
 	"github.com/harshagw/viri/internal/ast"
 	"github.com/harshagw/viri/internal/objects"
@@ -42,6 +44,8 @@ type Resolver struct {
 	scopes            []map[string]*VariableInfo
 	locals            map[ast.Expr]int
 	hadError          bool
+	resolutionStack   []string
+	resolvedModules   map[string]*ast.Module
 }
 
 func NewResolver(diagnosticHandler objects.DiagnosticHandler) *Resolver {
@@ -51,15 +55,31 @@ func NewResolver(diagnosticHandler objects.DiagnosticHandler) *Resolver {
 		currentFunction:   FunctionTypeNone,
 		currentClass:      ClassTypeNone,
 		locals:            make(map[ast.Expr]int),
+		resolutionStack:   []string{},
+		resolvedModules:   make(map[string]*ast.Module),
 	}
 }
 
-func (r *Resolver) Resolve(stmts []ast.Stmt) (map[ast.Expr]int, error) {
+func (r *Resolver) GetResolvedModules() map[string]*ast.Module {
+	return r.resolvedModules
+}
+
+func (r *Resolver) GetCurrentModule() string {
+	if len(r.resolutionStack) == 0 {
+		return ""
+	}
+	return r.resolutionStack[len(r.resolutionStack)-1]
+}
+
+func (r *Resolver) Resolve(mod *ast.Module) (map[ast.Expr]int, error) {
+	r.resolutionStack = []string{mod.Path}
+
 	r.beginScope()
-	for _, stmt := range stmts {
+	for _, stmt := range mod.GetAllStatements() {
 		r.resolveStmt(stmt)
 	}
 	r.endScope()
+
 	if r.hadError {
 		return r.locals, ErrResolve
 	}
@@ -68,6 +88,8 @@ func (r *Resolver) Resolve(stmts []ast.Stmt) (map[ast.Expr]int, error) {
 
 func (r *Resolver) resolveStmt(stmt ast.Stmt) {
 	switch s := stmt.(type) {
+	case *ast.ImportStmt:
+		r.resolveImportStmt(s)
 	case *ast.BlockStmt:
 		r.visitBlock(s)
 	case *ast.VarDeclStmt:
@@ -164,6 +186,10 @@ func (r *Resolver) visitVarDeclStmt(stmt *ast.VarDeclStmt) {
 		r.resolveExpr(stmt.Initializer)
 	}
 	r.define(stmt.Name)
+
+	if stmt.Exported {
+		r.markVariableUsed(stmt.Name)
+	}
 }
 
 func (r *Resolver) visitVariable(variable *ast.VariableExpr) {
@@ -199,6 +225,10 @@ func (r *Resolver) visitFunction(function *ast.FunctionStmt) {
 	r.declare(function.Name)
 	r.define(function.Name)
 
+	if function.Exported {
+		r.markVariableUsed(function.Name)
+	}
+
 	newFunctionType := FunctionTypeFunction
 	if r.currentClass != ClassTypeNone && function.Name.Lexeme == "init" {
 		newFunctionType = FunctionTypeInitializer
@@ -209,6 +239,10 @@ func (r *Resolver) visitFunction(function *ast.FunctionStmt) {
 func (r *Resolver) visitClass(class *ast.ClassStmt) {
 	r.declare(class.Name)
 	r.define(class.Name)
+
+	if class.Exported {
+		r.markVariableUsed(class.Name)
+	}
 
 	previousClassType := r.currentClass
 	r.currentClass = ClassTypeClass
@@ -225,13 +259,13 @@ func (r *Resolver) visitClass(class *ast.ClassStmt) {
 
 		r.currentClass = ClassTypeSubclass
 
-		superToken := token.New(token.SUPER, "super", nil, class.SuperClass.Name.Line)
+		superToken := token.New(token.SUPER, "super", nil, class.SuperClass.Name.Line, class.SuperClass.Name.FilePath)
 		r.declare(&superToken)
 		r.define(&superToken)
 	}
 
 	r.beginScope()
-	thisToken := token.New(token.THIS, "this", nil, class.Name.Line)
+	thisToken := token.New(token.THIS, "this", nil, class.Name.Line, class.Name.FilePath)
 	r.declare(&thisToken)
 	r.define(&thisToken)
 
@@ -419,4 +453,98 @@ func (r *Resolver) reportWarn(tok *token.Token, message string) {
 	if r.diagnosticHandler != nil && tok != nil {
 		r.diagnosticHandler.Warn(*tok, message)
 	}
+}
+
+func (r *Resolver) resolveImportStmt(stmt *ast.ImportStmt) {
+	r.declare(stmt.Alias)
+	r.define(stmt.Alias)
+
+	importPath, ok := stmt.Path.Literal.(string)
+	if !ok {
+		r.reportError(stmt.Path, "Import path must be a string.")
+		return
+	}
+
+	currentModule := r.GetCurrentModule()
+	baseDir := filepath.Dir(currentModule)
+	targetPath, err := ResolveModulePath(baseDir, importPath)
+	if err != nil {
+		r.reportError(stmt.Path, fmt.Sprintf("Failed to resolve import path: %s", err.Error()))
+		return
+	}
+
+	if r.isInResolutionStack(targetPath) {
+		cyclePath := r.buildCyclePath(targetPath)
+		message := fmt.Sprintf("Circular dependency detected:\n  %s\nThe import chain forms a cycle: %s imports %s, which is already in the import chain.",
+			cyclePath,
+			filepath.Base(currentModule),
+			filepath.Base(targetPath))
+		r.reportError(stmt.Path, message)
+		return
+	}
+
+	r.resolutionStack = append(r.resolutionStack, targetPath)
+
+	if _, ok := r.resolvedModules[targetPath]; !ok {
+		mod, err := LoadModuleFile(targetPath, r.diagnosticHandler)
+		if err != nil {
+			r.reportError(stmt.Path, fmt.Sprintf("Failed to load module: %s", err.Error()))
+			r.resolutionStack = r.resolutionStack[:len(r.resolutionStack)-1]
+			return
+		}
+
+		r.resolvedModules[targetPath] = mod
+
+		previousScopes := r.scopes
+		r.scopes = []map[string]*VariableInfo{}
+
+		r.beginScope()
+
+		for _, importStmt := range mod.Imports {
+			r.resolveStmt(importStmt)
+		}
+
+		for _, s := range mod.Statements {
+			r.resolveStmt(s)
+		}
+
+		r.endScope()
+
+		r.scopes = previousScopes
+	}
+
+	r.resolutionStack = r.resolutionStack[:len(r.resolutionStack)-1]
+}
+
+func (r *Resolver) isInResolutionStack(path string) bool {
+	for _, p := range r.resolutionStack {
+		if p == path {
+			return true
+		}
+	}
+	return false
+}
+
+func (r *Resolver) buildCyclePath(cycleStart string) string {
+	startIdx := -1
+	for i, p := range r.resolutionStack {
+		if p == cycleStart {
+			startIdx = i
+			break
+		}
+	}
+
+	if startIdx == -1 {
+		// Shouldn't happen, but handle gracefully
+		return filepath.Base(cycleStart)
+	}
+
+	cycle := r.resolutionStack[startIdx:]
+	cycle = append(cycle, cycleStart) // Close the cycle
+
+	var parts []string
+	for _, path := range cycle {
+		parts = append(parts, filepath.Base(path))
+	}
+	return strings.Join(parts, " → ")
 }

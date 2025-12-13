@@ -1,7 +1,6 @@
 package internal
 
 import (
-	"bytes"
 	"fmt"
 
 	"github.com/fatih/color"
@@ -9,7 +8,6 @@ import (
 	"github.com/harshagw/viri/internal/interp"
 	"github.com/harshagw/viri/internal/objects"
 	"github.com/harshagw/viri/internal/parser"
-	"github.com/harshagw/viri/internal/scanner"
 	"github.com/harshagw/viri/internal/token"
 )
 
@@ -43,7 +41,11 @@ func (v *Viri) HasErrors() bool {
 }
 
 func (v *Viri) Error(tok token.Token, message string) {
-	color.New(color.FgRed).Fprintf(color.Error, "Error at line %d: %s\n", tok.Line, message)
+	if tok.FilePath != nil {
+		color.New(color.FgRed).Fprintf(color.Error, "Error in %s at line %d: %s\n", *tok.FilePath, tok.Line, message)
+	} else {
+		color.New(color.FgRed).Fprintf(color.Error, "Error at line %d: %s\n", tok.Line, message)
+	}
 	v.hasErrors = true
 }
 
@@ -51,22 +53,19 @@ func (v *Viri) Warn(tok token.Token, message string) {
 	if v.config.DisableWarning {
 		return
 	}
-	color.New(color.FgYellow).Fprintf(color.Error, "Warning at line %d: %s\n", tok.Line, message)
+	if tok.FilePath != nil {
+		color.New(color.FgYellow).Fprintf(color.Error, "Warning in %s at line %d: %s\n", *tok.FilePath, tok.Line, message)
+	} else {
+		color.New(color.FgYellow).Fprintf(color.Error, "Warning at line %d: %s\n", tok.Line, message)
+	}
 }
 
-func (v *Viri) Run(bytes *bytes.Buffer) {
-	sc := scanner.New(bytes)
-	tokens, err := sc.Scan()
+func (v *Viri) Run(filePath string) {
+	mod, err := parser.LoadModuleFile(filePath, v)
 	if err != nil {
-		fmt.Println("Error parsing tokens:", err)
+		fmt.Println("Error parsing module:", err)
 		v.hasErrors = true
 		return
-	}
-
-	p := parser.NewParser(tokens, v)
-	statements, err := p.Parse()
-	if err != nil {
-		v.hasErrors = true
 	}
 
 	if v.hasErrors {
@@ -75,12 +74,12 @@ func (v *Viri) Run(bytes *bytes.Buffer) {
 
 	if v.config.DebugMode {
 		printer := ast.NewPrinter()
-		tree := printer.PrintStatements(statements)
+		tree := printer.PrintStatements(mod.GetAllStatements())
 		fmt.Println(tree)
 	}
 
 	res := parser.NewResolver(v)
-	locals, err := res.Resolve(statements)
+	locals, err := res.Resolve(mod)
 	if err != nil {
 		v.hasErrors = true
 		return
@@ -88,11 +87,17 @@ func (v *Viri) Run(bytes *bytes.Buffer) {
 
 	interpreter := interp.NewInterpreter(nil)
 	interpreter.SetLocals(locals)
+	interpreter.SetResolvedModules(res.GetResolvedModules())
+	interpreter.SetCurrentModule(mod.Path)
 
-	if _, err := interpreter.Interpret(statements); err != nil {
+	if _, err := interpreter.Interpret(mod.GetAllStatements()); err != nil {
 		if runtimeErr, ok := err.(*objects.RuntimeError); ok {
 			if runtimeErr.Token != nil {
-				color.New(color.FgRed).Fprintf(color.Error, "Runtime error at line %d: %s\n", runtimeErr.Token.Line, runtimeErr.Message)
+				if runtimeErr.Token.FilePath != nil {
+					color.New(color.FgRed).Fprintf(color.Error, "Runtime error in %s at line %d: %s\n", *runtimeErr.Token.FilePath, runtimeErr.Token.Line, runtimeErr.Message)
+				} else {
+					color.New(color.FgRed).Fprintf(color.Error, "Runtime error at line %d: %s\n", runtimeErr.Token.Line, runtimeErr.Message)
+				}
 			} else {
 				color.New(color.FgRed).Fprintln(color.Error, "Runtime error:", runtimeErr.Message)
 			}

@@ -14,6 +14,7 @@ const (
 	TypeNativeFun Type = "NATIVE_FUNCTION"
 	TypeArray     Type = "ARRAY"
 	TypeHash      Type = "HASH"
+	TypeNamespace Type = "NAMESPACE"
 )
 
 // Object is a runtime value.

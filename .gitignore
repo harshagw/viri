@@ -1,4 +1,9 @@
 docs/*
-test.viri
+examples/*
 .gocache/*
 viri-syntax-plugin/*.vsix
+
+# Go build executables
+/viri
+/repl
+*.exe

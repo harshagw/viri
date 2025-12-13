@@ -257,6 +257,11 @@ func (p *Printer) printStmt(stmt Stmt) {
 				})
 			}
 		})
+	case *ImportStmt:
+		p.writeNode("Import (" + n.Path.Lexeme + ")")
+		if n.Alias != nil {
+			p.withPrefix(p.childPrefix(), true, func() { p.writeNode("alias (" + n.Alias.Lexeme + ")") })
+		}
 	default:
 		p.writeNode("Unknown Stmt")
 	}

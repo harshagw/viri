@@ -20,6 +20,9 @@ var keywordLookup = map[string]Type{
 	"this":     THIS,
 	"continue": CONTINUE,
 	"break":    BREAK,
+	"import":   IMPORT,
+	"export":   EXPORT,
+	"as":       AS,
 }
 
 // LookupKeyword returns the token type for a keyword or IDENTIFIER if not reserved.

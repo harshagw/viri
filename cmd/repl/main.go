@@ -34,7 +34,7 @@ func main() {
 	fmt.Printf("\n%s\n\n(type :quit to exit)\n\n", banner)
 
 	interpreter := interp.NewInterpreter(nil)
-	var program []ast.Stmt
+	var programStmts []ast.Stmt
 	handler := &replHandler{disableWarning: !showWarning}
 
 	executor := func(line string) {
@@ -49,7 +49,7 @@ func main() {
 		code := bytes.NewBufferString(line + "\n")
 		handler.hasErrors = false
 
-		sc := scanner.New(code)
+		sc := scanner.New(code, nil)
 		tokens, err := sc.Scan()
 		if err != nil {
 			fmt.Println("Error parsing tokens:", err)
@@ -57,37 +57,40 @@ func main() {
 		}
 
 		p := parser.NewParser(tokens, handler)
-		stmts, err := p.Parse()
+		p.SetFilePath("<repl>")
+		lineModule, err := p.Parse()
 		if err != nil || handler.hasErrors {
 			return
 		}
 
 		if debugMode {
 			pr := ast.NewPrinter()
-			fmt.Println(pr.PrintStatements(stmts))
+			fmt.Println(pr.PrintStatements(lineModule.GetAllStatements()))
 		}
 
-		program = append(program, stmts...)
+		newStmts := lineModule.GetAllStatements()
+		programStmts = append(programStmts, newStmts...)
+		replModule := ast.NewModule("<repl>", nil, programStmts)
+
 		res := parser.NewResolver(handler)
-		locals, err := res.Resolve(program)
+		locals, err := res.Resolve(replModule)
 		if err != nil || handler.hasErrors {
-			program = program[:len(program)-len(stmts)]
+			programStmts = programStmts[:len(programStmts)-len(newStmts)]
 			return
 		}
 
 		interpreter.SetLocals(locals)
-		results, err := interpreter.Interpret(stmts)
+		results, err := interpreter.Interpret(newStmts)
 		if err != nil {
 			color.New(color.FgRed).Fprintf(color.Error, "Runtime error: %v\n", err)
-			program = program[:len(program)-len(stmts)]
+			programStmts = programStmts[:len(programStmts)-len(newStmts)]
 			return
 		}
 		for idx, result := range results {
 			if result == nil {
 				continue
 			}
-			if _, ok := stmts[idx].(*ast.PrintStmt); ok {
-				// Print statements already output the value; avoid duplicating.
+			if _, ok := newStmts[idx].(*ast.PrintStmt); ok {
 				continue
 			}
 			fmt.Println(result.Inspect())

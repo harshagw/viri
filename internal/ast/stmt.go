@@ -22,6 +22,7 @@ func (*PrintStmt) stmtNode() {}
 type VarDeclStmt struct {
 	Name        *token.Token
 	Initializer Expr
+	Exported    bool
 }
 
 func (*VarDeclStmt) stmtNode() {}
@@ -69,9 +70,10 @@ type ContinueStmt struct {
 func (*ContinueStmt) stmtNode() {}
 
 type FunctionStmt struct {
-	Name   *token.Token
-	Params []*token.Token
-	Body   *BlockStmt
+	Name     *token.Token
+	Params   []*token.Token
+	Body     *BlockStmt
+	Exported bool
 }
 
 func (*FunctionStmt) stmtNode() {}
@@ -87,6 +89,14 @@ type ClassStmt struct {
 	Name       *token.Token
 	SuperClass *VariableExpr
 	Methods    []*FunctionStmt
+	Exported   bool
 }
 
 func (*ClassStmt) stmtNode() {}
+
+type ImportStmt struct {
+	Path  *token.Token 
+	Alias *token.Token
+}
+
+func (*ImportStmt) stmtNode() {}

@@ -10,20 +10,22 @@ import (
 )
 
 type Scanner struct {
-	source  *bytes.Buffer
-	current int
-	start   int
-	line    int
-	tokens  []token.Token
+	source   *bytes.Buffer
+	current  int
+	start    int
+	line     int
+	tokens   []token.Token
+	filePath *string
 }
 
-func New(source *bytes.Buffer) *Scanner {
+func New(source *bytes.Buffer, filePath *string) *Scanner {
 	return &Scanner{
-		source:  source,
-		current: 0,
-		start:   0,
-		line:    1,
-		tokens:  []token.Token{},
+		source:   source,
+		current:  0,
+		start:    0,
+		line:     1,
+		tokens:   []token.Token{},
+		filePath: filePath,
 	}
 }
 
@@ -231,7 +233,8 @@ func (s *Scanner) addToken(tokenType token.Type) {
 
 func (s *Scanner) addTokenWithLiteral(tokenType token.Type, literal interface{}) {
 	text := s.getLexeme()
-	s.tokens = append(s.tokens, token.New(tokenType, text, literal, s.line))
+	tok := token.New(tokenType, text, literal, s.line, s.filePath)
+	s.tokens = append(s.tokens, tok)
 }
 
 // Returns the string starting from start to current.

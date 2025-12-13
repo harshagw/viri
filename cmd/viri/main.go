@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"os"
 	"strings"
@@ -38,14 +37,7 @@ func main() {
 	}
 	viri := internal.NewViriRuntime(config)
 
-	code, err := os.ReadFile(fileName)
-	if err != nil {
-		fmt.Println("Error reading file:", err)
-		os.Exit(66) // cannot open input
-	}
-
-	codeBytes := bytes.NewBuffer(code)
-	viri.Run(codeBytes)
+	viri.Run(fileName)
 
 	if viri.HasErrors() {
 		os.Exit(70) // syntax error

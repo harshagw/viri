@@ -3,17 +3,23 @@ package interp
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strconv"
 
 	"github.com/harshagw/viri/internal/ast"
 	"github.com/harshagw/viri/internal/objects"
+	"github.com/harshagw/viri/internal/parser"
 	"github.com/harshagw/viri/internal/token"
 )
 
 type Interpreter struct {
-	environment *objects.Environment
-	globals     *objects.Environment
-	locals      map[ast.Expr]int
+	environment     *objects.Environment
+	globals         *objects.Environment
+	locals          map[ast.Expr]int
+	moduleCache     *objects.ModuleCache
+	currentModule   string
+	moduleExports   map[string]objects.Object
+	resolvedModules map[string]*ast.Module
 }
 
 func NewInterpreter(globals *objects.Environment) *Interpreter {
@@ -23,10 +29,24 @@ func NewInterpreter(globals *objects.Environment) *Interpreter {
 	globals.Define("clock", objects.NewClock())
 	globals.Define("len", objects.NewLen())
 	return &Interpreter{
-		environment: globals,
-		globals:     globals,
-		locals:      make(map[ast.Expr]int),
+		environment:   globals,
+		globals:       globals,
+		locals:        make(map[ast.Expr]int),
+		moduleCache:   objects.NewModuleCache(),
+		moduleExports: make(map[string]objects.Object),
 	}
+}
+
+func (i *Interpreter) SetModuleCache(cache *objects.ModuleCache) {
+	i.moduleCache = cache
+}
+
+func (i *Interpreter) SetCurrentModule(path string) {
+	i.currentModule = path
+}
+
+func (i *Interpreter) SetResolvedModules(modules map[string]*ast.Module) {
+	i.resolvedModules = modules
 }
 
 func (i *Interpreter) SetLocals(locals map[ast.Expr]int) {
@@ -63,6 +83,8 @@ func (i *Interpreter) ExecuteBlock(block *ast.BlockStmt, env *objects.Environmen
 
 func (i *Interpreter) evalStmt(stmt ast.Stmt) (objects.Object, error) {
 	switch s := stmt.(type) {
+	case *ast.ImportStmt:
+		return i.visitImportStmt(s)
 	case *ast.BlockStmt:
 		newEnv := objects.NewEnvironment(i.environment)
 		return i.ExecuteBlock(s, newEnv)
@@ -93,9 +115,46 @@ func (i *Interpreter) evalStmt(stmt ast.Stmt) (objects.Object, error) {
 	}
 }
 
+func (i *Interpreter) visitImportStmt(stmt *ast.ImportStmt) (objects.Object, error) {
+	importPath, ok := stmt.Path.Literal.(string)
+	if !ok {
+		return nil, i.runtimeError(stmt.Path, "Import path must be a string.")
+	}
+
+	baseDir := filepath.Dir(i.currentModule)
+	targetPath, err := parser.ResolveModulePath(baseDir, importPath)
+	if err != nil {
+		return nil, i.runtimeError(stmt.Path, fmt.Sprintf("Failed to resolve import path: %s", err.Error()))
+	}
+
+	runtimeMod, cached := i.moduleCache.Get(targetPath)
+	if !cached {
+		astMod, ok := i.resolvedModules[targetPath]
+		if !ok {
+			return nil, i.runtimeError(stmt.Path, fmt.Sprintf("Module not found in resolved modules: %s", targetPath))
+		}
+
+		runtimeMod, err = i.ExecuteModule(astMod, stmt)
+		if err != nil {
+			return nil, err
+		}
+
+		i.moduleCache.Put(targetPath, runtimeMod)
+	}
+
+	i.environment.Define(stmt.Alias.Lexeme, runtimeMod.Namespace)
+
+	return nil, nil
+}
+
 func (i *Interpreter) visitFunction(function *ast.FunctionStmt) (objects.Object, error) {
 	fn := objects.NewFunction(function, i.environment, false)
 	i.environment.Define(function.Name.Lexeme, fn)
+
+	if function.Exported {
+		i.moduleExports[function.Name.Lexeme] = fn
+	}
+
 	return nil, nil
 }
 
@@ -134,6 +193,11 @@ func (i *Interpreter) visitClass(class *ast.ClassStmt) (objects.Object, error) {
 	if err := methodEnvironment.Assign(class.Name.Lexeme, classObj); err != nil {
 		return nil, i.runtimeError(class.Name, err.Error())
 	}
+
+	if class.Exported {
+		i.moduleExports[class.Name.Lexeme] = classObj
+	}
+
 	return nil, nil
 }
 
@@ -150,15 +214,23 @@ func (i *Interpreter) visitReturnStmt(ret *ast.ReturnStmt) (objects.Object, erro
 }
 
 func (i *Interpreter) visitVarDeclStmt(decl *ast.VarDeclStmt) (objects.Object, error) {
+	var val objects.Object
 	if decl.Initializer != nil {
-		val, err := i.evalExpr(decl.Initializer)
+		v, err := i.evalExpr(decl.Initializer)
 		if err != nil {
 			return nil, err
 		}
+		val = v
 		i.environment.Define(decl.Name.Lexeme, val)
 	} else {
-		i.environment.Define(decl.Name.Lexeme, objects.NewNil())
+		val = objects.NewNil()
+		i.environment.Define(decl.Name.Lexeme, val)
 	}
+
+	if decl.Exported {
+		i.moduleExports[decl.Name.Lexeme] = val
+	}
+
 	return nil, nil
 }
 
@@ -411,6 +483,12 @@ func (i *Interpreter) visitAssignExpr(assign *ast.AssignExpr) (objects.Object, e
 			return nil, i.runtimeError(assign.Name, err.Error())
 		}
 	}
+
+	// If this variable is exported, update the export map as well
+	if _, exported := i.moduleExports[assign.Name.Lexeme]; exported {
+		i.moduleExports[assign.Name.Lexeme] = value
+	}
+
 	return value, nil
 }
 
@@ -580,9 +658,20 @@ func (i *Interpreter) visitGetExpr(get *ast.GetExpr) (objects.Object, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Handle namespace access
+	if namespace, ok := object.(*objects.Namespace); ok {
+		value, err := namespace.Get(get.Name)
+		if err != nil {
+			return nil, i.runtimeError(get.Name, err.Error())
+		}
+		return value, nil
+	}
+
+	// Handle class instance access
 	instance, ok := object.(*objects.ClassInstance)
 	if !ok {
-		return nil, i.runtimeError(get.Name, "Only instances have properties.")
+		return nil, i.runtimeError(get.Name, "Only instances and namespaces have properties.")
 	}
 	value, err := instance.Get(get.Name)
 	if err != nil {

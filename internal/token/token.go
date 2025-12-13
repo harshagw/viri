@@ -60,6 +60,10 @@ const (
 	CONTINUE
 	BREAK
 
+	IMPORT
+	EXPORT
+	AS
+
 	EOF
 )
 
@@ -151,6 +155,12 @@ func (tt Type) String() string {
 		return "CONTINUE"
 	case BREAK:
 		return "BREAK"
+	case IMPORT:
+		return "IMPORT"
+	case EXPORT:
+		return "EXPORT"
+	case AS:
+		return "AS"
 	case EOF:
 		return "EOF"
 	default:
@@ -160,18 +170,20 @@ func (tt Type) String() string {
 
 // Token is a lexical token produced by the scanner.
 type Token struct {
-	Type    Type
-	Lexeme  string
-	Literal interface{}
-	Line    int
+	Type     Type
+	Lexeme   string
+	Literal  interface{}
+	Line     int
+	FilePath *string 
 }
 
-func New(tt Type, lexeme string, literal interface{}, line int) Token {
+func New(tt Type, lexeme string, literal interface{}, line int, filePath *string) Token {
 	return Token{
-		Type:    tt,
-		Lexeme:  lexeme,
-		Literal: literal,
-		Line:    line,
+		Type:     tt,
+		Lexeme:   lexeme,
+		Literal:  literal,
+		Line:     line,
+		FilePath: filePath,
 	}
 }
 

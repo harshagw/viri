@@ -1,7 +1,7 @@
 .PHONY: viri repl tidy test
 
 viri:
-	go run cmd/viri/main.go test.viri
+	go run cmd/viri/main.go examples/demo.viri
 
 repl:
 	go run cmd/repl/main.go

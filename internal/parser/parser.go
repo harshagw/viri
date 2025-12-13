@@ -17,6 +17,7 @@ type Parser struct {
 	current           int
 	diagnosticHandler objects.DiagnosticHandler
 	hadError          bool
+	filePath          string
 }
 
 func NewParser(tokens []token.Token, diagnosticHandler objects.DiagnosticHandler) *Parser {
@@ -27,32 +28,79 @@ func NewParser(tokens []token.Token, diagnosticHandler objects.DiagnosticHandler
 	}
 }
 
-func (p *Parser) Parse() ([]ast.Stmt, error) {
-	statements := []ast.Stmt{}
+func (p *Parser) SetFilePath(path string) {
+	p.filePath = path
+}
+
+func (p *Parser) Parse() (*ast.Module, error) {
+	var imports []*ast.ImportStmt
+	var statements []ast.Stmt
+	hasSeenNonImport := false
+
 	for !p.isAtEnd() {
-		stmt := p.parseDeclaration()
-		if stmt != nil {
-			statements = append(statements, stmt)
+		if p.check(token.IMPORT) {
+			if hasSeenNonImport {
+				p.error(p.peekCurrent(), "Imports must appear at the top of the file, before any other statements.")
+				p.advance()
+				p.synchronize()
+				continue
+			}
+			p.advance()
+			stmt, err := p.parseImportStmt()
+			if err == nil && stmt != nil {
+				if importStmt, ok := stmt.(*ast.ImportStmt); ok {
+					imports = append(imports, importStmt)
+				}
+			}
+		} else {
+			hasSeenNonImport = true
+			stmt := p.parseDeclaration()
+			if stmt != nil {
+				statements = append(statements, stmt)
+			}
 		}
 	}
+
+	mod := ast.NewModule(p.filePath, imports, statements)
+
 	if p.hadError {
-		return statements, ErrParse
+		return mod, ErrParse
 	}
-	return statements, nil
+	return mod, nil
 }
 
 func (p *Parser) parseDeclaration() ast.Stmt {
 	var (
-		stmt ast.Stmt
-		err  error
+		stmt     ast.Stmt
+		err      error
+		exported bool
 	)
+
+	// Check for export keyword
+	if p.match(token.EXPORT) {
+		exported = true
+	}
+
 	if p.match(token.VAR) {
 		stmt, err = p.parseVarDecl()
+		if exported && stmt != nil {
+			stmt.(*ast.VarDeclStmt).Exported = true
+		}
 	} else if p.match(token.FUN) {
 		stmt, err = p.parseFunction()
+		if exported && stmt != nil {
+			stmt.(*ast.FunctionStmt).Exported = true
+		}
 	} else if p.match(token.CLASS) {
 		stmt, err = p.parseClass()
+		if exported && stmt != nil {
+			stmt.(*ast.ClassStmt).Exported = true
+		}
 	} else {
+		if exported {
+			p.error(p.peekPrevious(), "Only var, fun, and class declarations can be exported.")
+			return nil
+		}
 		stmt, err = p.parseStmt()
 	}
 	if err != nil {
@@ -385,6 +433,31 @@ func (p *Parser) parseExprStmt() (ast.Stmt, error) {
 	}
 	return &ast.ExprStmt{
 		Expr: expr,
+	}, nil
+}
+
+func (p *Parser) parseImportStmt() (ast.Stmt, error) {
+	pathToken, err := p.consume(token.STRING, "Expect string path after 'import'.")
+	if err != nil {
+		return nil, err
+	}
+
+	if _, err = p.consume(token.AS, "Expect 'as' after import path."); err != nil {
+		return nil, err
+	}
+
+	aliasToken, err := p.consume(token.IDENTIFIER, "Expect alias identifier after 'as'.")
+	if err != nil {
+		return nil, err
+	}
+
+	if _, err = p.consume(token.SEMICOLON, "Expect ';' after import statement."); err != nil {
+		return nil, err
+	}
+
+	return &ast.ImportStmt{
+		Path:  pathToken,
+		Alias: aliasToken,
 	}, nil
 }
 
