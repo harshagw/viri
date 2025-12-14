@@ -16,6 +16,7 @@ var ErrResolve = errors.New("resolve error")
 type VariableInfo struct {
 	defined bool
 	used    bool
+	isConst bool
 	token   *token.Token
 }
 
@@ -181,13 +182,23 @@ func (r *Resolver) visitBlock(stmt *ast.BlockStmt) {
 }
 
 func (r *Resolver) visitVarDeclStmt(stmt *ast.VarDeclStmt) {
-	r.declare(stmt.Name)
+	// Require initializer for const variables
+	if stmt.IsConst && stmt.Initializer == nil {
+		r.reportError(stmt.Name, "Const variables must have an initializer.")
+		return
+	}
+
+	r.declare(stmt.Name, stmt.IsConst)
 	if stmt.Initializer != nil {
 		r.resolveExpr(stmt.Initializer)
 	}
-	r.define(stmt.Name)
+	r.define(stmt.Name, stmt.IsConst)
 
 	if stmt.Exported {
+		if len(r.scopes) > 1 {
+			r.reportError(stmt.Name, "Exported variables must be global.")
+			return
+		}
 		r.markVariableUsed(stmt.Name)
 	}
 }
@@ -205,6 +216,20 @@ func (r *Resolver) visitVariable(variable *ast.VariableExpr) {
 
 func (r *Resolver) visitAssignment(assignment *ast.AssignExpr) {
 	r.resolveExpr(assignment.Value)
+
+	// Check if the variable is const
+	if assignment.Name != nil {
+		for i := len(r.scopes) - 1; i >= 0; i-- {
+			if info, ok := r.scopes[i][assignment.Name.Lexeme]; ok {
+				if info.isConst {
+					r.reportError(assignment.Name, "Cannot reassign const variable '"+assignment.Name.Lexeme+"'.")
+					return
+				}
+				break
+			}
+		}
+	}
+
 	r.resolveLocal(assignment, assignment.Name)
 	r.markVariableUsed(assignment.Name)
 }
@@ -226,6 +251,10 @@ func (r *Resolver) visitFunction(function *ast.FunctionStmt) {
 	r.define(function.Name)
 
 	if function.Exported {
+		if len(r.scopes) > 1 {
+			r.reportError(function.Name, "Exported functions must be global.")
+			return
+		}
 		r.markVariableUsed(function.Name)
 	}
 
@@ -241,6 +270,10 @@ func (r *Resolver) visitClass(class *ast.ClassStmt) {
 	r.define(class.Name)
 
 	if class.Exported {
+		if len(r.scopes) > 1 {
+			r.reportError(class.Name, "Exported classes must be global.")
+			return
+		}
 		r.markVariableUsed(class.Name)
 	}
 
@@ -389,7 +422,7 @@ func (r *Resolver) endScope() {
 	r.scopes = r.scopes[:len(r.scopes)-1]
 }
 
-func (r *Resolver) declare(tok *token.Token) {
+func (r *Resolver) declare(tok *token.Token, isConst ...bool) {
 	if len(r.scopes) == 0 {
 		return
 	}
@@ -403,14 +436,20 @@ func (r *Resolver) declare(tok *token.Token) {
 		r.reportError(tok, "Cannot declare variable with this name again.")
 	}
 
+	constFlag := false
+	if len(isConst) > 0 {
+		constFlag = isConst[0]
+	}
+
 	currentScope[tok.Lexeme] = &VariableInfo{
 		defined: false,
 		used:    false,
+		isConst: constFlag,
 		token:   tok,
 	}
 }
 
-func (r *Resolver) define(tok *token.Token) {
+func (r *Resolver) define(tok *token.Token, isConst ...bool) {
 	if len(r.scopes) == 0 {
 		return
 	}
@@ -419,12 +458,19 @@ func (r *Resolver) define(tok *token.Token) {
 		return
 	}
 
+	constFlag := false
+	if len(isConst) > 0 {
+		constFlag = isConst[0]
+	}
+
 	if info, ok := r.scopes[len(r.scopes)-1][tok.Lexeme]; ok {
 		info.defined = true
+		info.isConst = constFlag
 	} else {
 		r.scopes[len(r.scopes)-1][tok.Lexeme] = &VariableInfo{
 			defined: true,
 			used:    false,
+			isConst: constFlag,
 			token:   tok,
 		}
 	}

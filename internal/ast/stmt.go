@@ -23,6 +23,7 @@ type VarDeclStmt struct {
 	Name        *token.Token
 	Initializer Expr
 	Exported    bool
+	IsConst     bool
 }
 
 func (*VarDeclStmt) stmtNode() {}
@@ -95,7 +96,7 @@ type ClassStmt struct {
 func (*ClassStmt) stmtNode() {}
 
 type ImportStmt struct {
-	Path  *token.Token 
+	Path  *token.Token
 	Alias *token.Token
 }
 

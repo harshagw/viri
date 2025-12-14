@@ -153,7 +153,11 @@ func (p *Printer) printStmt(stmt Stmt) {
 		p.writeNode("PrintStmt")
 		p.withPrefix(p.childPrefix(), true, func() { p.printExpr(n.Expr) })
 	case *VarDeclStmt:
-		p.writeNode("VarDecl (" + n.Name.Lexeme + ")")
+		declType := "VarDecl"
+		if n.IsConst {
+			declType = "ConstDecl"
+		}
+		p.writeNode(declType + " (" + n.Name.Lexeme + ")")
 		if n.Initializer != nil {
 			p.withPrefix(p.childPrefix(), true, func() { p.printExpr(n.Initializer) })
 		}

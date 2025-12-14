@@ -41,6 +41,7 @@ const (
 	AND
 	OR
 	VAR
+	CONST
 	PRINT
 
 	IF
@@ -125,6 +126,8 @@ func (tt Type) String() string {
 		return "OR"
 	case VAR:
 		return "VAR"
+	case CONST:
+		return "CONST"
 	case PRINT:
 		return "PRINT"
 	case IF:
@@ -174,7 +177,7 @@ type Token struct {
 	Lexeme   string
 	Literal  interface{}
 	Line     int
-	FilePath *string 
+	FilePath *string
 }
 
 func New(tt Type, lexeme string, literal interface{}, line int, filePath *string) Token {

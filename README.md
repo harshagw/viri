@@ -5,13 +5,83 @@ A scripting language interpreter written in Go. Viri supports variables, express
 ## Installation
 
 ```bash
-go build -o viri cmd/viri.go
+go build -o viri cmd/viri/main.go
 ```
 
 ## Usage
 
 ```bash
 ./viri <file.viri>
+```
+
+## Grammar
+
+```
+program       ::= { importDecl } { declaration } "EOF" ;
+
+importDecl    ::= "import" STRING "as" IDENTIFIER ";" ;
+
+declaration   ::= classDecl
+                | funDecl
+                | varDecl
+                | constDecl
+                | statement ;
+
+varDecl       ::= [ "export" ] "var" IDENTIFIER [ "=" expression ] ";" ;
+constDecl     ::= [ "export" ] "const" IDENTIFIER "=" expression ";" ;
+funDecl       ::= [ "export" ] "fun" function ;
+classDecl     ::= [ "export" ] "class" IDENTIFIER [ "<" IDENTIFIER ]
+                  "{" { function } "}" ;
+function      ::= IDENTIFIER "(" [ parameters ] ")" block ;
+parameters    ::= IDENTIFIER { "," IDENTIFIER } ;
+
+statement     ::= exprStmt
+                | forStmt
+                | ifStmt
+                | printStmt
+                | returnStmt
+                | whileStmt
+                | breakStmt
+                | continueStmt
+                | block ;
+returnStmt    ::= "return" [ expression ] ";" ;
+forStmt       ::= "for" "(" ( varDecl | constDecl | exprStmt | ";" )
+                  [ expression ] ";"
+                  [ expression ] ")" statement ;
+whileStmt     ::= "while" "(" expression ")" statement ;
+ifStmt        ::= "if" "(" expression ")" statement
+                  [ "else" statement ] ;
+breakStmt     ::= "break" ";" ;
+continueStmt  ::= "continue" ";" ;
+block         ::= "{" { declaration } "}" ;
+exprStmt      ::= expression ";" ;
+printStmt     ::= "print" expression ";" ;
+
+expression    ::= assignment ;
+assignment    ::= ( call "." IDENTIFIER
+                 | call "[" expression "]"
+                 | IDENTIFIER ) "=" assignment
+                 | logic_or ;
+logic_or      ::= logic_and { "or" logic_and } ;
+logic_and     ::= equality { "and" equality } ;
+equality      ::= comparison { ( "!=" | "==" ) comparison } ;
+comparison    ::= term { ( ">" | ">=" | "<" | "<=" ) term } ;
+term          ::= factor { ( "-" | "+" ) factor } ;
+factor        ::= unary { ( "/" | "*" ) unary } ;
+unary         ::= ( "!" | "-" ) unary | call ;
+call          ::= primary { "(" [ arguments ] ")"
+                         | "." IDENTIFIER
+                         | "[" expression "]" } ;
+primary       ::= "true" | "false" | "nil" | "this"
+                | NUMBER | STRING | IDENTIFIER | "(" expression ")"
+                | "super" "." IDENTIFIER
+                | arrayLiteral | hashLiteral ;
+
+arguments     ::= expression { "," expression } ;
+
+arrayLiteral  ::= "[" [ expression { "," expression } ] "]" ;
+hashLiteral   ::= "{" [ hashEntry { "," hashEntry } ] "}" ;
+hashEntry     ::= expression ":" expression ;
 ```
 
 ## Example

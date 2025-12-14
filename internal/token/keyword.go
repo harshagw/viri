@@ -5,6 +5,7 @@ var keywordLookup = map[string]Type{
 	"and":      AND,
 	"or":       OR,
 	"var":      VAR,
+	"const":    CONST,
 	"print":    PRINT,
 	"if":       IF,
 	"else":     ELSE,

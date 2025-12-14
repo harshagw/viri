@@ -82,7 +82,12 @@ func (p *Parser) parseDeclaration() ast.Stmt {
 	}
 
 	if p.match(token.VAR) {
-		stmt, err = p.parseVarDecl()
+		stmt, err = p.parseVarDecl(false)
+		if exported && stmt != nil {
+			stmt.(*ast.VarDeclStmt).Exported = true
+		}
+	} else if p.match(token.CONST) {
+		stmt, err = p.parseVarDecl(true)
 		if exported && stmt != nil {
 			stmt.(*ast.VarDeclStmt).Exported = true
 		}
@@ -98,7 +103,7 @@ func (p *Parser) parseDeclaration() ast.Stmt {
 		}
 	} else {
 		if exported {
-			p.error(p.peekPrevious(), "Only var, fun, and class declarations can be exported.")
+			p.error(p.peekPrevious(), "Only var, const, fun, and class declarations can be exported.")
 			return nil
 		}
 		stmt, err = p.parseStmt()
@@ -110,7 +115,7 @@ func (p *Parser) parseDeclaration() ast.Stmt {
 	return stmt
 }
 
-func (p *Parser) parseVarDecl() (ast.Stmt, error) {
+func (p *Parser) parseVarDecl(isConst bool) (ast.Stmt, error) {
 	name, err := p.consume(token.IDENTIFIER, "Expect variable name.")
 	if err != nil {
 		return nil, err
@@ -131,6 +136,7 @@ func (p *Parser) parseVarDecl() (ast.Stmt, error) {
 	return &ast.VarDeclStmt{
 		Name:        name,
 		Initializer: initializer,
+		IsConst:     isConst,
 	}, nil
 }
 
@@ -292,7 +298,12 @@ func (p *Parser) parseForStmt() (ast.Stmt, error) {
 	var err error
 
 	if p.match(token.VAR) {
-		initializer, err = p.parseVarDecl()
+		initializer, err = p.parseVarDecl(false)
+		if err != nil {
+			return nil, err
+		}
+	} else if p.match(token.CONST) {
+		initializer, err = p.parseVarDecl(true)
 		if err != nil {
 			return nil, err
 		}
@@ -529,7 +540,7 @@ func (p *Parser) synchronize() {
 		}
 
 		switch p.peekCurrent().Type {
-		case token.CLASS, token.FOR, token.FUN, token.IF, token.PRINT, token.RETURN, token.VAR, token.WHILE:
+		case token.CLASS, token.FOR, token.FUN, token.IF, token.PRINT, token.RETURN, token.VAR, token.CONST, token.WHILE:
 			return
 		}
 
