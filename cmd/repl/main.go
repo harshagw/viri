@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
 	"io"
@@ -85,7 +86,7 @@ func runTerminalMode(programStmts *[]ast.Stmt, interpreter *interp.Interpreter, 
 					code := strings.Join(inputBuffer, "\n")
 					fmt.Println() // Add newline after Ctrl+D
 					executeCode(code, programStmts, interpreter, handler, debugMode)
-					inputBuffer = nil
+					inputBuffer = inputBuffer[:0]
 				} else {
 					// Ctrl+D on empty buffer - exit
 					fmt.Println("\nbye")
@@ -110,67 +111,42 @@ func runTerminalMode(programStmts *[]ast.Stmt, interpreter *interp.Interpreter, 
 
 func runNonTerminalMode(programStmts *[]ast.Stmt, interpreter *interp.Interpreter, handler *replHandler, debugMode bool) {
 	// Simple line-by-line mode for testing (without Ctrl+D detection)
-	// Each line is executed immediately
-	reader := io.Reader(os.Stdin)
-	buf := make([]byte, 4096)
-	var accumulated strings.Builder
+	// Uses bufio.Scanner for efficient line-by-line reading
+	scanner := bufio.NewScanner(os.Stdin)
+	var inputBuffer []string
 	
-	for {
-		n, err := reader.Read(buf)
-		if err != nil {
-			if err == io.EOF {
-				// Execute any remaining accumulated code
-				if accumulated.Len() > 0 {
-					code := accumulated.String()
-					executeCode(code, programStmts, interpreter, handler, debugMode)
-				}
-				return
-			}
-			fmt.Fprintf(os.Stderr, "Error reading input: %v\n", err)
+	for scanner.Scan() {
+		line := scanner.Text()
+		
+		// Handle :quit command
+		if strings.TrimSpace(line) == ":quit" {
+			fmt.Println("bye")
 			return
 		}
 		
-		accumulated.Write(buf[:n])
-		
-		// Process complete lines
-		text := accumulated.String()
-		lines := strings.Split(text, "\n")
-		
-		// Keep the last incomplete line in the buffer
-		if !strings.HasSuffix(text, "\n") {
-			accumulated.Reset()
-			if len(lines) > 0 {
-				accumulated.WriteString(lines[len(lines)-1])
-				lines = lines[:len(lines)-1]
+		// Empty line triggers execution
+		if strings.TrimSpace(line) == "" {
+			if len(inputBuffer) > 0 {
+				code := strings.Join(inputBuffer, "\n")
+				executeCode(code, programStmts, interpreter, handler, debugMode)
+				inputBuffer = inputBuffer[:0]
 			}
-		} else {
-			accumulated.Reset()
+			continue
 		}
 		
-		// Process complete lines
-		var inputBuffer []string
-		for _, line := range lines {
-			line = strings.TrimSuffix(line, "\r")
-			
-			// Handle :quit command
-			if strings.TrimSpace(line) == ":quit" {
-				fmt.Println("bye")
-				return
-			}
-			
-			// Empty line triggers execution
-			if strings.TrimSpace(line) == "" {
-				if len(inputBuffer) > 0 {
-					code := strings.Join(inputBuffer, "\n")
-					executeCode(code, programStmts, interpreter, handler, debugMode)
-					inputBuffer = nil
-				}
-				continue
-			}
-			
-			// Accumulate non-empty lines
-			inputBuffer = append(inputBuffer, line)
-		}
+		// Accumulate non-empty lines
+		inputBuffer = append(inputBuffer, line)
+	}
+	
+	// Handle any scanner errors
+	if err := scanner.Err(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error reading input: %v\n", err)
+	}
+	
+	// Execute any remaining accumulated code
+	if len(inputBuffer) > 0 {
+		code := strings.Join(inputBuffer, "\n")
+		executeCode(code, programStmts, interpreter, handler, debugMode)
 	}
 }
 
