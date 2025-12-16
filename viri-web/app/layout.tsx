@@ -20,18 +20,22 @@ export const metadata: Metadata = {
   description: "Viri is a programming language that is designed to be easy to learn and use.",
 };
 
+import { ThemeProvider } from "@/components/theme-provider";
+
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={jetbrainsMono.variable}>
+    <html lang="en" className={jetbrainsMono.variable} suppressHydrationWarning>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        <div className="min-h-screen flex flex-col bg-background">
-          <Navigation />
-          {children}
-        </div>
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+          <div className="min-h-screen flex flex-col bg-background">
+            <Navigation />
+            {children}
+          </div>
+        </ThemeProvider>
       </body>
     </html>
   );

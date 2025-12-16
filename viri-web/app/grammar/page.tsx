@@ -16,10 +16,7 @@ export default function GrammarPage() {
           {/* EBNF Legend */}
           <section className="mb-12 pb-8 border-b border-border">
             <p className="text-sm text-muted-foreground mb-4 uppercase tracking-wider">notation</p>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-              <div>
-                <code className="font-mono text-primary">::=</code> <span className="text-muted-foreground">definition</span>
-              </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
               <div>
                 <code className="font-mono text-primary">|</code> <span className="text-muted-foreground">alternative</span>
               </div>
@@ -461,7 +458,7 @@ export default function GrammarPage() {
           {/* Footer note */}
           <div className="mt-16 pt-8 border-t border-border">
             <p className="text-sm text-muted-foreground">
-              <Lexical>IDENTIFIER</Lexical>, <Lexical>NUMBER</Lexical>, <Lexical>STRING</Lexical>, <Token>EOF</Token> are lexical tokens.
+              <Lexical>IDENTIFIER</Lexical>, <Lexical>NUMBER</Lexical>, <Lexical>STRING</Lexical>, <Lexical>EOF</Lexical> are lexical tokens.
             </p>
           </div>
         </div>
@@ -518,7 +515,7 @@ function RuleLink({ href, children }: { href: string; children: React.ReactNode 
 }
 
 function Token({ children }: { children: React.ReactNode }) {
-  return <span className="text-green-600 dark:text-green-400">"{children}"</span>;
+  return <span className="text-green-600 dark:text-green-400">&quot;{children}&quot;</span>;
 }
 
 function Lexical({ children }: { children: React.ReactNode }) {

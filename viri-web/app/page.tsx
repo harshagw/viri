@@ -21,7 +21,7 @@ export default function Page() {
           <div className="container mx-auto px-6 max-w-4xl">
             <div className="max-w-xl">
               <h1 className="text-7xl font-bold font-mono text-primary mb-6">viri</h1>
-              <p className="text-xl leading-relaxed text-foreground mb-8">A tiny language for learning big ideas.</p>
+              <p className="text-xl leading-relaxed text-foreground mb-8">A tiny language built for learning how languages work</p>
               <div className="flex gap-3">
                 <Link href="/grammar">
                   <Button size="lg">explore grammar →</Button>
@@ -107,20 +107,37 @@ print dict["name"];`}
       {/* Footer - minimal */}
       <footer className="border-t border-border py-8">
         <div className="container mx-auto px-6 max-w-4xl flex flex-col md:flex-row justify-between items-start gap-6">
-          <p className="text-sm text-muted-foreground">viri — a learning language</p>
-          
+          <div className="flex flex-col gap-2">
+            <p className="text-sm text-muted-foreground">viri — a learning language</p>
+            <p className="text-sm text-muted-foreground">
+              Made by{" "}
+              <a href="https://harshagw.github.io" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground transition-colors">
+                Harsh Agarwal
+              </a>
+            </p>
+          </div>
+
           <div className="text-sm text-muted-foreground">
-             <p className="font-medium mb-2">Shoutout to</p>
-             <ul className="space-y-1">
-               <li>
-                 <a href="https://craftinginterpreters.com/" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground transition-colors">Crafting Interpreters</a> 
-                 <span className="opacity-75"> by Robert Nystrom</span>
-               </li>
-               <li>
-                 <a href="https://interpreterbook.com/" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground transition-colors">Writing An Interpreter In Go</a> 
-                 <span className="opacity-75"> by Thorsten Ball</span>
-               </li>
-             </ul>
+            <p className="font-medium mb-2">Shoutout to</p>
+            <ul className="space-y-1">
+              <li>
+                <a
+                  href="https://craftinginterpreters.com/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline hover:text-foreground transition-colors"
+                >
+                  Crafting Interpreters
+                </a>
+                <span className="opacity-75"> by Robert Nystrom</span>
+              </li>
+              <li>
+                <a href="https://interpreterbook.com/" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground transition-colors">
+                  Writing An Interpreter In Go
+                </a>
+                <span className="opacity-75"> by Thorsten Ball</span>
+              </li>
+            </ul>
           </div>
         </div>
       </footer>

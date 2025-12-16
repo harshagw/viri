@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { ThemeToggle } from "@/components/theme-toggle";
+
 export function Navigation() {
   const pathname = usePathname();
 
@@ -13,13 +15,16 @@ export function Navigation() {
           <Link href="/" className="font-mono font-bold text-primary hover:opacity-70">
             viri
           </Link>
-          <div className="flex gap-8 text-sm">
-            <Link href="/" className={pathname === "/" ? "text-foreground" : "text-muted-foreground hover:text-foreground"}>
-              home
-            </Link>
-            <Link href="/grammar" className={pathname === "/grammar" ? "text-foreground" : "text-muted-foreground hover:text-foreground"}>
-              grammar
-            </Link>
+          <div className="flex items-center gap-8">
+            <div className="flex gap-8 text-sm">
+              <Link href="/" className={pathname === "/" ? "text-foreground" : "text-muted-foreground hover:text-foreground"}>
+                home
+              </Link>
+              <Link href="/grammar" className={pathname === "/grammar" ? "text-foreground" : "text-muted-foreground hover:text-foreground"}>
+                grammar
+              </Link>
+            </div>
+            <ThemeToggle />
           </div>
         </div>
       </div>

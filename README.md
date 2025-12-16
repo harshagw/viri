@@ -1,7 +1,9 @@
 # Viri
 
-A tiny language interpreter written in Go. Viri supports variables, expressions, control flow, and more.
- Check out the [Viri Website](https://harshagw.github.io/viri/) for grammar.
+A tiny language built to learn how languages work. It’s currently implemented as a tree-walking interpreter in Go. Viri supports variables, expressions, control flow, and core language constructs.
+
+Check out the [Viri Website](https://harshagw.github.io/viri/) for grammar.
+
 ## Installation
 
 ```bash
@@ -13,8 +15,6 @@ go build -o viri cmd/viri/main.go
 ```bash
 ./viri <file.viri>
 ```
-
-
 
 ## Example
 
