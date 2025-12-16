@@ -14,3 +14,6 @@ test:
 
 build-plugin:
 	cd /Users/harsh/code/viri/viri-syntax-plugin && vsce package
+
+web:
+	cd viri-web && npm run dev
