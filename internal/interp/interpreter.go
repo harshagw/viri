@@ -3,6 +3,8 @@ package interp
 import (
 	"errors"
 	"fmt"
+	"io"
+	"os"
 	"path/filepath"
 	"strconv"
 
@@ -20,6 +22,7 @@ type Interpreter struct {
 	currentModule   string
 	moduleExports   map[string]objects.Object
 	resolvedModules map[string]*ast.Module
+	stdout          io.Writer
 }
 
 func NewInterpreter(globals *objects.Environment) *Interpreter {
@@ -34,7 +37,12 @@ func NewInterpreter(globals *objects.Environment) *Interpreter {
 		locals:        make(map[ast.Expr]int),
 		moduleCache:   objects.NewModuleCache(),
 		moduleExports: make(map[string]objects.Object),
+		stdout:        os.Stdout,
 	}
+}
+
+func (i *Interpreter) SetStdout(w io.Writer) {
+	i.stdout = w
 }
 
 func (i *Interpreter) SetModuleCache(cache *objects.ModuleCache) {
@@ -239,7 +247,7 @@ func (i *Interpreter) visitPrintStmt(printStmt *ast.PrintStmt) (objects.Object, 
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println(objects.Stringify(value))
+	fmt.Fprintln(i.stdout, objects.Stringify(value))
 	return value, nil
 }
 

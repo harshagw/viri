@@ -1,4 +1,4 @@
-.PHONY: viri repl tidy test
+.PHONY: viri repl tidy test wasm
 
 viri:
 	go run cmd/viri/main.go examples/demo.viri
@@ -17,3 +17,7 @@ build-plugin:
 
 web:
 	cd viri-web && npm run dev
+
+wasm:
+	GOOS=js GOARCH=wasm go build -o viri-web/public/viri.wasm cmd/web-playground/main.go
+	cp $$(go env GOROOT)/misc/wasm/wasm_exec.js viri-web/public/

@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 
 import { CodeSnippet } from "@/components/code-snippet";
 import { FeatureList } from "@/components/feature-list";
+import { SNIPPETS } from "@/lib/snippets";
 
 const featureList = [
   { title: "Classes & inheritance", description: "define methods and reuse behavior via single inheritance" },
@@ -22,9 +23,11 @@ export default function Page() {
             <div className="max-w-xl">
               <h1 className="text-7xl font-bold font-mono text-primary mb-6">viri</h1>
               <p className="text-xl leading-relaxed text-foreground mb-8">A tiny language built for learning how languages work</p>
-              <div className="flex gap-3">
-                <Link href="/grammar">
-                  <Button size="lg">explore grammar →</Button>
+              <div className="flex gap-3 flex-wrap">
+                <Link href="/playground">
+                  <Button size="lg" variant="default">
+                    try playground
+                  </Button>
                 </Link>
                 <Link href="https://github.com/harshagw/viri" target="_blank">
                   <Button variant="secondary" size="lg">
@@ -40,58 +43,9 @@ export default function Page() {
           <div className="container mx-auto px-6 max-w-4xl">
             <p className="text-sm text-muted-foreground mb-6 uppercase tracking-wider">A taste</p>
             <div className="grid md:grid-cols-2 gap-6">
-              <CodeSnippet
-                title="functions"
-                code={`fun fibonacci(n) {
-  if (n <= 1) return n;
-  return fibonacci(n - 1) 
-       + fibonacci(n - 2);
-}
-
-print fibonacci(10);`}
-              />
-              <CodeSnippet
-                title="classes"
-                code={`class Animal {
-  init(name) {
-    this.name = name;
-  }
-}
-
-class Dog < Animal {
-  init(name){
-    super.init(name);
-  }
-
-  speak() {
-    print this.name + " barks";
-  } 
-}
-
-var rex = Dog("Rex");
-rex.speak();`}
-              />
-              <CodeSnippet
-                title="modules"
-                code={`import "math" as m;
-
-print m.pi;
-print m.pow(2, 3);
-
-// easy to use modules
-// for code organization`}
-              />
-              <CodeSnippet
-                title="data types"
-                code={`var list = [1, 2, 3];
-print list[0];
-
-var dict = {
-  "name": "Viri",
-  "ver": 1
-};
-print dict["name"];`}
-              />
+              {SNIPPETS.map((snippet) => (
+                <CodeSnippet key={snippet.id} id={snippet.id} title={snippet.title} code={snippet.code} />
+              ))}
             </div>
           </div>
         </section>

@@ -1,0 +1,95 @@
+/**
+ * Custom Viri Syntax Highlighting Theme
+ * Supports Light (VS Code Light) and Dark (VS Code Dark+) modes
+ */
+
+/* ==========================================================================
+   Light Mode (Default)
+   ========================================================================== */
+
+/* Keywords: fun, var, class, if, else, etc */
+.token.keyword {
+  color: #0000ff;
+}
+.token.keyword.control {
+  color: #af00db;
+}
+
+/* Constants */
+.token.boolean,
+.token.nil {
+  color: #0000ff;
+}
+
+/* Strings */
+.token.string {
+  color: #a31515;
+}
+
+/* Numbers */
+.token.number {
+  color: #098658;
+}
+
+/* Function definitions */
+.token.function {
+  color: #795e26;
+}
+
+/* Class names */
+.token.class-name {
+  color: #267f99;
+}
+
+/* Comments */
+.token.comment {
+  color: #008000;
+}
+
+/* Operators & Punctuation */
+.token.operator {
+  color: #000000;
+}
+.token.punctuation {
+  color: #000000;
+}
+
+/* Editor container overrides */
+.prism-editor textarea {
+  outline: none !important;
+}
+
+/* ==========================================================================
+   Dark Mode Overrides
+   ========================================================================== */
+.dark .token.keyword {
+  color: #569cd6;
+}
+.dark .token.keyword.control {
+  color: #c586c0;
+}
+.dark .token.boolean,
+.dark .token.nil {
+  color: #569cd6;
+}
+.dark .token.string {
+  color: #ce9178;
+}
+.dark .token.number {
+  color: #b5cea8;
+}
+.dark .token.function {
+  color: #dcdcaa;
+}
+.dark .token.class-name {
+  color: #4ec9b0;
+}
+.dark .token.comment {
+  color: #6a9955;
+}
+.dark .token.operator {
+  color: #d4d4d4;
+}
+.dark .token.punctuation {
+  color: #d4d4d4;
+}
