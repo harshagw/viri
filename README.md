@@ -1,7 +1,7 @@
 # Viri
 
-A scripting language interpreter written in Go. Viri supports variables, expressions, control flow, and more.
-
+A tiny language interpreter written in Go. Viri supports variables, expressions, control flow, and more.
+ Check out the [Viri Website](https://harshagw.github.io/viri/) for grammar.
 ## Installation
 
 ```bash
@@ -14,75 +14,7 @@ go build -o viri cmd/viri/main.go
 ./viri <file.viri>
 ```
 
-## Grammar
 
-```
-program       ::= { importDecl } { declaration } "EOF" ;
-
-importDecl    ::= "import" STRING "as" IDENTIFIER ";" ;
-
-declaration   ::= classDecl
-                | funDecl
-                | varDecl
-                | constDecl
-                | statement ;
-
-varDecl       ::= [ "export" ] "var" IDENTIFIER [ "=" expression ] ";" ;
-constDecl     ::= [ "export" ] "const" IDENTIFIER "=" expression ";" ;
-funDecl       ::= [ "export" ] "fun" function ;
-classDecl     ::= [ "export" ] "class" IDENTIFIER [ "<" IDENTIFIER ]
-                  "{" { function } "}" ;
-function      ::= IDENTIFIER "(" [ parameters ] ")" block ;
-parameters    ::= IDENTIFIER { "," IDENTIFIER } ;
-
-statement     ::= exprStmt
-                | forStmt
-                | ifStmt
-                | printStmt
-                | returnStmt
-                | whileStmt
-                | breakStmt
-                | continueStmt
-                | block ;
-returnStmt    ::= "return" [ expression ] ";" ;
-forStmt       ::= "for" "(" ( varDecl | constDecl | exprStmt | ";" )
-                  [ expression ] ";"
-                  [ expression ] ")" statement ;
-whileStmt     ::= "while" "(" expression ")" statement ;
-ifStmt        ::= "if" "(" expression ")" statement
-                  [ "else" statement ] ;
-breakStmt     ::= "break" ";" ;
-continueStmt  ::= "continue" ";" ;
-block         ::= "{" { declaration } "}" ;
-exprStmt      ::= expression ";" ;
-printStmt     ::= "print" expression ";" ;
-
-expression    ::= assignment ;
-assignment    ::= ( call "." IDENTIFIER
-                 | call "[" expression "]"
-                 | IDENTIFIER ) "=" assignment
-                 | logic_or ;
-logic_or      ::= logic_and { "or" logic_and } ;
-logic_and     ::= equality { "and" equality } ;
-equality      ::= comparison { ( "!=" | "==" ) comparison } ;
-comparison    ::= term { ( ">" | ">=" | "<" | "<=" ) term } ;
-term          ::= factor { ( "-" | "+" ) factor } ;
-factor        ::= unary { ( "/" | "*" ) unary } ;
-unary         ::= ( "!" | "-" ) unary | call ;
-call          ::= primary { "(" [ arguments ] ")"
-                         | "." IDENTIFIER
-                         | "[" expression "]" } ;
-primary       ::= "true" | "false" | "nil" | "this"
-                | NUMBER | STRING | IDENTIFIER | "(" expression ")"
-                | "super" "." IDENTIFIER
-                | arrayLiteral | hashLiteral ;
-
-arguments     ::= expression { "," expression } ;
-
-arrayLiteral  ::= "[" [ expression { "," expression } ] "]" ;
-hashLiteral   ::= "{" [ hashEntry { "," hashEntry } ] "}" ;
-hashEntry     ::= expression ":" expression ;
-```
 
 ## Example
 
@@ -124,4 +56,5 @@ if (result > 20) {
 
 ## Reference
 
-This interpreter is inspired by [Crafting Interpreters](https://craftinginterpreters.com/) by Robert Nystrom, an excellent resource for learning how to build programming languages.
+1. [Crafting Interpreters](https://craftinginterpreters.com/) by Robert Nystrom
+2. [Writing an Interpreter in Go](https://interpreterbook.com/) by Thorsten Ball
