@@ -48,12 +48,14 @@ export function Navigation() {
           <div className="flex items-center gap-4 md:hidden">
             <ThemeToggle />
             <Sheet open={isOpen} onOpenChange={setIsOpen}>
-              <SheetTrigger>
-                <Button variant="ghost" size="icon" className="-mr-2">
-                  <Menu className="h-5 w-5" />
-                  <span className="sr-only">Toggle menu</span>
-                </Button>
-              </SheetTrigger>
+              <SheetTrigger
+                render={
+                  <Button variant="ghost" size="icon" className="-mr-2">
+                    <Menu className="h-5 w-5" />
+                    <span className="sr-only">Toggle menu</span>
+                  </Button>
+                }
+              />
               <SheetContent side="right" className="p-6">
                 <SheetTitle className="font-mono font-bold text-primary mb-6 text-lg">viri</SheetTitle>
                 <div className="flex flex-col gap-6">

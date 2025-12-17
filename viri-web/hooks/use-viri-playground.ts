@@ -1,3 +1,4 @@
+import { basePath } from "@/lib/utils";
 import { useEffect, useState, useCallback, useRef } from "react";
 
 interface ViriResponse {
@@ -29,10 +30,11 @@ export function useViriPlayground(): UseViriReturn {
   const [error, setError] = useState<string | null>(null);
 
   const workerRef = useRef<Worker | null>(null);
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (typeof window !== "undefined" && typeof WebAssembly !== "object") {
+    if (typeof WebAssembly !== "object") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsWasmSupported(false);
     }
   }, []);
@@ -49,28 +51,37 @@ export function useViriPlayground(): UseViriReturn {
       workerRef.current.terminate();
     }
 
-    const worker = new Worker("/viri.worker.js");
+    const worker = new Worker(new URL("./viri.worker.js", import.meta.url), { type: "classic" });
+
     workerRef.current = worker;
+
+    worker.postMessage({ type: "init", basePath: basePath });
 
     worker.onmessage = (e) => {
       const { type, data, content } = e.data;
 
       if (type === "ready") {
         setIsReady(true);
-      } else if (type === "result") {
-        clearTimeout(timeoutRef.current!);
+        return;
+      }
+
+      if (type === "result") {
+        if (timeoutRef.current) clearTimeout(timeoutRef.current);
         setResult(data);
         setIsRunning(false);
-      } else if (type === "error") {
-        clearTimeout(timeoutRef.current!);
+        return;
+      }
+
+      if (type === "error") {
+        if (timeoutRef.current) clearTimeout(timeoutRef.current);
         setError(content);
         setIsRunning(false);
       }
     };
 
     worker.onerror = (e) => {
-      console.error("Worker failed", e);
-      setError("Runtime worker error.");
+      console.error("Worker crashed", e);
+      setError("Runtime worker crashed.");
       setIsRunning(false);
     };
   }, []);
@@ -128,5 +139,14 @@ export function useViriPlayground(): UseViriReturn {
     setError(null);
   }, []);
 
-  return { isReady, isWasmSupported, run, reset, clear, result, isRunning, error };
+  return {
+    isReady,
+    isWasmSupported,
+    run,
+    reset,
+    clear,
+    result,
+    isRunning,
+    error,
+  };
 }

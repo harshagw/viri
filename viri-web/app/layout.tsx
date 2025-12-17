@@ -20,7 +20,8 @@ export const metadata: Metadata = {
   description: "Viri is a programming language that is designed to be easy to learn and use.",
 };
 
-import { ThemeProvider } from "@/components/theme-provider";
+import { ThemeProvider } from "@/app/providers/theme-provider";
+import { PostHogProvider } from "@/app/providers/posthog-provider";
 
 export default function RootLayout({
   children,
@@ -28,15 +29,17 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={jetbrainsMono.variable} suppressHydrationWarning>
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-          <div className="min-h-screen flex flex-col bg-background">
-            <Navigation />
-            {children}
-          </div>
-        </ThemeProvider>
-      </body>
-    </html>
+    <PostHogProvider>
+      <html lang="en" className={jetbrainsMono.variable} suppressHydrationWarning>
+        <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+          <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+            <div className="min-h-screen flex flex-col bg-background">
+              <Navigation />
+              {children}
+            </div>
+          </ThemeProvider>
+        </body>
+      </html>
+    </PostHogProvider>
   );
 }

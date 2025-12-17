@@ -71,7 +71,7 @@ function PlaygroundContent() {
           <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">Input</span>
 
           <div className="flex items-center gap-3">
-            {!isReady && (
+            {!isReady && !error && (
               <Badge variant="secondary" className={cn("text-yellow-500 bg-yellow-500/10")}>
                 Loading...
               </Badge>
@@ -161,26 +161,6 @@ function PlaygroundContent() {
 
               {result && (
                 <>
-                  {/* Stdout */}
-                  {result.output && (
-                    <div className="whitespace-pre-wrap text-foreground">
-                      {result.output.length > 2000 ? (
-                        <>
-                          {result.output.slice(0, 2000)}
-                          <div className="flex items-center gap-3 mt-4 pt-3 border-t border-border">
-                            <div className="text-muted-foreground italic text-xs">...Output truncated (too long)...</div>
-                            <Button variant="outline" size="sm" onClick={() => download("output.txt", result.output)}>
-                              <Download className="w-3 h-3 mr-2" />
-                              Download Full Output
-                            </Button>
-                          </div>
-                        </>
-                      ) : (
-                        result.output.trimEnd()
-                      )}
-                    </div>
-                  )}
-
                   {/* Parser/Runtime Errors */}
                   {result.errors && result.errors.length > 0 && (
                     <div className="space-y-1">
@@ -202,6 +182,26 @@ function PlaygroundContent() {
                           <AlertDescription>Warning: {warn}</AlertDescription>
                         </Alert>
                       ))}
+                    </div>
+                  )}
+
+                  {/* Stdout */}
+                  {result.output && (
+                    <div className="whitespace-pre-wrap text-foreground">
+                      {result.output.length > 2000 ? (
+                        <>
+                          {result.output.slice(0, 2000)}
+                          <div className="flex items-center gap-3 mt-4 pt-3 border-t border-border">
+                            <div className="text-muted-foreground italic text-xs">...Output truncated (too long)...</div>
+                            <Button variant="outline" size="sm" onClick={() => download("output.txt", result.output)}>
+                              <Download className="w-3 h-3 mr-2" />
+                              Download Full Output
+                            </Button>
+                          </div>
+                        </>
+                      ) : (
+                        result.output.trimEnd()
+                      )}
                     </div>
                   )}
 
