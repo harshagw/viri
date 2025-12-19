@@ -1,0 +1,29 @@
+{
+  "name": "viri",
+  "version": "1.0.0",
+  "description": "A tiny language built to learn how languages work. It’s currently implemented as a tree-walking interpreter in Go. Viri supports variables, expressions, control flow, and core language constructs.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "example": "examples",
+    "test": "test"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "prepare": "husky"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/harshagw/viri.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/harshagw/viri/issues"
+  },
+  "homepage": "https://github.com/harshagw/viri#readme",
+  "devDependencies": {
+    "husky": "^9.1.7"
+  }
+}

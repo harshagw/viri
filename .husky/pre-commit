@@ -1,0 +1,9 @@
+#!/bin/sh
+
+# Check if any changes were made to the core directories
+if git diff --cached --name-only | grep -qE '^(cmd/|internal/|test/)'; then
+  echo "Core changes detected, running tests..."
+  make test && make e2e
+else
+  echo "No core changes detected, skipping pre-commit tests."
+fi

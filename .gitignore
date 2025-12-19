@@ -7,3 +7,5 @@ viri-syntax-plugin/*.vsix
 /viri
 /repl
 *.exe
+
+/node_modules
