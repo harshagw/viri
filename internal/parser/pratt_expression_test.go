@@ -418,9 +418,9 @@ func TestParseSuperExpression(t *testing.T) {
 
 func TestParseArrayLiteral(t *testing.T) {
 	tests := []struct {
-		name     string
-		tokens   []token.Token
-		count    int
+		name   string
+		tokens []token.Token
+		count  int
 	}{
 		{
 			"empty array",
@@ -459,9 +459,9 @@ func TestParseArrayLiteral(t *testing.T) {
 
 func TestParseHashLiteral(t *testing.T) {
 	tests := []struct {
-		name     string
-		tokens   []token.Token
-		count    int
+		name   string
+		tokens []token.Token
+		count  int
 	}{
 		{
 			"empty hash",
@@ -591,6 +591,88 @@ func TestParseInvalidExpressions(t *testing.T) {
 			if len(collector.Errors) == 0 {
 				t.Error("expected diagnostic errors for invalid expression")
 			}
+		})
+	}
+}
+
+func TestPrattParseFunctionExpr(t *testing.T) {
+	tests := []struct {
+		name   string
+		tokens []token.Token
+		check  func(*testing.T, ast.Expr)
+	}{
+		{
+			"simple anonymous function",
+			[]token.Token{
+				token.New(token.FUN, "fun", nil, 1, nil),
+				token.New(token.LEFT_PAREN, "(", nil, 1, nil),
+				token.New(token.RIGHT_PAREN, ")", nil, 1, nil),
+				token.New(token.LEFT_BRACE, "{", nil, 1, nil),
+				token.New(token.RIGHT_BRACE, "}", nil, 1, nil),
+				token.New(token.EOF, "", nil, 1, nil),
+			},
+			func(t *testing.T, expr ast.Expr) {
+				fn := assertFunctionExpr(t, expr)
+				if len(fn.Params) != 0 {
+					t.Errorf("expected 0 params, got %d", len(fn.Params))
+				}
+				if len(fn.Body.Statements) != 0 {
+					t.Errorf("expected 0 statements, got %d", len(fn.Body.Statements))
+				}
+			},
+		},
+		{
+			"anonymous function with params",
+			[]token.Token{
+				token.New(token.FUN, "fun", nil, 1, nil),
+				token.New(token.LEFT_PAREN, "(", nil, 1, nil),
+				token.New(token.IDENTIFIER, "a", nil, 1, nil),
+				token.New(token.COMMA, ",", nil, 1, nil),
+				token.New(token.IDENTIFIER, "b", nil, 1, nil),
+				token.New(token.RIGHT_PAREN, ")", nil, 1, nil),
+				token.New(token.LEFT_BRACE, "{", nil, 1, nil),
+				token.New(token.RIGHT_BRACE, "}", nil, 1, nil),
+				token.New(token.EOF, "", nil, 1, nil),
+			},
+			func(t *testing.T, expr ast.Expr) {
+				fn := assertFunctionExpr(t, expr)
+				if len(fn.Params) != 2 {
+					t.Errorf("expected 2 params, got %d", len(fn.Params))
+				}
+				if fn.Params[0].Lexeme != "a" || fn.Params[1].Lexeme != "b" {
+					t.Errorf("expected params [a, b], got [%s, %s]", fn.Params[0].Lexeme, fn.Params[1].Lexeme)
+				}
+			},
+		},
+		{
+			"anonymous function with body",
+			[]token.Token{
+				token.New(token.FUN, "fun", nil, 1, nil),
+				token.New(token.LEFT_PAREN, "(", nil, 1, nil),
+				token.New(token.RIGHT_PAREN, ")", nil, 1, nil),
+				token.New(token.LEFT_BRACE, "{", nil, 1, nil),
+				token.New(token.RETURN, "return", nil, 1, nil),
+				token.New(token.NUMBER, "1", 1.0, 1, nil),
+				token.New(token.SEMICOLON, ";", nil, 1, nil),
+				token.New(token.RIGHT_BRACE, "}", nil, 1, nil),
+				token.New(token.EOF, "", nil, 1, nil),
+			},
+			func(t *testing.T, expr ast.Expr) {
+				fn := assertFunctionExpr(t, expr)
+				if len(fn.Body.Statements) != 1 {
+					t.Errorf("expected 1 statement, got %d", len(fn.Body.Statements))
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			expr, _, err := parseExpressionFromTokens(tt.tokens)
+			if err != nil {
+				t.Fatalf("parseExpr() error = %v", err)
+			}
+			tt.check(t, expr)
 		})
 	}
 }
@@ -771,4 +853,13 @@ func assertSetIndex(t *testing.T, expr ast.Expr) (*ast.SetIndexExpr, ast.Expr, a
 		t.Fatalf("expected SetIndexExpr, got %T", expr)
 	}
 	return sidx, sidx.Object, sidx.Index, sidx.Value
+}
+
+func assertFunctionExpr(t *testing.T, expr ast.Expr) *ast.FunctionExpr {
+	t.Helper()
+	fn, ok := expr.(*ast.FunctionExpr)
+	if !ok {
+		t.Fatalf("expected FunctionExpr, got %T", expr)
+	}
+	return fn
 }

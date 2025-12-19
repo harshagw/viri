@@ -10,7 +10,7 @@ import (
 
 func TestInterpreter_EvalLiteral(t *testing.T) {
 	i := NewInterpreter(nil)
-	
+
 	tests := []struct {
 		name     string
 		expr     ast.Expr
@@ -39,7 +39,7 @@ func TestInterpreter_EvalLiteral(t *testing.T) {
 			if err != nil {
 				t.Fatalf("evalExpr() error = %v", err)
 			}
-			
+
 			var actual interface{}
 			switch v := result.(type) {
 			case *objects.Number:
@@ -61,7 +61,7 @@ func TestInterpreter_EvalBinary(t *testing.T) {
 	i := NewInterpreter(nil)
 
 	plusTok := token.New(token.PLUS, "+", nil, 1, nil)
-	
+
 	expr := &ast.BinaryExpr{
 		Left:     &ast.LiteralExpr{Value: 10.0},
 		Operator: &plusTok,
@@ -88,9 +88,9 @@ func TestInterpreter_EvalVarDecl(t *testing.T) {
 	i := NewInterpreter(globals)
 
 	nameTok := token.New(token.IDENTIFIER, "x", nil, 1, nil)
-	
+
 	stmt := &ast.VarDeclStmt{
-		Name: &nameTok,
+		Name:        &nameTok,
 		Initializer: &ast.LiteralExpr{Value: 100.0},
 	}
 
@@ -154,7 +154,7 @@ func TestInterpreter_EvalFunction(t *testing.T) {
 	bVarExpr := &ast.VariableExpr{Name: &bTok}
 
 	funStmt := &ast.FunctionStmt{
-		Name: &addTok,
+		Name:   &addTok,
 		Params: []*token.Token{&aTok, &bTok},
 		Body: &ast.BlockStmt{
 			Statements: []ast.Stmt{
@@ -219,7 +219,7 @@ func TestInterpreter_EvalClass(t *testing.T) {
 		Name: &pointTok,
 		Methods: []*ast.FunctionStmt{
 			{
-				Name: &initTok,
+				Name:   &initTok,
 				Params: []*token.Token{&xTok, &yTok},
 				Body: &ast.BlockStmt{
 					Statements: []ast.Stmt{
@@ -413,7 +413,7 @@ func TestInterpreter_EvalUnary(t *testing.T) {
 			name: "--42",
 			expr: &ast.UnaryExpr{
 				Operator: &minusTok,
-				Expr:     &ast.UnaryExpr{
+				Expr: &ast.UnaryExpr{
 					Operator: &minusTok,
 					Expr:     &ast.LiteralExpr{Value: 42.0},
 				},
@@ -537,7 +537,7 @@ func TestInterpreter_EvalWhile(t *testing.T) {
 	// var x = 0; while (x < 3) { x = x + 1; }
 	xTok := token.New(token.IDENTIFIER, "x", nil, 1, nil)
 	globals.Define("x", objects.NewNumber(0))
-	
+
 	lessTok := token.New(token.LESS, "<", nil, 1, nil)
 	plusTok := token.New(token.PLUS, "+", nil, 1, nil)
 
@@ -567,5 +567,62 @@ func TestInterpreter_EvalWhile(t *testing.T) {
 	val, _ := globals.Get("x")
 	if val.(*objects.Number).Value != 3.0 {
 		t.Errorf("got %v, want 3.0", val.(*objects.Number).Value)
+	}
+}
+
+func TestInterpreter_EvalFunctionExpr(t *testing.T) {
+	globals := objects.NewEnvironment(nil)
+	i := NewInterpreter(globals)
+
+	// fun(x) { return x + 1; }
+	xTok := token.New(token.IDENTIFIER, "x", nil, 1, nil)
+	plusTok := token.New(token.PLUS, "+", nil, 1, nil)
+
+	xVarExpr := &ast.VariableExpr{Name: &xTok}
+
+	expr := &ast.FunctionExpr{
+		Params: []*token.Token{&xTok},
+		Body: &ast.BlockStmt{
+			Statements: []ast.Stmt{
+				&ast.ReturnStmt{
+					Keyword: &token.Token{Type: token.RETURN, Lexeme: "return"},
+					Value: &ast.BinaryExpr{
+						Left:     xVarExpr,
+						Operator: &plusTok,
+						Right:    &ast.LiteralExpr{Value: 1.0},
+					},
+				},
+			},
+		},
+	}
+
+	i.SetLocals(map[ast.Expr]int{
+		xVarExpr: 0,
+	})
+
+	result, err := i.evalExpr(expr)
+	if err != nil {
+		t.Fatalf("evalExpr() error = %v", err)
+	}
+
+	fn, ok := result.(*objects.Function)
+	if !ok {
+		t.Fatalf("expected Function, got %T", result)
+	}
+
+	// Call the function: fn(10)
+	args := []objects.Object{&objects.Number{Value: 10.0}}
+	callResult, err := fn.Call(i, args)
+	if err != nil {
+		t.Fatalf("fn.Call() error = %v", err)
+	}
+
+	num, ok := callResult.(*objects.Number)
+	if !ok {
+		t.Fatalf("expected Number, got %T", callResult)
+	}
+
+	if num.Value != 11.0 {
+		t.Errorf("got %v, want 11.0", num.Value)
 	}
 }

@@ -125,3 +125,10 @@ type SetIndexExpr struct {
 }
 
 func (*SetIndexExpr) exprNode() {}
+
+type FunctionExpr struct {
+	Params []*token.Token
+	Body   *BlockStmt
+}
+
+func (*FunctionExpr) exprNode() {}

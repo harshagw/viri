@@ -128,6 +128,20 @@ func (p *Printer) printExpr(expr Expr) {
 			p.writeNode("value")
 			p.withPrefix(p.childPrefix(), true, func() { p.printExpr(n.Value) })
 		})
+	case *FunctionExpr:
+		p.writeNode("Function (anonymous)")
+		newPrefix := p.childPrefix()
+		p.withPrefix(newPrefix, false, func() {
+			p.writeNode("params")
+			paramsPrefix := p.childPrefix()
+			for i, param := range n.Params {
+				p.withPrefix(paramsPrefix, i == len(n.Params)-1, func() { p.writeNode(param.Lexeme) })
+			}
+		})
+		p.withPrefix(newPrefix, true, func() {
+			p.writeNode("body")
+			p.withPrefix(p.childPrefix(), true, func() { p.printStmt(n.Body) })
+		})
 	case *HashLiteralExpr:
 		p.writeNode("HashLiteral")
 		newPrefix := p.childPrefix()

@@ -91,7 +91,8 @@ func (p *Parser) parseDeclaration() ast.Stmt {
 		if exported && stmt != nil {
 			stmt.(*ast.VarDeclStmt).Exported = true
 		}
-	} else if p.match(token.FUN) {
+	} else if p.check(token.FUN) && p.checkNext(token.IDENTIFIER) {
+		p.advance()
 		stmt, err = p.parseFunction()
 		if exported && stmt != nil {
 			stmt.(*ast.FunctionStmt).Exported = true
@@ -231,19 +232,31 @@ func (p *Parser) parseFunction() (ast.Stmt, error) {
 	if err != nil {
 		return nil, err
 	}
-	if _, err = p.consume(token.LEFT_PAREN, "Expect '(' after function name."); err != nil {
+	params, body, err := p.parseFunctionBody(objects.FunctionTypeNamed)
+	if err != nil {
 		return nil, err
+	}
+	return &ast.FunctionStmt{
+		Name:   name,
+		Params: params,
+		Body:   body,
+	}, nil
+}
+
+func (p *Parser) parseFunctionBody(functionType objects.FunctionType) ([]*token.Token, *ast.BlockStmt, error) {
+	if _, err := p.consume(token.LEFT_PAREN, "Expect '(' after "+functionType.String()+"."); err != nil {
+		return nil, nil, err
 	}
 	parameters := make([]*token.Token, 0)
 	if !p.check(token.RIGHT_PAREN) {
 		for {
 			if len(parameters) >= 255 {
-				return nil, p.error(p.peekPrevious(), "Can't have more than 255 parameters.")
+				return nil, nil, p.error(p.peekPrevious(), "Can't have more than 255 parameters.")
 			}
 
 			parameter, err := p.consume(token.IDENTIFIER, "Expect parameter name.")
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			parameters = append(parameters, parameter)
 			if !p.match(token.COMMA) {
@@ -251,21 +264,17 @@ func (p *Parser) parseFunction() (ast.Stmt, error) {
 			}
 		}
 	}
-	if _, err = p.consume(token.RIGHT_PAREN, "Expect ')' after parameters."); err != nil {
-		return nil, err
+	if _, err := p.consume(token.RIGHT_PAREN, "Expect ')' after parameters."); err != nil {
+		return nil, nil, err
 	}
-	if _, err = p.consume(token.LEFT_BRACE, "Expect '{' before block."); err != nil {
-		return nil, err
+	if _, err := p.consume(token.LEFT_BRACE, "Expect '{' before block."); err != nil {
+		return nil, nil, err
 	}
 	body, err := p.parseBlockStmt()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return &ast.FunctionStmt{
-		Name:   name,
-		Params: parameters,
-		Body:   body,
-	}, nil
+	return parameters, body, nil
 }
 
 func (p *Parser) parseWhileStmt() (ast.Stmt, error) {
@@ -500,6 +509,16 @@ func (p *Parser) check(tokenType token.Type) bool {
 		return false
 	}
 	return p.peekCurrent().Type == tokenType
+}
+
+func (p *Parser) checkNext(tokenType token.Type) bool {
+	if p.isAtEnd() {
+		return false
+	}
+	if p.current+1 >= len(p.tokens) {
+		return false
+	}
+	return p.tokens[p.current+1].Type == tokenType
 }
 
 func (p *Parser) peekPrevious() *token.Token {

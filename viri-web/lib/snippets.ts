@@ -8,7 +8,15 @@ export const SNIPPETS = [
        + fibonacci(n - 2);
 }
 
-print fibonacci(10);`,
+print fibonacci(10);
+
+var multiply = fun(a, b) {
+  return a * b;
+};
+print multiply(3, 4);
+
+// IIFE
+print fun(x) { return x * x; }(5);`,
   },
   {
     id: "classes",

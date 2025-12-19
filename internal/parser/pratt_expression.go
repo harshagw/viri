@@ -2,6 +2,7 @@ package parser
 
 import (
 	"github.com/harshagw/viri/internal/ast"
+	"github.com/harshagw/viri/internal/objects"
 	"github.com/harshagw/viri/internal/token"
 )
 
@@ -66,7 +67,7 @@ func (p *Parser) parseExpression(minPrec precedence) (ast.Expr, error) {
 	for {
 		op := p.peekCurrent() // this usually gives out operator token
 		if op == nil {
-			break;
+			break
 		}
 		nextPrec := infixBindingPower(op.Type)
 		if minPrec >= nextPrec {
@@ -105,6 +106,12 @@ func (p *Parser) parsePrefix(tok *token.Token) (ast.Expr, error) {
 			return nil, err
 		}
 		return &ast.UnaryExpr{Operator: tok, Expr: right}, nil
+	case token.FUN:
+		params, body, err := p.parseFunctionBody(objects.FunctionTypeAnonymous)
+		if err != nil {
+			return nil, err
+		}
+		return &ast.FunctionExpr{Params: params, Body: body}, nil
 	case token.LEFT_PAREN:
 		expr, err := p.parseExpression(precNone)
 		if err != nil {

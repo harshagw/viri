@@ -156,6 +156,8 @@ func (r *Resolver) resolveExpr(expr ast.Expr) {
 		r.resolveExpr(e.Right)
 	case *ast.CallExpr:
 		r.visitCall(e)
+	case *ast.FunctionExpr:
+		r.visitFunctionExpr(e)
 	case *ast.GetExpr:
 		r.resolveExpr(e.Object)
 	case *ast.SetExpr:
@@ -262,7 +264,11 @@ func (r *Resolver) visitFunction(function *ast.FunctionStmt) {
 	if r.currentClass != ClassTypeNone && function.Name.Lexeme == "init" {
 		newFunctionType = FunctionTypeInitializer
 	}
-	r.resolveFunction(function, newFunctionType)
+	r.resolveFunction(function.Params, function.Body, newFunctionType)
+}
+
+func (r *Resolver) visitFunctionExpr(expr *ast.FunctionExpr) {
+	r.resolveFunction(expr.Params, expr.Body, FunctionTypeFunction)
 }
 
 func (r *Resolver) visitClass(class *ast.ClassStmt) {
@@ -303,7 +309,7 @@ func (r *Resolver) visitClass(class *ast.ClassStmt) {
 	r.define(&thisToken)
 
 	for _, method := range class.Methods {
-		r.resolveFunction(method, FunctionTypeMethod)
+		r.resolveFunction(method.Params, method.Body, FunctionTypeMethod)
 	}
 
 	r.endScope()
@@ -315,15 +321,15 @@ func (r *Resolver) visitClass(class *ast.ClassStmt) {
 	r.currentClass = previousClassType
 }
 
-func (r *Resolver) resolveFunction(function *ast.FunctionStmt, functionType FunctionType) {
+func (r *Resolver) resolveFunction(params []*token.Token, body *ast.BlockStmt, functionType FunctionType) {
 	previousFunctionType := r.currentFunction
 	r.currentFunction = functionType
 	r.beginScope()
-	for _, param := range function.Params {
+	for _, param := range params {
 		r.declare(param)
 		r.define(param)
 	}
-	for _, statement := range function.Body.Statements {
+	for _, statement := range body.Statements {
 		r.resolveStmt(statement)
 	}
 	r.endScope()

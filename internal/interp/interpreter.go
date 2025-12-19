@@ -156,7 +156,7 @@ func (i *Interpreter) visitImportStmt(stmt *ast.ImportStmt) (objects.Object, err
 }
 
 func (i *Interpreter) visitFunction(function *ast.FunctionStmt) (objects.Object, error) {
-	fn := objects.NewFunction(function, i.environment, false)
+	fn := objects.NewFunction(function.Name.Lexeme, function.Params, function.Body, i.environment, false, objects.FunctionTypeNamed)
 	i.environment.Define(function.Name.Lexeme, fn)
 
 	if function.Exported {
@@ -164,6 +164,10 @@ func (i *Interpreter) visitFunction(function *ast.FunctionStmt) (objects.Object,
 	}
 
 	return nil, nil
+}
+
+func (i *Interpreter) visitFunctionExpr(expr *ast.FunctionExpr) (objects.Object, error) {
+	return objects.NewFunction("", expr.Params, expr.Body, i.environment, false, objects.FunctionTypeAnonymous), nil
 }
 
 func (i *Interpreter) visitClass(class *ast.ClassStmt) (objects.Object, error) {
@@ -192,7 +196,7 @@ func (i *Interpreter) visitClass(class *ast.ClassStmt) (objects.Object, error) {
 
 	methods := make(map[string]*objects.Function, len(class.Methods))
 	for _, method := range class.Methods {
-		function := objects.NewFunction(method, methodEnvironment, method.Name.Lexeme == "init")
+		function := objects.NewFunction(method.Name.Lexeme, method.Params, method.Body, methodEnvironment, method.Name.Lexeme == "init", objects.FunctionTypeNamed)
 		methods[method.Name.Lexeme] = function
 	}
 
@@ -360,6 +364,8 @@ func (i *Interpreter) evalExpr(expr ast.Expr) (objects.Object, error) {
 		return i.visitLogicalExpr(e)
 	case *ast.CallExpr:
 		return i.visitCallExpr(e)
+	case *ast.FunctionExpr:
+		return i.visitFunctionExpr(e)
 	case *ast.GetExpr:
 		return i.visitGetExpr(e)
 	case *ast.SetExpr:

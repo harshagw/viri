@@ -576,6 +576,41 @@ func TestResolveStaticScoping(t *testing.T) {
 	assertResolved(t, locals, printAtEnd, "a (local)", 0)
 }
 
+func TestResolveFunctionExpr(t *testing.T) {
+	// Represents: var a = fun(x) { return x; };
+	aTok := token.Token{Type: token.IDENTIFIER, Lexeme: "a", Literal: nil, Line: 1, FilePath: nil}
+	xTok := token.Token{Type: token.IDENTIFIER, Lexeme: "x", Literal: nil, Line: 1, FilePath: nil}
+	mod := &ast.Module{
+		Statements: []ast.Stmt{
+			&ast.VarDeclStmt{
+				Name: &aTok,
+				Initializer: &ast.FunctionExpr{
+					Params: []*token.Token{&xTok},
+					Body: &ast.BlockStmt{
+						Statements: []ast.Stmt{
+							&ast.ReturnStmt{
+								Keyword: &token.Token{Type: token.RETURN, Lexeme: "return"},
+								Value:   &ast.VariableExpr{Name: &xTok},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	resolver, _ := createResolverFromAST()
+	locals, err := resolver.Resolve(mod)
+	if err != nil {
+		t.Fatalf("Resolve() error = %v", err)
+	}
+	// x should be resolved
+	stmt := mod.Statements[0].(*ast.VarDeclStmt)
+	expr := stmt.Initializer.(*ast.FunctionExpr)
+	retStmt := expr.Body.Statements[0].(*ast.ReturnStmt)
+	varExpr := retStmt.Value.(*ast.VariableExpr)
+	assertResolved(t, locals, varExpr, "x", 0)
+}
+
 func assertResolved(t *testing.T, locals map[ast.Expr]int, expr ast.Expr, name string, expectedDepth int) {
 	t.Helper()
 	depth, found := locals[expr]

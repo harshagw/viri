@@ -1023,6 +1023,161 @@ func TestParseFunction(t *testing.T) {
 	}
 }
 
+func TestParseFunctionExpr(t *testing.T) {
+	tests := []struct {
+		name    string
+		tokens  []token.Token
+		wantErr bool
+		checkFn func(*testing.T, *ast.Module)
+	}{
+		{
+			name: "anonymous function",
+			// var a = fun() { return 0; };
+			tokens: []token.Token{
+				token.New(token.VAR, "var", nil, 1, nil),
+				token.New(token.IDENTIFIER, "a", nil, 1, nil),
+				token.New(token.EQUAL, "=", nil, 1, nil),
+				token.New(token.FUN, "fun", nil, 1, nil),
+				token.New(token.LEFT_PAREN, "(", nil, 1, nil),
+				token.New(token.RIGHT_PAREN, ")", nil, 1, nil),
+				token.New(token.LEFT_BRACE, "{", nil, 1, nil),
+				token.New(token.RETURN, "return", nil, 1, nil),
+				token.New(token.NUMBER, "0", 0.0, 1, nil),
+				token.New(token.SEMICOLON, ";", nil, 1, nil),
+				token.New(token.RIGHT_BRACE, "}", nil, 1, nil),
+				token.New(token.SEMICOLON, ";", nil, 1, nil),
+				token.New(token.EOF, "", nil, 1, nil),
+			},
+			wantErr: false,
+			checkFn: func(t *testing.T, mod *ast.Module) {
+				stmt, ok := mod.Statements[0].(*ast.VarDeclStmt)
+				if !ok {
+					t.Fatalf("expected VarDeclStmt, got %T", mod.Statements[0])
+				}
+				expr, ok := stmt.Initializer.(*ast.FunctionExpr)
+				if !ok {
+					t.Fatalf("expected FunctionExpr, got %T", stmt.Initializer)
+				}
+				if len(expr.Params) != 0 {
+					t.Errorf("params = %d, want 0", len(expr.Params))
+				}
+				if len(expr.Body.Statements) != 1 {
+					t.Errorf("body statements = %d, want 1", len(expr.Body.Statements))
+				}
+			},
+		},
+		{
+			name: "function with parameters",
+			// var add = fun(a, b) { return a + b; };
+			tokens: []token.Token{
+				token.New(token.VAR, "var", nil, 1, nil),
+				token.New(token.IDENTIFIER, "add", nil, 1, nil),
+				token.New(token.EQUAL, "=", nil, 1, nil),
+				token.New(token.FUN, "fun", nil, 1, nil),
+				token.New(token.LEFT_PAREN, "(", nil, 1, nil),
+				token.New(token.IDENTIFIER, "a", nil, 1, nil),
+				token.New(token.COMMA, ",", nil, 1, nil),
+				token.New(token.IDENTIFIER, "b", nil, 1, nil),
+				token.New(token.RIGHT_PAREN, ")", nil, 1, nil),
+				token.New(token.LEFT_BRACE, "{", nil, 1, nil),
+				token.New(token.RETURN, "return", nil, 1, nil),
+				token.New(token.IDENTIFIER, "a", nil, 1, nil),
+				token.New(token.PLUS, "+", nil, 1, nil),
+				token.New(token.IDENTIFIER, "b", nil, 1, nil),
+				token.New(token.SEMICOLON, ";", nil, 1, nil),
+				token.New(token.RIGHT_BRACE, "}", nil, 1, nil),
+				token.New(token.SEMICOLON, ";", nil, 1, nil),
+				token.New(token.EOF, "", nil, 1, nil),
+			},
+			wantErr: false,
+			checkFn: func(t *testing.T, mod *ast.Module) {
+				stmt := mod.Statements[0].(*ast.VarDeclStmt)
+				expr := stmt.Initializer.(*ast.FunctionExpr)
+				if len(expr.Params) != 2 {
+					t.Errorf("params = %d, want 2", len(expr.Params))
+				}
+			},
+		},
+		{
+			name: "IIFE",
+			// fun(x) { print x; }(10);
+			tokens: []token.Token{
+				token.New(token.FUN, "fun", nil, 1, nil),
+				token.New(token.LEFT_PAREN, "(", nil, 1, nil),
+				token.New(token.IDENTIFIER, "x", nil, 1, nil),
+				token.New(token.RIGHT_PAREN, ")", nil, 1, nil),
+				token.New(token.LEFT_BRACE, "{", nil, 1, nil),
+				token.New(token.PRINT, "print", nil, 1, nil),
+				token.New(token.IDENTIFIER, "x", nil, 1, nil),
+				token.New(token.SEMICOLON, ";", nil, 1, nil),
+				token.New(token.RIGHT_BRACE, "}", nil, 1, nil),
+				token.New(token.LEFT_PAREN, "(", nil, 1, nil),
+				token.New(token.NUMBER, "10", 10.0, 1, nil),
+				token.New(token.RIGHT_PAREN, ")", nil, 1, nil),
+				token.New(token.SEMICOLON, ";", nil, 1, nil),
+				token.New(token.EOF, "", nil, 1, nil),
+			},
+			wantErr: false,
+			checkFn: func(t *testing.T, mod *ast.Module) {
+				stmt, ok := mod.Statements[0].(*ast.ExprStmt)
+				if !ok {
+					t.Fatalf("expected ExprStmt, got %T", mod.Statements[0])
+				}
+				call, ok := stmt.Expr.(*ast.CallExpr)
+				if !ok {
+					t.Fatalf("expected CallExpr, got %T", stmt.Expr)
+				}
+				if _, ok := call.Callee.(*ast.FunctionExpr); !ok {
+					t.Errorf("expected Callee to be FunctionExpr, got %T", call.Callee)
+				}
+			},
+		},
+		{
+			name: "function with multiple statements",
+			// var f = fun() { print 1; print 2; };
+			tokens: []token.Token{
+				token.New(token.VAR, "var", nil, 1, nil),
+				token.New(token.IDENTIFIER, "f", nil, 1, nil),
+				token.New(token.EQUAL, "=", nil, 1, nil),
+				token.New(token.FUN, "fun", nil, 1, nil),
+				token.New(token.LEFT_PAREN, "(", nil, 1, nil),
+				token.New(token.RIGHT_PAREN, ")", nil, 1, nil),
+				token.New(token.LEFT_BRACE, "{", nil, 1, nil),
+				token.New(token.PRINT, "print", nil, 1, nil),
+				token.New(token.NUMBER, "1", 1.0, 1, nil),
+				token.New(token.SEMICOLON, ";", nil, 1, nil),
+				token.New(token.PRINT, "print", nil, 1, nil),
+				token.New(token.NUMBER, "2", 2.0, 1, nil),
+				token.New(token.SEMICOLON, ";", nil, 1, nil),
+				token.New(token.RIGHT_BRACE, "}", nil, 1, nil),
+				token.New(token.SEMICOLON, ";", nil, 1, nil),
+				token.New(token.EOF, "", nil, 1, nil),
+			},
+			wantErr: false,
+			checkFn: func(t *testing.T, mod *ast.Module) {
+				stmt := mod.Statements[0].(*ast.VarDeclStmt)
+				expr := stmt.Initializer.(*ast.FunctionExpr)
+				if len(expr.Body.Statements) != 2 {
+					t.Errorf("body statements = %d, want 2", len(expr.Body.Statements))
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p, _ := createParserFromTokens(tt.tokens)
+			mod, err := p.Parse()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Parse() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if tt.checkFn != nil {
+				tt.checkFn(t, mod)
+			}
+		})
+	}
+}
+
 func TestParseClass(t *testing.T) {
 	tests := []struct {
 		name    string

@@ -1,0 +1,43 @@
+var add = fun(a, b) {
+  return a + b;
+};
+
+print add(5, 10);
+
+var multiply = fun(a, b) {
+  return a * b;
+};
+
+print multiply(3, 4);
+
+var a = fun (a,b) { return a + b; }(500, 1000);
+
+print a;
+
+// Will not print anything but it should not give an error;
+fun () { return 1; }();
+fun (a,b) {return a - b;}(12, 5);
+fun (a, b) {return a * b;};
+
+// Immediately invoked function expression (IIFE)
+print fun(x) { return x * x; }(5);
+
+// Function as argument
+var apply = fun(f, x) {
+  return f(x);
+};
+
+print apply(fun(x) { return x + 1; }, 10);
+
+// Closure with anonymous function
+var makeCounter = fun() {
+  var count = 0;
+  return fun() {
+    count = count + 1;
+    return count;
+  };
+};
+
+var counter = makeCounter();
+print counter();
+print counter();

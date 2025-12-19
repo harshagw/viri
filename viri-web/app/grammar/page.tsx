@@ -138,7 +138,7 @@ export default function GrammarPage() {
                   <Lexical>IDENTIFIER</Lexical> {"{"} <Token>,</Token> <Lexical>IDENTIFIER</Lexical> {"}"}
                 </>
               }
-              referencedBy={["function"]}
+              referencedBy={["function", "functionExpr"]}
             />
 
             {/* Statements */}
@@ -166,7 +166,7 @@ export default function GrammarPage() {
                   <Token>{"{"}</Token> {"{"} <RuleLink href="#declaration">declaration</RuleLink> {"}"} <Token>{"}"}</Token>
                 </>
               }
-              referencedBy={["function", "statement"]}
+              referencedBy={["function", "functionExpr", "statement"]}
             />
 
             <GrammarRule
@@ -399,7 +399,7 @@ export default function GrammarPage() {
                   <Token>true</Token> | <Token>false</Token> | <Token>nil</Token> | <Token>this</Token> | <Lexical>NUMBER</Lexical> | <Lexical>STRING</Lexical>{" "}
                   | <Lexical>IDENTIFIER</Lexical> | <Token>(</Token> <RuleLink href="#expression">expression</RuleLink> <Token>)</Token> | <Token>super</Token>{" "}
                   <Token>.</Token> <Lexical>IDENTIFIER</Lexical> | <RuleLink href="#arrayLiteral">arrayLiteral</RuleLink> |{" "}
-                  <RuleLink href="#hashLiteral">hashLiteral</RuleLink>
+                  <RuleLink href="#hashLiteral">hashLiteral</RuleLink> | <RuleLink href="#functionExpr">functionExpr</RuleLink>
                 </>
               }
               referencedBy={["call"]}
@@ -452,6 +452,18 @@ export default function GrammarPage() {
                 </>
               }
               referencedBy={["hashLiteral"]}
+            />
+
+            <GrammarRule
+              id="functionExpr"
+              name="functionExpr"
+              definition={
+                <>
+                  <Token>fun</Token> <Token>(</Token> [ <RuleLink href="#parameters">parameters</RuleLink> ] <Token>)</Token>{" "}
+                  <RuleLink href="#block">block</RuleLink>
+                </>
+              }
+              referencedBy={["primary"]}
             />
           </div>
 
