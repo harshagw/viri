@@ -9,6 +9,10 @@ type Array struct {
 	Elements []Object
 }
 
+func NewArray(elements []Object) *Array {
+	return &Array{Elements: elements}
+}
+
 func (a *Array) Type() Type {
 	return TypeArray
 }

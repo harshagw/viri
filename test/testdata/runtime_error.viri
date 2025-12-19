@@ -1,0 +1,2 @@
+var x = "hello";
+print x - 5; // Runtime error: operands must be numbers

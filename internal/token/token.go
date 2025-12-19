@@ -190,6 +190,7 @@ func New(tt Type, lexeme string, literal interface{}, line int, filePath *string
 	}
 }
 
+
 func (t *Token) String() string {
 	return fmt.Sprintf("%s %s %v %v", t.Type.String(), t.Lexeme, t.Literal, t.Line)
 }
