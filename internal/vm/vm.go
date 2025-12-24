@@ -41,9 +41,10 @@ func (vm *VM) Run() error {
 
 		switch op {
 		case code.OpConstant:
-			constIndex, _ := code.ReadOperands(&code.Definition{OperandWidths: []int{2}}, vm.instructions[ip+1:])
-			ip += 2
-			if err := vm.push(vm.constants[constIndex[0]]); err != nil {
+			def, _ := code.Lookup(byte(op))
+			operands, read := code.ReadOperands(def, vm.instructions[ip+1:])
+			ip += read
+			if err := vm.push(vm.constants[operands[0]]); err != nil {
 				return err
 			}
 
@@ -75,6 +76,21 @@ func (vm *VM) Run() error {
 		case code.OpMinus:
 			if err := vm.executeMinusOperator(); err != nil {
 				return err
+			}
+
+		case code.OpJump:
+			def, _ := code.Lookup(byte(op))
+			pos, _ := code.ReadOperands(def, vm.instructions[ip+1:])
+			ip = pos[0] - 1 // -1 because the loop will increment ip
+
+		case code.OpJumpNotTruthy:
+			def, _ := code.Lookup(byte(op))
+			pos, read := code.ReadOperands(def, vm.instructions[ip+1:])
+			ip += read
+
+			condition := vm.pop()
+			if !objects.IsTruthy(condition) {
+				ip = pos[0] - 1 // -1 because the loop will increment ip
 			}
 
 		case code.OpPop:

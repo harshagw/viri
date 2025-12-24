@@ -42,6 +42,47 @@ func (c *Compiler) compileStatement(stmt ast.Stmt) error {
 		}
 		c.emit(code.OpPop)
 		return nil
+
+	case *ast.BlockStmt:
+		for _, s := range stmt.Statements {
+			if err := c.compileStatement(s); err != nil {
+				return err
+			}
+		}
+		return nil
+
+	case *ast.IfStmt:
+		if err := c.compileExpression(stmt.Condition); err != nil {
+			return err
+		}
+
+		// Emit an OpJumpNotTruthy with a placeholder offset
+		jumpNotTruthyPos := c.emit(code.OpJumpNotTruthy, 9999)
+
+		if err := c.compileStatement(stmt.ThenBranch); err != nil {
+			return err
+		}
+
+		if stmt.ElseBranch != nil {
+			// Emit an OpJump to skip the else branch after executing if branch
+			jumpPos := c.emit(code.OpJump, 9999)
+
+			// Patch the OpJumpNotTruthy to jump to else branch
+			c.changeOperand(jumpNotTruthyPos, len(c.instructions))
+
+			if err := c.compileStatement(stmt.ElseBranch); err != nil {
+				return err
+			}
+
+			// Patch the OpJump to jump past else branch
+			c.changeOperand(jumpPos, len(c.instructions))
+		} else {
+			// No else branch - patch jump to skip if branch
+			c.changeOperand(jumpNotTruthyPos, len(c.instructions))
+		}
+
+		return nil
+
 	default:
 		return fmt.Errorf("unsupported statement type: %T", stmt)
 	}
@@ -134,6 +175,14 @@ func (c *Compiler) emit(op code.Opcode, operands ...int) int {
 	ins := code.Make(op, operands...)
 	pos := c.addInstruction(ins)
 	return pos
+}
+
+func (c *Compiler) changeOperand(opPos int, operands ...int) {
+	op := code.Opcode(c.instructions[opPos])
+	newInstruction := code.Make(op, operands...)
+	for i := 0; i < len(newInstruction); i++ {
+		c.instructions[opPos+i] = newInstruction[i]
+	}
 }
 
 func (c *Compiler) addInstruction(ins []byte) int {

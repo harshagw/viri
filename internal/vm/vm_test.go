@@ -244,20 +244,19 @@ func runVmTests(t *testing.T, tests []vmTestCase) {
 	t.Helper()
 
 	for _, tt := range tests {
-		compiler := compiler.New(nil)
-		err := compiler.Compile(tt.input)
+		comp := compiler.New(nil)
+		err := comp.Compile(tt.input)
 		if err != nil {
 			t.Fatalf("compiler error: %s", err)
 		}
 
-		vm := New(compiler.Bytecode())
+		vm := New(comp.Bytecode())
 		err = vm.Run()
 		if err != nil {
 			t.Fatalf("vm error: %s", err)
 		}
 
 		stackElem := vm.LastPoppedStackElem()
-
 		testExpectedObject(t, tt.expected, stackElem)
 	}
 }
@@ -314,4 +313,125 @@ func testBooleanObject(expected bool, actual objects.Object) error {
 	}
 
 	return nil
+}
+
+func TestConditionals(t *testing.T) {
+	// Since if-else is a statement (not expression) in Viri,
+	// we test by checking the last popped value from ExprStmt
+	tests := []vmTestCase{
+		// if (true) { 10; }
+		{&ast.IfStmt{
+			Condition: &ast.LiteralExpr{Value: true},
+			ThenBranch: &ast.BlockStmt{
+				Statements: []ast.Stmt{
+					&ast.ExprStmt{Expr: &ast.LiteralExpr{Value: 10}},
+				},
+			},
+			ElseBranch: nil,
+		}, 10},
+		// if (true) { 10; } else { 20; }
+		{&ast.IfStmt{
+			Condition: &ast.LiteralExpr{Value: true},
+			ThenBranch: &ast.BlockStmt{
+				Statements: []ast.Stmt{
+					&ast.ExprStmt{Expr: &ast.LiteralExpr{Value: 10}},
+				},
+			},
+			ElseBranch: &ast.BlockStmt{
+				Statements: []ast.Stmt{
+					&ast.ExprStmt{Expr: &ast.LiteralExpr{Value: 20}},
+				},
+			},
+		}, 10},
+		// if (false) { 10; } else { 20; }
+		{&ast.IfStmt{
+			Condition: &ast.LiteralExpr{Value: false},
+			ThenBranch: &ast.BlockStmt{
+				Statements: []ast.Stmt{
+					&ast.ExprStmt{Expr: &ast.LiteralExpr{Value: 10}},
+				},
+			},
+			ElseBranch: &ast.BlockStmt{
+				Statements: []ast.Stmt{
+					&ast.ExprStmt{Expr: &ast.LiteralExpr{Value: 20}},
+				},
+			},
+		}, 20},
+		// if (1) { 10; }
+		{&ast.IfStmt{
+			Condition: &ast.LiteralExpr{Value: 1},
+			ThenBranch: &ast.BlockStmt{
+				Statements: []ast.Stmt{
+					&ast.ExprStmt{Expr: &ast.LiteralExpr{Value: 10}},
+				},
+			},
+			ElseBranch: nil,
+		}, 10},
+		// if (1 < 2) { 10; }
+		{&ast.IfStmt{
+			Condition: &ast.BinaryExpr{
+				Left:     &ast.LiteralExpr{Value: 1},
+				Right:    &ast.LiteralExpr{Value: 2},
+				Operator: &token.Token{Type: token.LESS},
+			},
+			ThenBranch: &ast.BlockStmt{
+				Statements: []ast.Stmt{
+					&ast.ExprStmt{Expr: &ast.LiteralExpr{Value: 10}},
+				},
+			},
+			ElseBranch: nil,
+		}, 10},
+		// if (1 > 2) { 10; } else { 20; }
+		{&ast.IfStmt{
+			Condition: &ast.BinaryExpr{
+				Left:     &ast.LiteralExpr{Value: 1},
+				Right:    &ast.LiteralExpr{Value: 2},
+				Operator: &token.Token{Type: token.GREATER},
+			},
+			ThenBranch: &ast.BlockStmt{
+				Statements: []ast.Stmt{
+					&ast.ExprStmt{Expr: &ast.LiteralExpr{Value: 10}},
+				},
+			},
+			ElseBranch: &ast.BlockStmt{
+				Statements: []ast.Stmt{
+					&ast.ExprStmt{Expr: &ast.LiteralExpr{Value: 20}},
+				},
+			},
+		}, 20},
+	}
+
+	runVmTests(t, tests)
+}
+
+func TestBlockStatements(t *testing.T) {
+	tests := []vmTestCase{
+		// { 10 }
+		{&ast.BlockStmt{
+			Statements: []ast.Stmt{
+				&ast.ExprStmt{Expr: &ast.LiteralExpr{Value: 10}},
+			},
+		}, 10},
+		// { 10; 20 }
+		{&ast.BlockStmt{
+			Statements: []ast.Stmt{
+				&ast.ExprStmt{Expr: &ast.LiteralExpr{Value: 10}},
+				&ast.ExprStmt{Expr: &ast.LiteralExpr{Value: 20}},
+			},
+		}, 20},
+		// { 1 + 2 }
+		{&ast.BlockStmt{
+			Statements: []ast.Stmt{
+				&ast.ExprStmt{
+					Expr: &ast.BinaryExpr{
+						Left:     &ast.LiteralExpr{Value: 1},
+						Right:    &ast.LiteralExpr{Value: 2},
+						Operator: &token.Token{Type: token.PLUS},
+					},
+				},
+			},
+		}, 3},
+	}
+
+	runVmTests(t, tests)
 }

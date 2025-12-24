@@ -210,6 +210,115 @@ func TestExpressionStatements(t *testing.T) {
 	runCompilerTests(t, tests)
 }
 
+func TestConditionals(t *testing.T) {
+	tests := []compilerTestCase{
+		{
+			// if (true) { 10; }
+			input: &ast.IfStmt{
+				Condition: &ast.LiteralExpr{Value: true},
+				ThenBranch: &ast.BlockStmt{
+					Statements: []ast.Stmt{
+						&ast.ExprStmt{Expr: &ast.LiteralExpr{Value: 10}},
+					},
+				},
+				ElseBranch: nil,
+			},
+			expectedConstants: []interface{}{10},
+			expectedInstructions: []code.Instructions{
+				// 0000
+				code.Make(code.OpTrue),
+				// 0001
+				code.Make(code.OpJumpNotTruthy, 8),
+				// 0004
+				code.Make(code.OpConstant, 0),
+				// 0007
+				code.Make(code.OpPop),
+				// 0008
+			},
+		},
+		{
+			// if (true) { 10; } else { 20; }
+			input: &ast.IfStmt{
+				Condition: &ast.LiteralExpr{Value: true},
+				ThenBranch: &ast.BlockStmt{
+					Statements: []ast.Stmt{
+						&ast.ExprStmt{Expr: &ast.LiteralExpr{Value: 10}},
+					},
+				},
+				ElseBranch: &ast.BlockStmt{
+					Statements: []ast.Stmt{
+						&ast.ExprStmt{Expr: &ast.LiteralExpr{Value: 20}},
+					},
+				},
+			},
+			expectedConstants: []interface{}{10, 20},
+			expectedInstructions: []code.Instructions{
+				// 0000
+				code.Make(code.OpTrue),
+				// 0001
+				code.Make(code.OpJumpNotTruthy, 11),
+				// 0004
+				code.Make(code.OpConstant, 0),
+				// 0007
+				code.Make(code.OpPop),
+				// 0008
+				code.Make(code.OpJump, 15),
+				// 0011
+				code.Make(code.OpConstant, 1),
+				// 0014
+				code.Make(code.OpPop),
+				// 0015
+			},
+		},
+	}
+
+	runCompilerTests(t, tests)
+}
+
+func TestBlockStatements(t *testing.T) {
+	tests := []compilerTestCase{
+		{
+			// { 1; 2; }
+			input: &ast.BlockStmt{
+				Statements: []ast.Stmt{
+					&ast.ExprStmt{Expr: &ast.LiteralExpr{Value: 1}},
+					&ast.ExprStmt{Expr: &ast.LiteralExpr{Value: 2}},
+				},
+			},
+			expectedConstants: []interface{}{1, 2},
+			expectedInstructions: []code.Instructions{
+				code.Make(code.OpConstant, 0),
+				code.Make(code.OpPop),
+				code.Make(code.OpConstant, 1),
+				code.Make(code.OpPop),
+			},
+		},
+		{
+			// { 1 + 2; }
+			input: &ast.BlockStmt{
+				Statements: []ast.Stmt{
+					&ast.ExprStmt{
+						Expr: &ast.BinaryExpr{
+							Left:     &ast.LiteralExpr{Value: 1},
+							Right:    &ast.LiteralExpr{Value: 2},
+							Operator: &token.Token{Type: token.PLUS},
+						},
+					},
+				},
+			},
+			expectedConstants: []interface{}{1, 2},
+			expectedInstructions: []code.Instructions{
+				code.Make(code.OpConstant, 0),
+				code.Make(code.OpConstant, 1),
+				code.Make(code.OpAdd),
+				code.Make(code.OpPop),
+			},
+		},
+	}
+
+	runCompilerTests(t, tests)
+}
+
 func runCompilerTests(t *testing.T, tests []compilerTestCase) {
 	t.Helper()
 
