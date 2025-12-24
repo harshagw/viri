@@ -435,3 +435,141 @@ func TestBlockStatements(t *testing.T) {
 
 	runVmTests(t, tests)
 }
+
+func TestGlobalVarStatements(t *testing.T) {
+	tests := []vmTestCase{
+		// var one = 1; one;
+		{&ast.BlockStmt{
+			Statements: []ast.Stmt{
+				&ast.VarDeclStmt{
+					Name:        &token.Token{Type: token.IDENTIFIER, Lexeme: "one"},
+					Initializer: &ast.LiteralExpr{Value: 1},
+					IsConst:     false,
+				},
+				&ast.ExprStmt{
+					Expr: &ast.VariableExpr{
+						Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "one"},
+					},
+				},
+			},
+		}, 1},
+		// var one = 1; var two = 2; one + two;
+		{&ast.BlockStmt{
+			Statements: []ast.Stmt{
+				&ast.VarDeclStmt{
+					Name:        &token.Token{Type: token.IDENTIFIER, Lexeme: "one"},
+					Initializer: &ast.LiteralExpr{Value: 1},
+					IsConst:     false,
+				},
+				&ast.VarDeclStmt{
+					Name:        &token.Token{Type: token.IDENTIFIER, Lexeme: "two"},
+					Initializer: &ast.LiteralExpr{Value: 2},
+					IsConst:     false,
+				},
+				&ast.ExprStmt{
+					Expr: &ast.BinaryExpr{
+						Left: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "one"},
+						},
+						Right: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "two"},
+						},
+						Operator: &token.Token{Type: token.PLUS},
+					},
+				},
+			},
+		}, 3},
+		// var one = 1; var two = one + one; one + two;
+		{&ast.BlockStmt{
+			Statements: []ast.Stmt{
+				&ast.VarDeclStmt{
+					Name:        &token.Token{Type: token.IDENTIFIER, Lexeme: "one"},
+					Initializer: &ast.LiteralExpr{Value: 1},
+					IsConst:     false,
+				},
+				&ast.VarDeclStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "two"},
+					Initializer: &ast.BinaryExpr{
+						Left: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "one"},
+						},
+						Right: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "one"},
+						},
+						Operator: &token.Token{Type: token.PLUS},
+					},
+					IsConst: false,
+				},
+				&ast.ExprStmt{
+					Expr: &ast.BinaryExpr{
+						Left: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "one"},
+						},
+						Right: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "two"},
+						},
+						Operator: &token.Token{Type: token.PLUS},
+					},
+				},
+			},
+		}, 3},
+	}
+
+	runVmTests(t, tests)
+}
+
+func TestGlobalAssignment(t *testing.T) {
+	tests := []vmTestCase{
+		// var x = 1; x = 5; x;
+		{&ast.BlockStmt{
+			Statements: []ast.Stmt{
+				&ast.VarDeclStmt{
+					Name:        &token.Token{Type: token.IDENTIFIER, Lexeme: "x"},
+					Initializer: &ast.LiteralExpr{Value: 1},
+					IsConst:     false,
+				},
+				&ast.ExprStmt{
+					Expr: &ast.AssignExpr{
+						Name:  &token.Token{Type: token.IDENTIFIER, Lexeme: "x"},
+						Value: &ast.LiteralExpr{Value: 5},
+					},
+				},
+				&ast.ExprStmt{
+					Expr: &ast.VariableExpr{
+						Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "x"},
+					},
+				},
+			},
+		}, 5},
+		// var x = 1; var y = 2; x = y; x;
+		{&ast.BlockStmt{
+			Statements: []ast.Stmt{
+				&ast.VarDeclStmt{
+					Name:        &token.Token{Type: token.IDENTIFIER, Lexeme: "x"},
+					Initializer: &ast.LiteralExpr{Value: 1},
+					IsConst:     false,
+				},
+				&ast.VarDeclStmt{
+					Name:        &token.Token{Type: token.IDENTIFIER, Lexeme: "y"},
+					Initializer: &ast.LiteralExpr{Value: 2},
+					IsConst:     false,
+				},
+				&ast.ExprStmt{
+					Expr: &ast.AssignExpr{
+						Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "x"},
+						Value: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "y"},
+						},
+					},
+				},
+				&ast.ExprStmt{
+					Expr: &ast.VariableExpr{
+						Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "x"},
+					},
+				},
+			},
+		}, 2},
+	}
+
+	runVmTests(t, tests)
+}

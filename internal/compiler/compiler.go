@@ -13,6 +13,7 @@ type Compiler struct {
 	instructions      code.Instructions
 	constants         []objects.Object
 	diagnosticHandler objects.DiagnosticHandler
+	symbolTable       *SymbolTable
 }
 
 func New(diagnosticHandler objects.DiagnosticHandler) *Compiler {
@@ -20,6 +21,7 @@ func New(diagnosticHandler objects.DiagnosticHandler) *Compiler {
 		instructions:      code.Instructions{},
 		constants:         []objects.Object{},
 		diagnosticHandler: diagnosticHandler,
+		symbolTable:       NewSymbolTable(),
 	}
 }
 
@@ -81,6 +83,20 @@ func (c *Compiler) compileStatement(stmt ast.Stmt) error {
 			c.changeOperand(jumpNotTruthyPos, len(c.instructions))
 		}
 
+		return nil
+
+	case *ast.VarDeclStmt:
+		symbol := c.symbolTable.Define(stmt.Name.Lexeme, stmt.IsConst)
+
+		if stmt.Initializer != nil {
+			if err := c.compileExpression(stmt.Initializer); err != nil {
+				return err
+			}
+		} else {
+			c.emit(code.OpNil) // Default to nil if no initializer
+		}
+
+		c.emit(code.OpSetGlobal, symbol.Index)
 		return nil
 
 	default:
@@ -160,6 +176,29 @@ func (c *Compiler) compileExpression(node ast.Expr) error {
 		default:
 			return c.error(node.Operator, fmt.Sprintf("unknown operator %s", node.Operator.Lexeme))
 		}
+
+	case *ast.VariableExpr:
+		symbol, ok := c.symbolTable.Resolve(node.Name.Lexeme)
+		if !ok {
+			return c.error(node.Name, fmt.Sprintf("undefined variable %s", node.Name.Lexeme))
+		}
+		c.emit(code.OpGetGlobal, symbol.Index)
+
+	case *ast.AssignExpr:
+		symbol, ok := c.symbolTable.Resolve(node.Name.Lexeme)
+		if !ok {
+			return c.error(node.Name, fmt.Sprintf("undefined variable %s", node.Name.Lexeme))
+		}
+		if symbol.IsConst {
+			return c.error(node.Name, fmt.Sprintf("cannot assign to constant %s", node.Name.Lexeme))
+		}
+
+		if err := c.compileExpression(node.Value); err != nil {
+			return err
+		}
+		c.emit(code.OpSetGlobal, symbol.Index)
+		// Assignment is an expression, so we need to leave the value on the stack
+		c.emit(code.OpGetGlobal, symbol.Index)
 	}
 	return nil
 }

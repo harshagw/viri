@@ -9,6 +9,7 @@ import (
 )
 
 const StackSize = 2048
+const GlobalsSize = 65536
 
 type VM struct {
 	constants    []objects.Object
@@ -16,6 +17,8 @@ type VM struct {
 
 	stack []objects.Object
 	sp    int // Always points to the next value. Top of stack is stack[sp-1]
+
+	globals []objects.Object
 }
 
 func New(bytecode *compiler.Bytecode) *VM {
@@ -23,8 +26,9 @@ func New(bytecode *compiler.Bytecode) *VM {
 		instructions: bytecode.Instructions,
 		constants:    bytecode.Constants,
 
-		stack: make([]objects.Object, StackSize),
-		sp:    0,
+		stack:   make([]objects.Object, StackSize),
+		sp:      0,
+		globals: make([]objects.Object, GlobalsSize),
 	}
 }
 
@@ -63,6 +67,11 @@ func (vm *VM) Run() error {
 				return err
 			}
 
+		case code.OpNil:
+			if err := vm.push(objects.NilValue); err != nil {
+				return err
+			}
+
 		case code.OpEqual, code.OpNotEqual, code.OpGreaterThan:
 			if err := vm.executeComparison(op); err != nil {
 				return err
@@ -95,6 +104,23 @@ func (vm *VM) Run() error {
 
 		case code.OpPop:
 			vm.pop()
+
+		case code.OpSetGlobal:
+			def, _ := code.Lookup(byte(op))
+			operands, read := code.ReadOperands(def, vm.instructions[ip+1:])
+			ip += read
+
+			globalIndex := operands[0]
+			vm.globals[globalIndex] = vm.pop()
+
+		case code.OpGetGlobal:
+			def, _ := code.Lookup(byte(op))
+			operands, read := code.ReadOperands(def, vm.instructions[ip+1:])
+			ip += read
+
+			if err := vm.push(vm.globals[operands[0]]); err != nil {
+				return err
+			}
 		}
 	}
 

@@ -45,7 +45,10 @@ func (b *Bool) Inspect() string {
 // Nil is the singleton nil value.
 type Nil struct{}
 
-func NewNil() *Nil        { return &Nil{} }
+// NilValue is the singleton nil instance
+var NilValue = &Nil{}
+
+func NewNil() *Nil        { return NilValue }
 func (n *Nil) Type() Type { return TypeNil }
 func (n *Nil) Inspect() string {
 	return "nil"

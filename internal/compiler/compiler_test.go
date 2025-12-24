@@ -403,3 +403,188 @@ func testIntegerObject(expected int64, actual objects.Object) error {
 
 	return nil
 }
+
+func TestGlobalVarStatements(t *testing.T) {
+	tests := []compilerTestCase{
+		{
+			// var one = 1;
+			input: &ast.VarDeclStmt{
+				Name:        &token.Token{Type: token.IDENTIFIER, Lexeme: "one"},
+				Initializer: &ast.LiteralExpr{Value: 1},
+				IsConst:     false,
+			},
+			expectedConstants: []interface{}{1},
+			expectedInstructions: []code.Instructions{
+				code.Make(code.OpConstant, 0),
+				code.Make(code.OpSetGlobal, 0),
+			},
+		},
+		{
+			// var one = 1; var two = 2;
+			input: &ast.BlockStmt{
+				Statements: []ast.Stmt{
+					&ast.VarDeclStmt{
+						Name:        &token.Token{Type: token.IDENTIFIER, Lexeme: "one"},
+						Initializer: &ast.LiteralExpr{Value: 1},
+						IsConst:     false,
+					},
+					&ast.VarDeclStmt{
+						Name:        &token.Token{Type: token.IDENTIFIER, Lexeme: "two"},
+						Initializer: &ast.LiteralExpr{Value: 2},
+						IsConst:     false,
+					},
+				},
+			},
+			expectedConstants: []interface{}{1, 2},
+			expectedInstructions: []code.Instructions{
+				code.Make(code.OpConstant, 0),
+				code.Make(code.OpSetGlobal, 0),
+				code.Make(code.OpConstant, 1),
+				code.Make(code.OpSetGlobal, 1),
+			},
+		},
+		{
+			// var one = 1; one;
+			input: &ast.BlockStmt{
+				Statements: []ast.Stmt{
+					&ast.VarDeclStmt{
+						Name:        &token.Token{Type: token.IDENTIFIER, Lexeme: "one"},
+						Initializer: &ast.LiteralExpr{Value: 1},
+						IsConst:     false,
+					},
+					&ast.ExprStmt{
+						Expr: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "one"},
+						},
+					},
+				},
+			},
+			expectedConstants: []interface{}{1},
+			expectedInstructions: []code.Instructions{
+				code.Make(code.OpConstant, 0),
+				code.Make(code.OpSetGlobal, 0),
+				code.Make(code.OpGetGlobal, 0),
+				code.Make(code.OpPop),
+			},
+		},
+		{
+			// var one = 1; var two = one; two;
+			input: &ast.BlockStmt{
+				Statements: []ast.Stmt{
+					&ast.VarDeclStmt{
+						Name:        &token.Token{Type: token.IDENTIFIER, Lexeme: "one"},
+						Initializer: &ast.LiteralExpr{Value: 1},
+						IsConst:     false,
+					},
+					&ast.VarDeclStmt{
+						Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "two"},
+						Initializer: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "one"},
+						},
+						IsConst: false,
+					},
+					&ast.ExprStmt{
+						Expr: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "two"},
+						},
+					},
+				},
+			},
+			expectedConstants: []interface{}{1},
+			expectedInstructions: []code.Instructions{
+				code.Make(code.OpConstant, 0),
+				code.Make(code.OpSetGlobal, 0),
+				code.Make(code.OpGetGlobal, 0),
+				code.Make(code.OpSetGlobal, 1),
+				code.Make(code.OpGetGlobal, 1),
+				code.Make(code.OpPop),
+			},
+		},
+	}
+
+	runCompilerTests(t, tests)
+}
+
+func TestGlobalConstStatements(t *testing.T) {
+	tests := []compilerTestCase{
+		{
+			// const PI = 3;
+			input: &ast.VarDeclStmt{
+				Name:        &token.Token{Type: token.IDENTIFIER, Lexeme: "PI"},
+				Initializer: &ast.LiteralExpr{Value: 3},
+				IsConst:     true,
+			},
+			expectedConstants: []interface{}{3},
+			expectedInstructions: []code.Instructions{
+				code.Make(code.OpConstant, 0),
+				code.Make(code.OpSetGlobal, 0),
+			},
+		},
+	}
+
+	runCompilerTests(t, tests)
+}
+
+func TestConstAssignmentError(t *testing.T) {
+	// const PI = 3; PI = 4; should fail
+	input := &ast.BlockStmt{
+		Statements: []ast.Stmt{
+			&ast.VarDeclStmt{
+				Name:        &token.Token{Type: token.IDENTIFIER, Lexeme: "PI"},
+				Initializer: &ast.LiteralExpr{Value: 3},
+				IsConst:     true,
+			},
+			&ast.ExprStmt{
+				Expr: &ast.AssignExpr{
+					Name:  &token.Token{Type: token.IDENTIFIER, Lexeme: "PI"},
+					Value: &ast.LiteralExpr{Value: 4},
+				},
+			},
+		},
+	}
+
+	compiler := New(nil)
+	err := compiler.Compile(input)
+	if err == nil {
+		t.Fatalf("expected error for const assignment, got none")
+	}
+
+	expected := "cannot assign to constant PI"
+	if err.Error() != expected {
+		t.Fatalf("wrong error. want=%q, got=%q", expected, err.Error())
+	}
+}
+
+func TestGlobalAssignmentStatements(t *testing.T) {
+	tests := []compilerTestCase{
+		{
+			// var x = 1; x = 2;
+			input: &ast.BlockStmt{
+				Statements: []ast.Stmt{
+					&ast.VarDeclStmt{
+						Name:        &token.Token{Type: token.IDENTIFIER, Lexeme: "x"},
+						Initializer: &ast.LiteralExpr{Value: 1},
+						IsConst:     false,
+					},
+					&ast.ExprStmt{
+						Expr: &ast.AssignExpr{
+							Name:  &token.Token{Type: token.IDENTIFIER, Lexeme: "x"},
+							Value: &ast.LiteralExpr{Value: 2},
+						},
+					},
+				},
+			},
+			expectedConstants: []interface{}{1, 2},
+			expectedInstructions: []code.Instructions{
+				code.Make(code.OpConstant, 0),
+				code.Make(code.OpSetGlobal, 0),
+				code.Make(code.OpConstant, 1),
+				code.Make(code.OpSetGlobal, 0),
+				code.Make(code.OpGetGlobal, 0),
+				code.Make(code.OpPop),
+			},
+		},
+	}
+
+	runCompilerTests(t, tests)
+}
