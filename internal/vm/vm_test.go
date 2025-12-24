@@ -265,7 +265,7 @@ func testExpectedObject(t *testing.T, expected interface{}, actual objects.Objec
 	t.Helper()
 
 	if expected == nil {
-		if actual != nil {
+		if actual != nil && actual.Type() != objects.TypeNil {
 			t.Errorf("expected nil, got=%T (%+v)", actual, actual)
 		}
 		return
@@ -282,7 +282,66 @@ func testExpectedObject(t *testing.T, expected interface{}, actual objects.Objec
 		if err != nil {
 			t.Errorf("testBooleanObject failed: %s", err)
 		}
+	case string:
+		err := testStringObject(expected, actual)
+		if err != nil {
+			t.Errorf("testStringObject failed: %s", err)
+		}
+	case []int:
+		array, ok := actual.(*objects.Array)
+		if !ok {
+			t.Errorf("object is not Array. got=%T (%+v)", actual, actual)
+			return
+		}
+		if len(array.Elements) != len(expected) {
+			t.Errorf("wrong number of elements. want=%d, got=%d",
+				len(expected), len(array.Elements))
+			return
+		}
+		for i, expectedElem := range expected {
+			err := testIntegerObject(int64(expectedElem), array.Elements[i])
+			if err != nil {
+				t.Errorf("testIntegerObject failed for element %d: %s", i, err)
+			}
+		}
+	case map[string]int:
+		hash, ok := actual.(*objects.Hash)
+		if !ok {
+			t.Errorf("object is not Hash. got=%T (%+v)", actual, actual)
+			return
+		}
+		if len(hash.Pairs) != len(expected) {
+			t.Errorf("wrong number of pairs. want=%d, got=%d",
+				len(expected), len(hash.Pairs))
+			return
+		}
+		for key, expectedVal := range expected {
+			val, ok := hash.Pairs[key]
+			if !ok {
+				t.Errorf("no value for key %q in hash", key)
+				continue
+			}
+			err := testIntegerObject(int64(expectedVal), val)
+			if err != nil {
+				t.Errorf("testIntegerObject failed for key %q: %s", key, err)
+			}
+		}
 	}
+}
+
+func testStringObject(expected string, actual objects.Object) error {
+	result, ok := actual.(*objects.String)
+	if !ok {
+		return fmt.Errorf("object is not String. got=%T (%+v)",
+			actual, actual)
+	}
+
+	if result.Value != expected {
+		return fmt.Errorf("object has wrong value. want=%q, got=%q",
+			expected, result.Value)
+	}
+
+	return nil
 }
 
 func testIntegerObject(expected int64, actual objects.Object) error {
@@ -565,6 +624,354 @@ func TestGlobalAssignment(t *testing.T) {
 				&ast.ExprStmt{
 					Expr: &ast.VariableExpr{
 						Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "x"},
+					},
+				},
+			},
+		}, 2},
+	}
+
+	runVmTests(t, tests)
+}
+
+func TestStringExpressions(t *testing.T) {
+	tests := []vmTestCase{
+		{&ast.ExprStmt{
+			Expr: &ast.LiteralExpr{Value: "hello"},
+		}, "hello"},
+		// String concatenation
+		{&ast.ExprStmt{
+			Expr: &ast.BinaryExpr{
+				Left:     &ast.LiteralExpr{Value: "hello"},
+				Right:    &ast.LiteralExpr{Value: " world"},
+				Operator: &token.Token{Type: token.PLUS},
+			},
+		}, "hello world"},
+		// Number + String
+		{&ast.ExprStmt{
+			Expr: &ast.BinaryExpr{
+				Left:     &ast.LiteralExpr{Value: 42},
+				Right:    &ast.LiteralExpr{Value: " is the answer"},
+				Operator: &token.Token{Type: token.PLUS},
+			},
+		}, "42 is the answer"},
+		// String + Number
+		{&ast.ExprStmt{
+			Expr: &ast.BinaryExpr{
+				Left:     &ast.LiteralExpr{Value: "The answer is "},
+				Right:    &ast.LiteralExpr{Value: 42},
+				Operator: &token.Token{Type: token.PLUS},
+			},
+		}, "The answer is 42"},
+		// Float number + String
+		{&ast.ExprStmt{
+			Expr: &ast.BinaryExpr{
+				Left:     &ast.LiteralExpr{Value: 3.14},
+				Right:    &ast.LiteralExpr{Value: " is pi"},
+				Operator: &token.Token{Type: token.PLUS},
+			},
+		}, "3.14 is pi"},
+	}
+
+	runVmTests(t, tests)
+}
+
+func TestArrayLiterals(t *testing.T) {
+	tests := []vmTestCase{
+		// []
+		{&ast.ExprStmt{
+			Expr: &ast.ArrayLiteralExpr{Elements: []ast.Expr{}},
+		}, []int{}},
+		// [1, 2, 3]
+		{&ast.ExprStmt{
+			Expr: &ast.ArrayLiteralExpr{
+				Elements: []ast.Expr{
+					&ast.LiteralExpr{Value: 1},
+					&ast.LiteralExpr{Value: 2},
+					&ast.LiteralExpr{Value: 3},
+				},
+			},
+		}, []int{1, 2, 3}},
+		// [1 + 2, 3 * 4, 5 + 6]
+		{&ast.ExprStmt{
+			Expr: &ast.ArrayLiteralExpr{
+				Elements: []ast.Expr{
+					&ast.BinaryExpr{
+						Left:     &ast.LiteralExpr{Value: 1},
+						Right:    &ast.LiteralExpr{Value: 2},
+						Operator: &token.Token{Type: token.PLUS},
+					},
+					&ast.BinaryExpr{
+						Left:     &ast.LiteralExpr{Value: 3},
+						Right:    &ast.LiteralExpr{Value: 4},
+						Operator: &token.Token{Type: token.STAR},
+					},
+					&ast.BinaryExpr{
+						Left:     &ast.LiteralExpr{Value: 5},
+						Right:    &ast.LiteralExpr{Value: 6},
+						Operator: &token.Token{Type: token.PLUS},
+					},
+				},
+			},
+		}, []int{3, 12, 11}},
+	}
+
+	runVmTests(t, tests)
+}
+
+func TestHashLiterals(t *testing.T) {
+	tests := []vmTestCase{
+		// {}
+		{&ast.ExprStmt{
+			Expr: &ast.HashLiteralExpr{Pairs: []ast.HashPair{}},
+		}, map[string]int{}},
+		// {"one": 1, "two": 2}
+		{&ast.ExprStmt{
+			Expr: &ast.HashLiteralExpr{
+				Pairs: []ast.HashPair{
+					{Key: &ast.LiteralExpr{Value: "one"}, Value: &ast.LiteralExpr{Value: 1}},
+					{Key: &ast.LiteralExpr{Value: "two"}, Value: &ast.LiteralExpr{Value: 2}},
+				},
+			},
+		}, map[string]int{"one": 1, "two": 2}},
+		// {"one": 1 + 1, "two": 2 * 2}
+		{&ast.ExprStmt{
+			Expr: &ast.HashLiteralExpr{
+				Pairs: []ast.HashPair{
+					{
+						Key: &ast.LiteralExpr{Value: "one"},
+						Value: &ast.BinaryExpr{
+							Left:     &ast.LiteralExpr{Value: 1},
+							Right:    &ast.LiteralExpr{Value: 1},
+							Operator: &token.Token{Type: token.PLUS},
+						},
+					},
+					{
+						Key: &ast.LiteralExpr{Value: "two"},
+						Value: &ast.BinaryExpr{
+							Left:     &ast.LiteralExpr{Value: 2},
+							Right:    &ast.LiteralExpr{Value: 2},
+							Operator: &token.Token{Type: token.STAR},
+						},
+					},
+				},
+			},
+		}, map[string]int{"one": 2, "two": 4}},
+	}
+
+	runVmTests(t, tests)
+}
+
+func TestIndexExpressions(t *testing.T) {
+	tests := []vmTestCase{
+		// [1, 2, 3][1]
+		{&ast.ExprStmt{
+			Expr: &ast.IndexExpr{
+				Object: &ast.ArrayLiteralExpr{
+					Elements: []ast.Expr{
+						&ast.LiteralExpr{Value: 1},
+						&ast.LiteralExpr{Value: 2},
+						&ast.LiteralExpr{Value: 3},
+					},
+				},
+				Index: &ast.LiteralExpr{Value: 1},
+			},
+		}, 2},
+		// [1, 2, 3][0 + 2]
+		{&ast.ExprStmt{
+			Expr: &ast.IndexExpr{
+				Object: &ast.ArrayLiteralExpr{
+					Elements: []ast.Expr{
+						&ast.LiteralExpr{Value: 1},
+						&ast.LiteralExpr{Value: 2},
+						&ast.LiteralExpr{Value: 3},
+					},
+				},
+				Index: &ast.BinaryExpr{
+					Left:     &ast.LiteralExpr{Value: 0},
+					Right:    &ast.LiteralExpr{Value: 2},
+					Operator: &token.Token{Type: token.PLUS},
+				},
+			},
+		}, 3},
+		// [[1, 2], [3, 4]][0][0]
+		{&ast.ExprStmt{
+			Expr: &ast.IndexExpr{
+				Object: &ast.IndexExpr{
+					Object: &ast.ArrayLiteralExpr{
+						Elements: []ast.Expr{
+							&ast.ArrayLiteralExpr{
+								Elements: []ast.Expr{
+									&ast.LiteralExpr{Value: 1},
+									&ast.LiteralExpr{Value: 2},
+								},
+							},
+							&ast.ArrayLiteralExpr{
+								Elements: []ast.Expr{
+									&ast.LiteralExpr{Value: 3},
+									&ast.LiteralExpr{Value: 4},
+								},
+							},
+						},
+					},
+					Index: &ast.LiteralExpr{Value: 0},
+				},
+				Index: &ast.LiteralExpr{Value: 0},
+			},
+		}, 1},
+		// {"one": 1}["one"]
+		{&ast.ExprStmt{
+			Expr: &ast.IndexExpr{
+				Object: &ast.HashLiteralExpr{
+					Pairs: []ast.HashPair{
+						{Key: &ast.LiteralExpr{Value: "one"}, Value: &ast.LiteralExpr{Value: 1}},
+					},
+				},
+				Index: &ast.LiteralExpr{Value: "one"},
+			},
+		}, 1},
+		// {"one": 1, "two": 2}["two"]
+		{&ast.ExprStmt{
+			Expr: &ast.IndexExpr{
+				Object: &ast.HashLiteralExpr{
+					Pairs: []ast.HashPair{
+						{Key: &ast.LiteralExpr{Value: "one"}, Value: &ast.LiteralExpr{Value: 1}},
+						{Key: &ast.LiteralExpr{Value: "two"}, Value: &ast.LiteralExpr{Value: 2}},
+					},
+				},
+				Index: &ast.LiteralExpr{Value: "two"},
+			},
+		}, 2},
+	}
+
+	runVmTests(t, tests)
+}
+
+func TestIndexOutOfBoundsError(t *testing.T) {
+	// [1, 2, 3][99] - out of bounds should error
+	input := &ast.ExprStmt{
+		Expr: &ast.IndexExpr{
+			Object: &ast.ArrayLiteralExpr{
+				Elements: []ast.Expr{
+					&ast.LiteralExpr{Value: 1},
+					&ast.LiteralExpr{Value: 2},
+					&ast.LiteralExpr{Value: 3},
+				},
+			},
+			Index: &ast.LiteralExpr{Value: 99},
+		},
+	}
+
+	comp := compiler.New(nil)
+	err := comp.Compile(input)
+	if err != nil {
+		t.Fatalf("compiler error: %s", err)
+	}
+
+	vm := New(comp.Bytecode())
+	err = vm.Run()
+	if err == nil {
+		t.Fatalf("expected error for out of bounds index, got none")
+	}
+
+	expected := "index out of bounds"
+	if err.Error() != expected {
+		t.Fatalf("wrong error. want=%q, got=%q", expected, err.Error())
+	}
+}
+
+func TestHashKeyNotFoundError(t *testing.T) {
+	// {"one": 1}["missing"] - missing key should error
+	input := &ast.ExprStmt{
+		Expr: &ast.IndexExpr{
+			Object: &ast.HashLiteralExpr{
+				Pairs: []ast.HashPair{
+					{Key: &ast.LiteralExpr{Value: "one"}, Value: &ast.LiteralExpr{Value: 1}},
+				},
+			},
+			Index: &ast.LiteralExpr{Value: "missing"},
+		},
+	}
+
+	comp := compiler.New(nil)
+	err := comp.Compile(input)
+	if err != nil {
+		t.Fatalf("compiler error: %s", err)
+	}
+
+	vm := New(comp.Bytecode())
+	err = vm.Run()
+	if err == nil {
+		t.Fatalf("expected error for missing key, got none")
+	}
+
+	expected := "key 'missing' not found in hash map"
+	if err.Error() != expected {
+		t.Fatalf("wrong error. want=%q, got=%q", expected, err.Error())
+	}
+}
+
+func TestSetIndexExpressions(t *testing.T) {
+	tests := []vmTestCase{
+		// var arr = [1, 2, 3]; arr[0] = 99; arr[0];
+		{&ast.BlockStmt{
+			Statements: []ast.Stmt{
+				&ast.VarDeclStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "arr"},
+					Initializer: &ast.ArrayLiteralExpr{
+						Elements: []ast.Expr{
+							&ast.LiteralExpr{Value: 1},
+							&ast.LiteralExpr{Value: 2},
+							&ast.LiteralExpr{Value: 3},
+						},
+					},
+					IsConst: false,
+				},
+				&ast.ExprStmt{
+					Expr: &ast.SetIndexExpr{
+						Object: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "arr"},
+						},
+						Index: &ast.LiteralExpr{Value: 0},
+						Value: &ast.LiteralExpr{Value: 99},
+					},
+				},
+				&ast.ExprStmt{
+					Expr: &ast.IndexExpr{
+						Object: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "arr"},
+						},
+						Index: &ast.LiteralExpr{Value: 0},
+					},
+				},
+			},
+		}, 99},
+		// var hash = {"one": 1}; hash["two"] = 2; hash["two"];
+		{&ast.BlockStmt{
+			Statements: []ast.Stmt{
+				&ast.VarDeclStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "hash"},
+					Initializer: &ast.HashLiteralExpr{
+						Pairs: []ast.HashPair{
+							{Key: &ast.LiteralExpr{Value: "one"}, Value: &ast.LiteralExpr{Value: 1}},
+						},
+					},
+					IsConst: false,
+				},
+				&ast.ExprStmt{
+					Expr: &ast.SetIndexExpr{
+						Object: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "hash"},
+						},
+						Index: &ast.LiteralExpr{Value: "two"},
+						Value: &ast.LiteralExpr{Value: 2},
+					},
+				},
+				&ast.ExprStmt{
+					Expr: &ast.IndexExpr{
+						Object: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "hash"},
+						},
+						Index: &ast.LiteralExpr{Value: "two"},
 					},
 				},
 			},

@@ -383,7 +383,28 @@ func testConstants(t *testing.T, expected []interface{}, actual []objects.Object
 				return fmt.Errorf("constant %d - testIntegerObject failed: %s",
 					i, err)
 			}
+		case string:
+			err := testStringObject(constant, actual[i])
+			if err != nil {
+				return fmt.Errorf("constant %d - testStringObject failed: %s",
+					i, err)
+			}
 		}
+	}
+
+	return nil
+}
+
+func testStringObject(expected string, actual objects.Object) error {
+	result, ok := actual.(*objects.String)
+	if !ok {
+		return fmt.Errorf("object is not String. got=%T (%+v)",
+			actual, actual)
+	}
+
+	if result.Value != expected {
+		return fmt.Errorf("object has wrong value. want=%q, got=%q",
+			expected, result.Value)
 	}
 
 	return nil
@@ -553,6 +574,265 @@ func TestConstAssignmentError(t *testing.T) {
 	if err.Error() != expected {
 		t.Fatalf("wrong error. want=%q, got=%q", expected, err.Error())
 	}
+}
+
+func TestStringExpressions(t *testing.T) {
+	tests := []compilerTestCase{
+		{
+			input:             &ast.LiteralExpr{Value: "hello"},
+			expectedConstants: []interface{}{"hello"},
+			expectedInstructions: []code.Instructions{
+				code.Make(code.OpConstant, 0),
+			},
+		},
+	}
+
+	runCompilerTests(t, tests)
+}
+
+func TestArrayLiterals(t *testing.T) {
+	tests := []compilerTestCase{
+		{
+			// []
+			input:             &ast.ArrayLiteralExpr{Elements: []ast.Expr{}},
+			expectedConstants: []interface{}{},
+			expectedInstructions: []code.Instructions{
+				code.Make(code.OpArray, 0),
+			},
+		},
+		{
+			// [1, 2, 3]
+			input: &ast.ArrayLiteralExpr{
+				Elements: []ast.Expr{
+					&ast.LiteralExpr{Value: 1},
+					&ast.LiteralExpr{Value: 2},
+					&ast.LiteralExpr{Value: 3},
+				},
+			},
+			expectedConstants: []interface{}{1, 2, 3},
+			expectedInstructions: []code.Instructions{
+				code.Make(code.OpConstant, 0),
+				code.Make(code.OpConstant, 1),
+				code.Make(code.OpConstant, 2),
+				code.Make(code.OpArray, 3),
+			},
+		},
+		{
+			// [1 + 2, 3 - 4, 5 * 6]
+			input: &ast.ArrayLiteralExpr{
+				Elements: []ast.Expr{
+					&ast.BinaryExpr{
+						Left:     &ast.LiteralExpr{Value: 1},
+						Right:    &ast.LiteralExpr{Value: 2},
+						Operator: &token.Token{Type: token.PLUS},
+					},
+					&ast.BinaryExpr{
+						Left:     &ast.LiteralExpr{Value: 3},
+						Right:    &ast.LiteralExpr{Value: 4},
+						Operator: &token.Token{Type: token.MINUS},
+					},
+					&ast.BinaryExpr{
+						Left:     &ast.LiteralExpr{Value: 5},
+						Right:    &ast.LiteralExpr{Value: 6},
+						Operator: &token.Token{Type: token.STAR},
+					},
+				},
+			},
+			expectedConstants: []interface{}{1, 2, 3, 4, 5, 6},
+			expectedInstructions: []code.Instructions{
+				code.Make(code.OpConstant, 0),
+				code.Make(code.OpConstant, 1),
+				code.Make(code.OpAdd),
+				code.Make(code.OpConstant, 2),
+				code.Make(code.OpConstant, 3),
+				code.Make(code.OpSub),
+				code.Make(code.OpConstant, 4),
+				code.Make(code.OpConstant, 5),
+				code.Make(code.OpMul),
+				code.Make(code.OpArray, 3),
+			},
+		},
+	}
+
+	runCompilerTests(t, tests)
+}
+
+func TestHashLiterals(t *testing.T) {
+	tests := []compilerTestCase{
+		{
+			// {}
+			input:             &ast.HashLiteralExpr{Pairs: []ast.HashPair{}},
+			expectedConstants: []interface{}{},
+			expectedInstructions: []code.Instructions{
+				code.Make(code.OpHash, 0),
+			},
+		},
+		{
+			// {"one": 1, "two": 2}
+			input: &ast.HashLiteralExpr{
+				Pairs: []ast.HashPair{
+					{Key: &ast.LiteralExpr{Value: "one"}, Value: &ast.LiteralExpr{Value: 1}},
+					{Key: &ast.LiteralExpr{Value: "two"}, Value: &ast.LiteralExpr{Value: 2}},
+				},
+			},
+			expectedConstants: []interface{}{"one", 1, "two", 2},
+			expectedInstructions: []code.Instructions{
+				code.Make(code.OpConstant, 0),
+				code.Make(code.OpConstant, 1),
+				code.Make(code.OpConstant, 2),
+				code.Make(code.OpConstant, 3),
+				code.Make(code.OpHash, 4),
+			},
+		},
+	}
+
+	runCompilerTests(t, tests)
+}
+
+func TestIndexExpressions(t *testing.T) {
+	tests := []compilerTestCase{
+		{
+			// [1, 2, 3][1]
+			input: &ast.IndexExpr{
+				Object: &ast.ArrayLiteralExpr{
+					Elements: []ast.Expr{
+						&ast.LiteralExpr{Value: 1},
+						&ast.LiteralExpr{Value: 2},
+						&ast.LiteralExpr{Value: 3},
+					},
+				},
+				Index: &ast.LiteralExpr{Value: 1},
+			},
+			expectedConstants: []interface{}{1, 2, 3, 1},
+			expectedInstructions: []code.Instructions{
+				code.Make(code.OpConstant, 0),
+				code.Make(code.OpConstant, 1),
+				code.Make(code.OpConstant, 2),
+				code.Make(code.OpArray, 3),
+				code.Make(code.OpConstant, 3),
+				code.Make(code.OpIndex),
+			},
+		},
+		{
+			// {"one": 1}["one"]
+			input: &ast.IndexExpr{
+				Object: &ast.HashLiteralExpr{
+					Pairs: []ast.HashPair{
+						{Key: &ast.LiteralExpr{Value: "one"}, Value: &ast.LiteralExpr{Value: 1}},
+					},
+				},
+				Index: &ast.LiteralExpr{Value: "one"},
+			},
+			expectedConstants: []interface{}{"one", 1, "one"},
+			expectedInstructions: []code.Instructions{
+				code.Make(code.OpConstant, 0),
+				code.Make(code.OpConstant, 1),
+				code.Make(code.OpHash, 2),
+				code.Make(code.OpConstant, 2),
+				code.Make(code.OpIndex),
+			},
+		},
+	}
+
+	runCompilerTests(t, tests)
+}
+
+func TestSetIndexExpressions(t *testing.T) {
+	tests := []compilerTestCase{
+		{
+			// [1, 2, 3][0] = 99
+			input: &ast.SetIndexExpr{
+				Object: &ast.ArrayLiteralExpr{
+					Elements: []ast.Expr{
+						&ast.LiteralExpr{Value: 1},
+						&ast.LiteralExpr{Value: 2},
+						&ast.LiteralExpr{Value: 3},
+					},
+				},
+				Index: &ast.LiteralExpr{Value: 0},
+				Value: &ast.LiteralExpr{Value: 99},
+			},
+			expectedConstants: []interface{}{1, 2, 3, 0, 99},
+			expectedInstructions: []code.Instructions{
+				code.Make(code.OpConstant, 0),
+				code.Make(code.OpConstant, 1),
+				code.Make(code.OpConstant, 2),
+				code.Make(code.OpArray, 3),
+				code.Make(code.OpConstant, 3),
+				code.Make(code.OpConstant, 4),
+				code.Make(code.OpSetIndex),
+			},
+		},
+		{
+			// {"one": 1}["two"] = 2
+			input: &ast.SetIndexExpr{
+				Object: &ast.HashLiteralExpr{
+					Pairs: []ast.HashPair{
+						{Key: &ast.LiteralExpr{Value: "one"}, Value: &ast.LiteralExpr{Value: 1}},
+					},
+				},
+				Index: &ast.LiteralExpr{Value: "two"},
+				Value: &ast.LiteralExpr{Value: 2},
+			},
+			expectedConstants: []interface{}{"one", 1, "two", 2},
+			expectedInstructions: []code.Instructions{
+				code.Make(code.OpConstant, 0),
+				code.Make(code.OpConstant, 1),
+				code.Make(code.OpHash, 2),
+				code.Make(code.OpConstant, 2),
+				code.Make(code.OpConstant, 3),
+				code.Make(code.OpSetIndex),
+			},
+		},
+	}
+
+	runCompilerTests(t, tests)
+}
+
+func TestPrintStatements(t *testing.T) {
+	tests := []compilerTestCase{
+		{
+			// print 1;
+			input: &ast.PrintStmt{
+				Expr: &ast.LiteralExpr{Value: 1},
+			},
+			expectedConstants: []interface{}{1},
+			expectedInstructions: []code.Instructions{
+				code.Make(code.OpConstant, 0),
+				code.Make(code.OpPrint),
+			},
+		},
+		{
+			// print "hello";
+			input: &ast.PrintStmt{
+				Expr: &ast.LiteralExpr{Value: "hello"},
+			},
+			expectedConstants: []interface{}{"hello"},
+			expectedInstructions: []code.Instructions{
+				code.Make(code.OpConstant, 0),
+				code.Make(code.OpPrint),
+			},
+		},
+		{
+			// print "hello" + "world";
+			input: &ast.PrintStmt{
+				Expr: &ast.BinaryExpr{
+					Left:     &ast.LiteralExpr{Value: "hello"},
+					Right:    &ast.LiteralExpr{Value: "world"},
+					Operator: &token.Token{Type: token.PLUS},
+				},
+			},
+			expectedConstants: []interface{}{"hello", "world"},
+			expectedInstructions: []code.Instructions{
+				code.Make(code.OpConstant, 0),
+				code.Make(code.OpConstant, 1),
+				code.Make(code.OpAdd),
+				code.Make(code.OpPrint),
+			},
+		},
+	}
+
+	runCompilerTests(t, tests)
 }
 
 func TestGlobalAssignmentStatements(t *testing.T) {

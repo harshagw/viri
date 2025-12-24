@@ -29,6 +29,11 @@ const (
 	OpPop
 	OpSetGlobal
 	OpGetGlobal
+	OpArray
+	OpHash
+	OpIndex
+	OpSetIndex
+	OpPrint
 )
 
 type Definition struct {
@@ -37,7 +42,7 @@ type Definition struct {
 }
 
 var definitions = map[Opcode]*Definition{
-	OpConstant:      {"OpConstant", []int{2}},
+	OpConstant:      {"OpConstant", []int{2}}, // operand: index of constant in constants array
 	OpAdd:           {"OpAdd", []int{}},
 	OpSub:           {"OpSub", []int{}},
 	OpMul:           {"OpMul", []int{}},
@@ -51,10 +56,15 @@ var definitions = map[Opcode]*Definition{
 	OpMinus:         {"OpMinus", []int{}},
 	OpBang:          {"OpBang", []int{}},
 	OpJump:          {"OpJump", []int{2}},
-	OpJumpNotTruthy: {"OpJumpNotTruthy", []int{2}},
+	OpJumpNotTruthy: {"OpJumpNotTruthy", []int{2}}, // operand: jump position
 	OpPop:           {"OpPop", []int{}},
-	OpSetGlobal:     {"OpSetGlobal", []int{2}},
-	OpGetGlobal:     {"OpGetGlobal", []int{2}},
+	OpSetGlobal:     {"OpSetGlobal", []int{2}}, // operand: index of global in globals array
+	OpGetGlobal:     {"OpGetGlobal", []int{2}}, // operand: index of global in globals array
+	OpArray:         {"OpArray", []int{2}},     // operand: number of elements
+	OpHash:          {"OpHash", []int{2}},      // operand: number of pairs * 2
+	OpIndex:         {"OpIndex", []int{}},      // no operands: obj and index on stack
+	OpSetIndex:      {"OpSetIndex", []int{}},   // no operands: obj, index, and value on stack
+	OpPrint:         {"OpPrint", []int{}},      // no operands: value on stack
 }
 
 func Lookup(op byte) (*Definition, error) {

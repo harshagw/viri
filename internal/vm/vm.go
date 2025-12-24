@@ -121,6 +121,56 @@ func (vm *VM) Run() error {
 			if err := vm.push(vm.globals[operands[0]]); err != nil {
 				return err
 			}
+
+		case code.OpArray:
+			def, _ := code.Lookup(byte(op))
+			operands, read := code.ReadOperands(def, vm.instructions[ip+1:])
+			ip += read
+
+			numElements := operands[0]
+			array := vm.buildArray(vm.sp-numElements, vm.sp)
+			vm.sp = vm.sp - numElements
+
+			if err := vm.push(array); err != nil {
+				return err
+			}
+
+		case code.OpHash:
+			def, _ := code.Lookup(byte(op))
+			operands, read := code.ReadOperands(def, vm.instructions[ip+1:])
+			ip += read
+
+			numElements := operands[0]
+			hash, err := vm.buildHash(vm.sp-numElements, vm.sp)
+			if err != nil {
+				return err
+			}
+			vm.sp = vm.sp - numElements
+
+			if err := vm.push(hash); err != nil {
+				return err
+			}
+
+		case code.OpIndex:
+			index := vm.pop()
+			left := vm.pop()
+
+			if err := vm.executeIndexExpression(left, index); err != nil {
+				return err
+			}
+
+		case code.OpSetIndex:
+			value := vm.pop()
+			index := vm.pop()
+			left := vm.pop()
+
+			if err := vm.executeSetIndexExpression(left, index, value); err != nil {
+				return err
+			}
+
+		case code.OpPrint:
+			value := vm.pop()
+			fmt.Println(objects.Stringify(value))
 		}
 	}
 
@@ -159,7 +209,44 @@ func (vm *VM) executeBinaryOperation(op code.Opcode) error {
 		return vm.executeBinaryIntegerOperation(op, left, right)
 	}
 
+	if leftType == objects.TypeString && rightType == objects.TypeString {
+		return vm.executeBinaryStringOperation(op, left, right)
+	}
+
+	// Mixed type addition: number + string or string + number
+	if op == code.OpAdd {
+		if leftType == objects.TypeNumber && rightType == objects.TypeString {
+			return vm.executeBinaryNumberStringOperation(left, right)
+		}
+		if leftType == objects.TypeString && rightType == objects.TypeNumber {
+			return vm.executeBinaryStringNumberOperation(left, right)
+		}
+	}
+
 	return fmt.Errorf("unsupported types for binary operation: %s %s", leftType, rightType)
+}
+
+func (vm *VM) executeBinaryStringOperation(op code.Opcode, left, right objects.Object) error {
+	if op != code.OpAdd {
+		return fmt.Errorf("unknown string operator: %d", op)
+	}
+
+	leftVal := left.(*objects.String).Value
+	rightVal := right.(*objects.String).Value
+
+	return vm.push(&objects.String{Value: leftVal + rightVal})
+}
+
+func (vm *VM) executeBinaryNumberStringOperation(left, right objects.Object) error {
+	leftVal := left.(*objects.Number)
+	rightVal := right.(*objects.String)
+	return vm.push(&objects.String{Value: leftVal.Inspect() + rightVal.Value})
+}
+
+func (vm *VM) executeBinaryStringNumberOperation(left, right objects.Object) error {
+	leftVal := left.(*objects.String)
+	rightVal := right.(*objects.Number)
+	return vm.push(&objects.String{Value: leftVal.Value + rightVal.Inspect()})
 }
 
 func (vm *VM) executeBinaryIntegerOperation(op code.Opcode, left, right objects.Object) error {
@@ -232,4 +319,118 @@ func (vm *VM) executeMinusOperator() error {
 
 	value := operand.(*objects.Number).Value
 	return vm.push(&objects.Number{Value: -value})
+}
+
+func (vm *VM) buildArray(startIndex, endIndex int) objects.Object {
+	elements := make([]objects.Object, endIndex-startIndex)
+
+	for i := startIndex; i < endIndex; i++ {
+		elements[i-startIndex] = vm.stack[i]
+	}
+
+	return &objects.Array{Elements: elements}
+}
+
+func (vm *VM) buildHash(startIndex, endIndex int) (objects.Object, error) {
+	hash := objects.NewHash()
+
+	for i := startIndex; i < endIndex; i += 2 {
+		key := vm.stack[i]
+		value := vm.stack[i+1]
+
+		keyStr, err := vm.hashKey(key)
+		if err != nil {
+			return nil, err
+		}
+
+		hash.Set(keyStr, value)
+	}
+
+	return hash, nil
+}
+
+func (vm *VM) hashKey(key objects.Object) (string, error) {
+	switch k := key.(type) {
+	case *objects.String:
+		return k.Value, nil
+	case *objects.Number:
+		return k.Inspect(), nil
+	case *objects.Bool:
+		return k.Inspect(), nil
+	default:
+		return "", fmt.Errorf("unusable as hash key: %s", key.Type())
+	}
+}
+
+func (vm *VM) executeIndexExpression(left, index objects.Object) error {
+	switch {
+	case left.Type() == objects.TypeArray && index.Type() == objects.TypeNumber:
+		return vm.executeArrayIndex(left, index)
+	case left.Type() == objects.TypeHash:
+		return vm.executeHashIndex(left, index)
+	default:
+		return fmt.Errorf("index operator not supported: %s[%s]", left.Type(), index.Type())
+	}
+}
+
+func (vm *VM) executeArrayIndex(array, index objects.Object) error {
+	arrayObj := array.(*objects.Array)
+	idx := int(index.(*objects.Number).Value)
+
+	if idx < 0 || idx >= len(arrayObj.Elements) {
+		return fmt.Errorf("index out of bounds")
+	}
+
+	return vm.push(arrayObj.Elements[idx])
+}
+
+func (vm *VM) executeHashIndex(hash, index objects.Object) error {
+	hashObj := hash.(*objects.Hash)
+
+	key, err := vm.hashKey(index)
+	if err != nil {
+		return err
+	}
+
+	value, ok := hashObj.Get(key)
+	if !ok {
+		return fmt.Errorf("key '%s' not found in hash map", key)
+	}
+
+	return vm.push(value)
+}
+
+func (vm *VM) executeSetIndexExpression(left, index, value objects.Object) error {
+	switch {
+	case left.Type() == objects.TypeArray && index.Type() == objects.TypeNumber:
+		return vm.executeArraySetIndex(left, index, value)
+	case left.Type() == objects.TypeHash:
+		return vm.executeHashSetIndex(left, index, value)
+	default:
+		return fmt.Errorf("index assignment not supported: %s[%s]", left.Type(), index.Type())
+	}
+}
+
+func (vm *VM) executeArraySetIndex(array, index, value objects.Object) error {
+	arrayObj := array.(*objects.Array)
+	idx := int(index.(*objects.Number).Value)
+
+	if idx < 0 || idx >= len(arrayObj.Elements) {
+		return fmt.Errorf("index out of bounds: %d", idx)
+	}
+
+	arrayObj.Elements[idx] = value
+	return vm.push(value)
+}
+
+func (vm *VM) executeHashSetIndex(hash, index, value objects.Object) error {
+	hashObj := hash.(*objects.Hash)
+
+	key, err := vm.hashKey(index)
+	if err != nil {
+		return err
+	}
+
+	hashObj.Set(key, value)
+	return vm.push(value)
 }

@@ -99,6 +99,13 @@ func (c *Compiler) compileStatement(stmt ast.Stmt) error {
 		c.emit(code.OpSetGlobal, symbol.Index)
 		return nil
 
+	case *ast.PrintStmt:
+		if err := c.compileExpression(stmt.Expr); err != nil {
+			return err
+		}
+		c.emit(code.OpPrint)
+		return nil
+
 	default:
 		return fmt.Errorf("unsupported statement type: %T", stmt)
 	}
@@ -114,12 +121,17 @@ func (c *Compiler) compileExpression(node ast.Expr) error {
 		case float64:
 			number := &objects.Number{Value: value}
 			c.emitConstant(number)
+		case string:
+			str := &objects.String{Value: value}
+			c.emitConstant(str)
 		case bool:
 			if value {
 				c.emit(code.OpTrue)
 			} else {
 				c.emit(code.OpFalse)
 			}
+		case nil:
+			c.emit(code.OpNil)
 		}
 
 	case *ast.UnaryExpr:
@@ -199,6 +211,46 @@ func (c *Compiler) compileExpression(node ast.Expr) error {
 		c.emit(code.OpSetGlobal, symbol.Index)
 		// Assignment is an expression, so we need to leave the value on the stack
 		c.emit(code.OpGetGlobal, symbol.Index)
+
+	case *ast.ArrayLiteralExpr:
+		for _, elem := range node.Elements {
+			if err := c.compileExpression(elem); err != nil {
+				return err
+			}
+		}
+		c.emit(code.OpArray, len(node.Elements))
+
+	case *ast.HashLiteralExpr:
+		for _, pair := range node.Pairs {
+			if err := c.compileExpression(pair.Key); err != nil {
+				return err
+			}
+			if err := c.compileExpression(pair.Value); err != nil {
+				return err
+			}
+		}
+		c.emit(code.OpHash, len(node.Pairs)*2)
+
+	case *ast.IndexExpr:
+		if err := c.compileExpression(node.Object); err != nil {
+			return err
+		}
+		if err := c.compileExpression(node.Index); err != nil {
+			return err
+		}
+		c.emit(code.OpIndex)
+
+	case *ast.SetIndexExpr:
+		if err := c.compileExpression(node.Object); err != nil {
+			return err
+		}
+		if err := c.compileExpression(node.Index); err != nil {
+			return err
+		}
+		if err := c.compileExpression(node.Value); err != nil {
+			return err
+		}
+		c.emit(code.OpSetIndex)
 	}
 	return nil
 }
