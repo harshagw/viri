@@ -6,6 +6,7 @@ viri-syntax-plugin/*.vsix
 # Go build executables
 /viri
 /repl
+/repl-compiler
 *.exe
 
 /node_modules
