@@ -32,6 +32,10 @@ func New(bytecode *compiler.Bytecode) *VM {
 	}
 }
 
+func (vm *VM) UpdateGlobals(globals []objects.Object) {
+	vm.globals = globals
+}
+
 func (vm *VM) StackTop() objects.Object {
 	if vm.sp == 0 {
 		return nil

@@ -36,6 +36,10 @@ func main() {
 
 	handler := &replHandler{disableWarning: !showWarning}
 
+	// Persist symbol table and globals across REPL inputs
+	symbolTable := compiler.NewSymbolTable()
+	globals := make([]objects.Object, vm.GlobalsSize)
+
 	executor := func(line string) {
 		if strings.TrimSpace(line) == "" {
 			return
@@ -69,26 +73,30 @@ func main() {
 
 		newStmts := lineModule.GetAllStatements()
 
-		compiler := compiler.New(handler)
-		err = compiler.Compile(newStmts[0])
+		comp := compiler.New(handler)
+		comp.UpdateSymbolTable(symbolTable)
+		err = comp.Compile(newStmts[0])
 		if err != nil {
 			color.New(color.FgRed).Fprintf(color.Error, "Compilation error: %v\n", err)
 			return
 		}
 
 		if debugMode {
-			fmt.Println(compiler.Bytecode().Instructions.String())
-			fmt.Println(compiler.Bytecode().Constants)
+			fmt.Println(comp.Bytecode().Instructions.String())
+			fmt.Println(comp.Bytecode().Constants)
 		}
 
-		vm := vm.New(compiler.Bytecode())
-		err = vm.Run()
+		machine := vm.New(comp.Bytecode())
+		machine.UpdateGlobals(globals)
+		err = machine.Run()
 		if err != nil {
 			color.New(color.FgRed).Fprintf(color.Error, "Runtime error: %v\n", err)
 			return
 		}
 
-		fmt.Println(vm.LastPoppedStackElem().Inspect())
+		if _, isPrint := newStmts[0].(*ast.PrintStmt); !isPrint {
+			fmt.Println(machine.LastPoppedStackElem().Inspect())
+		}
 	}
 
 	completer := func(d prompt.Document) []prompt.Suggest {

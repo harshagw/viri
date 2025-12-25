@@ -19,7 +19,15 @@ test:
 	go test ./...
 
 e2e: build
-	go test -tags=e2e ./test/...
+	@echo "========================================="
+	@echo "Running E2E tests (Interpreter Engine)"
+	@echo "========================================="
+	go test -tags=e2e -run TestE2E$$ ./test/...
+	@echo ""
+	@echo "========================================="
+	@echo "Running E2E tests (VM Engine)"
+	@echo "========================================="
+	go test -tags=e2e -run TestE2E_VM ./test/...
 	rm -f viri
 
 build-plugin:

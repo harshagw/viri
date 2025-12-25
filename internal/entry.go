@@ -5,15 +5,18 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/harshagw/viri/internal/ast"
+	"github.com/harshagw/viri/internal/compiler"
 	"github.com/harshagw/viri/internal/interp"
 	"github.com/harshagw/viri/internal/objects"
 	"github.com/harshagw/viri/internal/parser"
 	"github.com/harshagw/viri/internal/token"
+	"github.com/harshagw/viri/internal/vm"
 )
 
 type ViriRuntimeConfig struct {
 	DebugMode      bool
 	DisableWarning bool
+	Engine         string // "interpreter" or "vm"
 }
 
 type Viri struct {
@@ -61,6 +64,51 @@ func (v *Viri) Warn(tok token.Token, message string) {
 }
 
 func (v *Viri) Run(filePath string) {
+	if v.config.Engine == "vm" {
+		v.runWithVM(filePath)
+	} else {
+		v.runWithInterpreter(filePath)
+	}
+}
+
+func (v *Viri) runWithVM(filePath string) {
+	mod, err := parser.LoadModuleFile(filePath, v)
+	if err != nil {
+		fmt.Println("Error parsing module:", err)
+		v.hasErrors = true
+		return
+	}
+
+	if v.hasErrors {
+		return
+	}
+
+	if v.config.DebugMode {
+		printer := ast.NewPrinter()
+		tree := printer.PrintStatements(mod.GetAllStatements())
+		fmt.Println(tree)
+	}
+
+	comp := compiler.New(v)
+	for _, stmt := range mod.GetAllStatements() {
+		if err := comp.Compile(stmt); err != nil {
+			if !v.hasErrors {
+				color.New(color.FgRed).Fprintln(color.Error, "Compilation error:", err)
+			}
+			v.hasErrors = true
+			return
+		}
+	}
+
+	machine := vm.New(comp.Bytecode())
+	if err := machine.Run(); err != nil {
+		color.New(color.FgRed).Fprintln(color.Error, "Runtime error:", err)
+		v.hasErrors = true
+		return
+	}
+}
+
+func (v *Viri) runWithInterpreter(filePath string) {
 	mod, err := parser.LoadModuleFile(filePath, v)
 	if err != nil {
 		fmt.Println("Error parsing module:", err)

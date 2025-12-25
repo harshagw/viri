@@ -27,6 +27,10 @@ func New(diagnosticHandler objects.DiagnosticHandler) *Compiler {
 	}
 }
 
+func (c *Compiler) UpdateSymbolTable(symbolTable *SymbolTable) {
+	c.symbolTable = symbolTable
+}
+
 func (c *Compiler) Compile(node interface{}) error {
 	switch node := node.(type) {
 	case ast.Stmt:
@@ -253,6 +257,7 @@ func (c *Compiler) compileExpression(node ast.Expr) error {
 		return c.compileExpression(node.Expr)
 
 	case *ast.BinaryExpr:
+		// a < b  => swap operands, then b > a
 		if node.Operator.Type == token.LESS {
 			if err := c.compileExpression(node.Right); err != nil {
 				return err
@@ -261,6 +266,32 @@ func (c *Compiler) compileExpression(node ast.Expr) error {
 				return err
 			}
 			c.emit(code.OpGreaterThan)
+			return nil
+		}
+
+		// a <= b  => !(a > b)
+		if node.Operator.Type == token.LESS_EQUAL {
+			if err := c.compileExpression(node.Left); err != nil {
+				return err
+			}
+			if err := c.compileExpression(node.Right); err != nil {
+				return err
+			}
+			c.emit(code.OpGreaterThan)
+			c.emit(code.OpBang)
+			return nil
+		}
+
+		// a >= b  => !(a < b) => !(b > a)
+		if node.Operator.Type == token.GREATER_EQUAL {
+			if err := c.compileExpression(node.Right); err != nil {
+				return err
+			}
+			if err := c.compileExpression(node.Left); err != nil {
+				return err
+			}
+			c.emit(code.OpGreaterThan)
+			c.emit(code.OpBang)
 			return nil
 		}
 
