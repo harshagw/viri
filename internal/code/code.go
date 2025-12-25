@@ -27,6 +27,7 @@ const (
 	OpJump
 	OpJumpNotTruthy
 	OpPop
+	OpDup
 	OpSetGlobal
 	OpGetGlobal
 	OpArray
@@ -58,6 +59,7 @@ var definitions = map[Opcode]*Definition{
 	OpJump:          {"OpJump", []int{2}},
 	OpJumpNotTruthy: {"OpJumpNotTruthy", []int{2}}, // operand: jump position
 	OpPop:           {"OpPop", []int{}},
+	OpDup:           {"OpDup", []int{}},        // no operands: duplicates top of stack
 	OpSetGlobal:     {"OpSetGlobal", []int{2}}, // operand: index of global in globals array
 	OpGetGlobal:     {"OpGetGlobal", []int{2}}, // operand: index of global in globals array
 	OpArray:         {"OpArray", []int{2}},     // operand: number of elements

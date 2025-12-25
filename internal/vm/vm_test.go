@@ -980,3 +980,884 @@ func TestSetIndexExpressions(t *testing.T) {
 
 	runVmTests(t, tests)
 }
+
+func TestLogicalExpressions(t *testing.T) {
+	tests := []vmTestCase{
+		// true and true -> true (evaluates right)
+		{&ast.ExprStmt{
+			Expr: &ast.LogicalExpr{
+				Left:     &ast.LiteralExpr{Value: true},
+				Operator: &token.Token{Type: token.AND},
+				Right:    &ast.LiteralExpr{Value: true},
+			},
+		}, true},
+		// true and false -> false (evaluates right)
+		{&ast.ExprStmt{
+			Expr: &ast.LogicalExpr{
+				Left:     &ast.LiteralExpr{Value: true},
+				Operator: &token.Token{Type: token.AND},
+				Right:    &ast.LiteralExpr{Value: false},
+			},
+		}, false},
+		// false and true -> false (short-circuits, returns left)
+		{&ast.ExprStmt{
+			Expr: &ast.LogicalExpr{
+				Left:     &ast.LiteralExpr{Value: false},
+				Operator: &token.Token{Type: token.AND},
+				Right:    &ast.LiteralExpr{Value: true},
+			},
+		}, false},
+		// false and false -> false (short-circuits, returns left)
+		{&ast.ExprStmt{
+			Expr: &ast.LogicalExpr{
+				Left:     &ast.LiteralExpr{Value: false},
+				Operator: &token.Token{Type: token.AND},
+				Right:    &ast.LiteralExpr{Value: false},
+			},
+		}, false},
+		// true or true -> true (short-circuits, returns left)
+		{&ast.ExprStmt{
+			Expr: &ast.LogicalExpr{
+				Left:     &ast.LiteralExpr{Value: true},
+				Operator: &token.Token{Type: token.OR},
+				Right:    &ast.LiteralExpr{Value: true},
+			},
+		}, true},
+		// true or false -> true (short-circuits, returns left)
+		{&ast.ExprStmt{
+			Expr: &ast.LogicalExpr{
+				Left:     &ast.LiteralExpr{Value: true},
+				Operator: &token.Token{Type: token.OR},
+				Right:    &ast.LiteralExpr{Value: false},
+			},
+		}, true},
+		// false or true -> true (evaluates right)
+		{&ast.ExprStmt{
+			Expr: &ast.LogicalExpr{
+				Left:     &ast.LiteralExpr{Value: false},
+				Operator: &token.Token{Type: token.OR},
+				Right:    &ast.LiteralExpr{Value: true},
+			},
+		}, true},
+		// false or false -> false (evaluates right)
+		{&ast.ExprStmt{
+			Expr: &ast.LogicalExpr{
+				Left:     &ast.LiteralExpr{Value: false},
+				Operator: &token.Token{Type: token.OR},
+				Right:    &ast.LiteralExpr{Value: false},
+			},
+		}, false},
+
+		// 0 and 42 -> 0 (0 is falsy, returns left value)
+		{&ast.ExprStmt{
+			Expr: &ast.LogicalExpr{
+				Left:     &ast.LiteralExpr{Value: 0},
+				Operator: &token.Token{Type: token.AND},
+				Right:    &ast.LiteralExpr{Value: 42},
+			},
+		}, 0},
+		// 5 and 42 -> 42 (5 is truthy, returns right value)
+		{&ast.ExprStmt{
+			Expr: &ast.LogicalExpr{
+				Left:     &ast.LiteralExpr{Value: 5},
+				Operator: &token.Token{Type: token.AND},
+				Right:    &ast.LiteralExpr{Value: 42},
+			},
+		}, 42},
+		// 0 or 42 -> 42 (0 is falsy, returns right value)
+		{&ast.ExprStmt{
+			Expr: &ast.LogicalExpr{
+				Left:     &ast.LiteralExpr{Value: 0},
+				Operator: &token.Token{Type: token.OR},
+				Right:    &ast.LiteralExpr{Value: 42},
+			},
+		}, 42},
+		// 5 or 42 -> 5 (5 is truthy, returns left value)
+		{&ast.ExprStmt{
+			Expr: &ast.LogicalExpr{
+				Left:     &ast.LiteralExpr{Value: 5},
+				Operator: &token.Token{Type: token.OR},
+				Right:    &ast.LiteralExpr{Value: 42},
+			},
+		}, 5},
+
+		// "" and "hello" -> "" (empty string is falsy)
+		{&ast.ExprStmt{
+			Expr: &ast.LogicalExpr{
+				Left:     &ast.LiteralExpr{Value: ""},
+				Operator: &token.Token{Type: token.AND},
+				Right:    &ast.LiteralExpr{Value: "hello"},
+			},
+		}, ""},
+		// "yes" and "no" -> "no" (both truthy, returns right)
+		{&ast.ExprStmt{
+			Expr: &ast.LogicalExpr{
+				Left:     &ast.LiteralExpr{Value: "yes"},
+				Operator: &token.Token{Type: token.AND},
+				Right:    &ast.LiteralExpr{Value: "no"},
+			},
+		}, "no"},
+		// "" or "hello" -> "hello" (empty string is falsy)
+		{&ast.ExprStmt{
+			Expr: &ast.LogicalExpr{
+				Left:     &ast.LiteralExpr{Value: ""},
+				Operator: &token.Token{Type: token.OR},
+				Right:    &ast.LiteralExpr{Value: "hello"},
+			},
+		}, "hello"},
+		// "yes" or "no" -> "yes" (truthy, returns left)
+		{&ast.ExprStmt{
+			Expr: &ast.LogicalExpr{
+				Left:     &ast.LiteralExpr{Value: "yes"},
+				Operator: &token.Token{Type: token.OR},
+				Right:    &ast.LiteralExpr{Value: "no"},
+			},
+		}, "yes"},
+
+		// (1 < 2) and (3 < 4) -> true
+		{&ast.ExprStmt{
+			Expr: &ast.LogicalExpr{
+				Left: &ast.BinaryExpr{
+					Left:     &ast.LiteralExpr{Value: 1},
+					Right:    &ast.LiteralExpr{Value: 2},
+					Operator: &token.Token{Type: token.LESS},
+				},
+				Operator: &token.Token{Type: token.AND},
+				Right: &ast.BinaryExpr{
+					Left:     &ast.LiteralExpr{Value: 3},
+					Right:    &ast.LiteralExpr{Value: 4},
+					Operator: &token.Token{Type: token.LESS},
+				},
+			},
+		}, true},
+		// (1 > 2) or (3 < 4) -> true
+		{&ast.ExprStmt{
+			Expr: &ast.LogicalExpr{
+				Left: &ast.BinaryExpr{
+					Left:     &ast.LiteralExpr{Value: 1},
+					Right:    &ast.LiteralExpr{Value: 2},
+					Operator: &token.Token{Type: token.GREATER},
+				},
+				Operator: &token.Token{Type: token.OR},
+				Right: &ast.BinaryExpr{
+					Left:     &ast.LiteralExpr{Value: 3},
+					Right:    &ast.LiteralExpr{Value: 4},
+					Operator: &token.Token{Type: token.LESS},
+				},
+			},
+		}, true},
+	}
+
+	runVmTests(t, tests)
+}
+
+func TestWhileStatements(t *testing.T) {
+	tests := []vmTestCase{
+		// var x = 0; while (x < 3) { x = x + 1; } x;
+		{&ast.BlockStmt{
+			Statements: []ast.Stmt{
+				&ast.VarDeclStmt{
+					Name:        &token.Token{Type: token.IDENTIFIER, Lexeme: "x"},
+					Initializer: &ast.LiteralExpr{Value: 0},
+					IsConst:     false,
+				},
+				&ast.WhileStmt{
+					Condition: &ast.BinaryExpr{
+						Left:     &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "x"}},
+						Right:    &ast.LiteralExpr{Value: 3},
+						Operator: &token.Token{Type: token.LESS},
+					},
+					Body: &ast.BlockStmt{
+						Statements: []ast.Stmt{
+							&ast.ExprStmt{
+								Expr: &ast.AssignExpr{
+									Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "x"},
+									Value: &ast.BinaryExpr{
+										Left:     &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "x"}},
+										Right:    &ast.LiteralExpr{Value: 1},
+										Operator: &token.Token{Type: token.PLUS},
+									},
+								},
+							},
+						},
+					},
+				},
+				&ast.ExprStmt{
+					Expr: &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "x"}},
+				},
+			},
+		}, 3},
+		// var sum = 0; var i = 1; while (i < 5) { sum = sum + i; i = i + 1; } sum;
+		{&ast.BlockStmt{
+			Statements: []ast.Stmt{
+				&ast.VarDeclStmt{
+					Name:        &token.Token{Type: token.IDENTIFIER, Lexeme: "sum"},
+					Initializer: &ast.LiteralExpr{Value: 0},
+					IsConst:     false,
+				},
+				&ast.VarDeclStmt{
+					Name:        &token.Token{Type: token.IDENTIFIER, Lexeme: "i"},
+					Initializer: &ast.LiteralExpr{Value: 1},
+					IsConst:     false,
+				},
+				&ast.WhileStmt{
+					Condition: &ast.BinaryExpr{
+						Left:     &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "i"}},
+						Right:    &ast.LiteralExpr{Value: 5},
+						Operator: &token.Token{Type: token.LESS},
+					},
+					Body: &ast.BlockStmt{
+						Statements: []ast.Stmt{
+							&ast.ExprStmt{
+								Expr: &ast.AssignExpr{
+									Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "sum"},
+									Value: &ast.BinaryExpr{
+										Left:     &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "sum"}},
+										Right:    &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "i"}},
+										Operator: &token.Token{Type: token.PLUS},
+									},
+								},
+							},
+							&ast.ExprStmt{
+								Expr: &ast.AssignExpr{
+									Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "i"},
+									Value: &ast.BinaryExpr{
+										Left:     &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "i"}},
+										Right:    &ast.LiteralExpr{Value: 1},
+										Operator: &token.Token{Type: token.PLUS},
+									},
+								},
+							},
+						},
+					},
+				},
+				&ast.ExprStmt{
+					Expr: &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "sum"}},
+				},
+			},
+		}, 10}, // 1 + 2 + 3 + 4 = 10
+	}
+
+	runVmTests(t, tests)
+}
+
+func TestForStatements(t *testing.T) {
+	tests := []vmTestCase{
+		// Full for loop: for (var i = 0; i < 5; i = i + 1) { sum = sum + i; }
+		// var sum = 0; for (var i = 0; i < 5; i = i + 1) { sum = sum + i; } sum;
+		{&ast.BlockStmt{
+			Statements: []ast.Stmt{
+				&ast.VarDeclStmt{
+					Name:        &token.Token{Type: token.IDENTIFIER, Lexeme: "sum"},
+					Initializer: &ast.LiteralExpr{Value: 0},
+					IsConst:     false,
+				},
+				&ast.ForStmt{
+					Initializer: &ast.VarDeclStmt{
+						Name:        &token.Token{Type: token.IDENTIFIER, Lexeme: "i"},
+						Initializer: &ast.LiteralExpr{Value: 0},
+						IsConst:     false,
+					},
+					Condition: &ast.BinaryExpr{
+						Left:     &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "i"}},
+						Right:    &ast.LiteralExpr{Value: 5},
+						Operator: &token.Token{Type: token.LESS},
+					},
+					Increment: &ast.AssignExpr{
+						Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "i"},
+						Value: &ast.BinaryExpr{
+							Left:     &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "i"}},
+							Right:    &ast.LiteralExpr{Value: 1},
+							Operator: &token.Token{Type: token.PLUS},
+						},
+					},
+					Body: &ast.BlockStmt{
+						Statements: []ast.Stmt{
+							&ast.ExprStmt{
+								Expr: &ast.AssignExpr{
+									Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "sum"},
+									Value: &ast.BinaryExpr{
+										Left:     &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "sum"}},
+										Right:    &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "i"}},
+										Operator: &token.Token{Type: token.PLUS},
+									},
+								},
+							},
+						},
+					},
+				},
+				&ast.ExprStmt{
+					Expr: &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "sum"}},
+				},
+			},
+		}, 10}, // 0 + 1 + 2 + 3 + 4 = 10
+
+		// No initializer: var i = 0; for (; i < 5; i = i + 1) { sum = sum + i; }
+		{&ast.BlockStmt{
+			Statements: []ast.Stmt{
+				&ast.VarDeclStmt{
+					Name:        &token.Token{Type: token.IDENTIFIER, Lexeme: "sum"},
+					Initializer: &ast.LiteralExpr{Value: 0},
+					IsConst:     false,
+				},
+				&ast.VarDeclStmt{
+					Name:        &token.Token{Type: token.IDENTIFIER, Lexeme: "i"},
+					Initializer: &ast.LiteralExpr{Value: 0},
+					IsConst:     false,
+				},
+				&ast.ForStmt{
+					Initializer: nil, // No initializer
+					Condition: &ast.BinaryExpr{
+						Left:     &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "i"}},
+						Right:    &ast.LiteralExpr{Value: 5},
+						Operator: &token.Token{Type: token.LESS},
+					},
+					Increment: &ast.AssignExpr{
+						Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "i"},
+						Value: &ast.BinaryExpr{
+							Left:     &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "i"}},
+							Right:    &ast.LiteralExpr{Value: 1},
+							Operator: &token.Token{Type: token.PLUS},
+						},
+					},
+					Body: &ast.BlockStmt{
+						Statements: []ast.Stmt{
+							&ast.ExprStmt{
+								Expr: &ast.AssignExpr{
+									Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "sum"},
+									Value: &ast.BinaryExpr{
+										Left:     &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "sum"}},
+										Right:    &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "i"}},
+										Operator: &token.Token{Type: token.PLUS},
+									},
+								},
+							},
+						},
+					},
+				},
+				&ast.ExprStmt{
+					Expr: &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "sum"}},
+				},
+			},
+		}, 10}, // 0 + 1 + 2 + 3 + 4 = 10
+
+		// No increment: for (var i = 0; i < 5;) { sum = sum + i; i = i + 1; }
+		{&ast.BlockStmt{
+			Statements: []ast.Stmt{
+				&ast.VarDeclStmt{
+					Name:        &token.Token{Type: token.IDENTIFIER, Lexeme: "sum"},
+					Initializer: &ast.LiteralExpr{Value: 0},
+					IsConst:     false,
+				},
+				&ast.ForStmt{
+					Initializer: &ast.VarDeclStmt{
+						Name:        &token.Token{Type: token.IDENTIFIER, Lexeme: "i"},
+						Initializer: &ast.LiteralExpr{Value: 0},
+						IsConst:     false,
+					},
+					Condition: &ast.BinaryExpr{
+						Left:     &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "i"}},
+						Right:    &ast.LiteralExpr{Value: 5},
+						Operator: &token.Token{Type: token.LESS},
+					},
+					Increment: nil, // No increment
+					Body: &ast.BlockStmt{
+						Statements: []ast.Stmt{
+							&ast.ExprStmt{
+								Expr: &ast.AssignExpr{
+									Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "sum"},
+									Value: &ast.BinaryExpr{
+										Left:     &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "sum"}},
+										Right:    &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "i"}},
+										Operator: &token.Token{Type: token.PLUS},
+									},
+								},
+							},
+							&ast.ExprStmt{
+								Expr: &ast.AssignExpr{
+									Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "i"},
+									Value: &ast.BinaryExpr{
+										Left:     &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "i"}},
+										Right:    &ast.LiteralExpr{Value: 1},
+										Operator: &token.Token{Type: token.PLUS},
+									},
+								},
+							},
+						},
+					},
+				},
+				&ast.ExprStmt{
+					Expr: &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "sum"}},
+				},
+			},
+		}, 10}, // 0 + 1 + 2 + 3 + 4 = 10
+
+		// No initializer and no increment: var i = 0; for (; i < 5;) { ... }
+		{&ast.BlockStmt{
+			Statements: []ast.Stmt{
+				&ast.VarDeclStmt{
+					Name:        &token.Token{Type: token.IDENTIFIER, Lexeme: "sum"},
+					Initializer: &ast.LiteralExpr{Value: 0},
+					IsConst:     false,
+				},
+				&ast.VarDeclStmt{
+					Name:        &token.Token{Type: token.IDENTIFIER, Lexeme: "i"},
+					Initializer: &ast.LiteralExpr{Value: 0},
+					IsConst:     false,
+				},
+				&ast.ForStmt{
+					Initializer: nil, // No initializer
+					Condition: &ast.BinaryExpr{
+						Left:     &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "i"}},
+						Right:    &ast.LiteralExpr{Value: 5},
+						Operator: &token.Token{Type: token.LESS},
+					},
+					Increment: nil, // No increment
+					Body: &ast.BlockStmt{
+						Statements: []ast.Stmt{
+							&ast.ExprStmt{
+								Expr: &ast.AssignExpr{
+									Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "sum"},
+									Value: &ast.BinaryExpr{
+										Left:     &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "sum"}},
+										Right:    &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "i"}},
+										Operator: &token.Token{Type: token.PLUS},
+									},
+								},
+							},
+							&ast.ExprStmt{
+								Expr: &ast.AssignExpr{
+									Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "i"},
+									Value: &ast.BinaryExpr{
+										Left:     &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "i"}},
+										Right:    &ast.LiteralExpr{Value: 1},
+										Operator: &token.Token{Type: token.PLUS},
+									},
+								},
+							},
+						},
+					},
+				},
+				&ast.ExprStmt{
+					Expr: &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "sum"}},
+				},
+			},
+		}, 10}, // 0 + 1 + 2 + 3 + 4 = 10
+
+		// No condition (infinite loop with break): for (var i = 0;; i = i + 1) { if (i == 5) break; sum = sum + i; }
+		{&ast.BlockStmt{
+			Statements: []ast.Stmt{
+				&ast.VarDeclStmt{
+					Name:        &token.Token{Type: token.IDENTIFIER, Lexeme: "sum"},
+					Initializer: &ast.LiteralExpr{Value: 0},
+					IsConst:     false,
+				},
+				&ast.ForStmt{
+					Initializer: &ast.VarDeclStmt{
+						Name:        &token.Token{Type: token.IDENTIFIER, Lexeme: "i"},
+						Initializer: &ast.LiteralExpr{Value: 0},
+						IsConst:     false,
+					},
+					Condition: nil, // No condition - infinite loop
+					Increment: &ast.AssignExpr{
+						Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "i"},
+						Value: &ast.BinaryExpr{
+							Left:     &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "i"}},
+							Right:    &ast.LiteralExpr{Value: 1},
+							Operator: &token.Token{Type: token.PLUS},
+						},
+					},
+					Body: &ast.BlockStmt{
+						Statements: []ast.Stmt{
+							&ast.IfStmt{
+								Condition: &ast.BinaryExpr{
+									Left:     &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "i"}},
+									Right:    &ast.LiteralExpr{Value: 5},
+									Operator: &token.Token{Type: token.EQUAL_EQUAL},
+								},
+								ThenBranch: &ast.BlockStmt{
+									Statements: []ast.Stmt{
+										&ast.BreakStmt{Keyword: &token.Token{Type: token.BREAK}},
+									},
+								},
+							},
+							&ast.ExprStmt{
+								Expr: &ast.AssignExpr{
+									Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "sum"},
+									Value: &ast.BinaryExpr{
+										Left:     &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "sum"}},
+										Right:    &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "i"}},
+										Operator: &token.Token{Type: token.PLUS},
+									},
+								},
+							},
+						},
+					},
+				},
+				&ast.ExprStmt{
+					Expr: &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "sum"}},
+				},
+			},
+		}, 10}, // 0 + 1 + 2 + 3 + 4 = 10 (breaks when i == 5)
+
+		// All parts missing (infinite loop): for (;;) { if (x == 5) break; x = x + 1; }
+		{&ast.BlockStmt{
+			Statements: []ast.Stmt{
+				&ast.VarDeclStmt{
+					Name:        &token.Token{Type: token.IDENTIFIER, Lexeme: "x"},
+					Initializer: &ast.LiteralExpr{Value: 0},
+					IsConst:     false,
+				},
+				&ast.ForStmt{
+					Initializer: nil, // No initializer
+					Condition:   nil, // No condition
+					Increment:   nil, // No increment
+					Body: &ast.BlockStmt{
+						Statements: []ast.Stmt{
+							&ast.IfStmt{
+								Condition: &ast.BinaryExpr{
+									Left:     &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "x"}},
+									Right:    &ast.LiteralExpr{Value: 5},
+									Operator: &token.Token{Type: token.EQUAL_EQUAL},
+								},
+								ThenBranch: &ast.BlockStmt{
+									Statements: []ast.Stmt{
+										&ast.BreakStmt{Keyword: &token.Token{Type: token.BREAK}},
+									},
+								},
+							},
+							&ast.ExprStmt{
+								Expr: &ast.AssignExpr{
+									Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "x"},
+									Value: &ast.BinaryExpr{
+										Left:     &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "x"}},
+										Right:    &ast.LiteralExpr{Value: 1},
+										Operator: &token.Token{Type: token.PLUS},
+									},
+								},
+							},
+						},
+					},
+				},
+				&ast.ExprStmt{
+					Expr: &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "x"}},
+				},
+			},
+		}, 5}, // x increments until it equals 5, then breaks
+
+		// Continue in for loop with increment - should still run increment
+		// for (var i = 0; i < 10; i = i + 1) { if (i == 3) continue; if (i == 7) break; sum = sum + i; }
+		{&ast.BlockStmt{
+			Statements: []ast.Stmt{
+				&ast.VarDeclStmt{
+					Name:        &token.Token{Type: token.IDENTIFIER, Lexeme: "sum"},
+					Initializer: &ast.LiteralExpr{Value: 0},
+					IsConst:     false,
+				},
+				&ast.ForStmt{
+					Initializer: &ast.VarDeclStmt{
+						Name:        &token.Token{Type: token.IDENTIFIER, Lexeme: "i"},
+						Initializer: &ast.LiteralExpr{Value: 0},
+						IsConst:     false,
+					},
+					Condition: &ast.BinaryExpr{
+						Left:     &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "i"}},
+						Right:    &ast.LiteralExpr{Value: 10},
+						Operator: &token.Token{Type: token.LESS},
+					},
+					Increment: &ast.AssignExpr{
+						Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "i"},
+						Value: &ast.BinaryExpr{
+							Left:     &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "i"}},
+							Right:    &ast.LiteralExpr{Value: 1},
+							Operator: &token.Token{Type: token.PLUS},
+						},
+					},
+					Body: &ast.BlockStmt{
+						Statements: []ast.Stmt{
+							// if (i == 3) continue;
+							&ast.IfStmt{
+								Condition: &ast.BinaryExpr{
+									Left:     &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "i"}},
+									Right:    &ast.LiteralExpr{Value: 3},
+									Operator: &token.Token{Type: token.EQUAL_EQUAL},
+								},
+								ThenBranch: &ast.BlockStmt{
+									Statements: []ast.Stmt{
+										&ast.ContinueStmt{Keyword: &token.Token{Type: token.CONTINUE}},
+									},
+								},
+							},
+							// if (i == 7) break;
+							&ast.IfStmt{
+								Condition: &ast.BinaryExpr{
+									Left:     &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "i"}},
+									Right:    &ast.LiteralExpr{Value: 7},
+									Operator: &token.Token{Type: token.EQUAL_EQUAL},
+								},
+								ThenBranch: &ast.BlockStmt{
+									Statements: []ast.Stmt{
+										&ast.BreakStmt{Keyword: &token.Token{Type: token.BREAK}},
+									},
+								},
+							},
+							// sum = sum + i;
+							&ast.ExprStmt{
+								Expr: &ast.AssignExpr{
+									Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "sum"},
+									Value: &ast.BinaryExpr{
+										Left:     &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "sum"}},
+										Right:    &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "i"}},
+										Operator: &token.Token{Type: token.PLUS},
+									},
+								},
+							},
+						},
+					},
+				},
+				&ast.ExprStmt{
+					Expr: &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "sum"}},
+				},
+			},
+		}, 18}, // 0 + 1 + 2 + 4 + 5 + 6 = 18 (skips 3, breaks at 7)
+	}
+
+	runVmTests(t, tests)
+}
+
+func TestBreakStatement(t *testing.T) {
+	tests := []vmTestCase{
+		// var x = 0; while (true) { x = x + 1; if (x == 5) { break; } } x;
+		{&ast.BlockStmt{
+			Statements: []ast.Stmt{
+				&ast.VarDeclStmt{
+					Name:        &token.Token{Type: token.IDENTIFIER, Lexeme: "x"},
+					Initializer: &ast.LiteralExpr{Value: 0},
+					IsConst:     false,
+				},
+				&ast.WhileStmt{
+					Condition: &ast.LiteralExpr{Value: true},
+					Body: &ast.BlockStmt{
+						Statements: []ast.Stmt{
+							&ast.ExprStmt{
+								Expr: &ast.AssignExpr{
+									Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "x"},
+									Value: &ast.BinaryExpr{
+										Left:     &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "x"}},
+										Right:    &ast.LiteralExpr{Value: 1},
+										Operator: &token.Token{Type: token.PLUS},
+									},
+								},
+							},
+							&ast.IfStmt{
+								Condition: &ast.BinaryExpr{
+									Left:     &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "x"}},
+									Right:    &ast.LiteralExpr{Value: 5},
+									Operator: &token.Token{Type: token.EQUAL_EQUAL},
+								},
+								ThenBranch: &ast.BlockStmt{
+									Statements: []ast.Stmt{
+										&ast.BreakStmt{Keyword: &token.Token{Type: token.BREAK}},
+									},
+								},
+							},
+						},
+					},
+				},
+				&ast.ExprStmt{
+					Expr: &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "x"}},
+				},
+			},
+		}, 5},
+		// var sum = 0; for (var i = 0; i < 100; i = i + 1) { if (i == 5) { break; } sum = sum + i; } sum;
+		{&ast.BlockStmt{
+			Statements: []ast.Stmt{
+				&ast.VarDeclStmt{
+					Name:        &token.Token{Type: token.IDENTIFIER, Lexeme: "sum"},
+					Initializer: &ast.LiteralExpr{Value: 0},
+					IsConst:     false,
+				},
+				&ast.ForStmt{
+					Initializer: &ast.VarDeclStmt{
+						Name:        &token.Token{Type: token.IDENTIFIER, Lexeme: "i"},
+						Initializer: &ast.LiteralExpr{Value: 0},
+						IsConst:     false,
+					},
+					Condition: &ast.BinaryExpr{
+						Left:     &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "i"}},
+						Right:    &ast.LiteralExpr{Value: 100},
+						Operator: &token.Token{Type: token.LESS},
+					},
+					Increment: &ast.AssignExpr{
+						Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "i"},
+						Value: &ast.BinaryExpr{
+							Left:     &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "i"}},
+							Right:    &ast.LiteralExpr{Value: 1},
+							Operator: &token.Token{Type: token.PLUS},
+						},
+					},
+					Body: &ast.BlockStmt{
+						Statements: []ast.Stmt{
+							&ast.IfStmt{
+								Condition: &ast.BinaryExpr{
+									Left:     &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "i"}},
+									Right:    &ast.LiteralExpr{Value: 5},
+									Operator: &token.Token{Type: token.EQUAL_EQUAL},
+								},
+								ThenBranch: &ast.BlockStmt{
+									Statements: []ast.Stmt{
+										&ast.BreakStmt{Keyword: &token.Token{Type: token.BREAK}},
+									},
+								},
+							},
+							&ast.ExprStmt{
+								Expr: &ast.AssignExpr{
+									Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "sum"},
+									Value: &ast.BinaryExpr{
+										Left:     &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "sum"}},
+										Right:    &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "i"}},
+										Operator: &token.Token{Type: token.PLUS},
+									},
+								},
+							},
+						},
+					},
+				},
+				&ast.ExprStmt{
+					Expr: &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "sum"}},
+				},
+			},
+		}, 10}, // 0 + 1 + 2 + 3 + 4 = 10 (breaks when i == 5)
+	}
+
+	runVmTests(t, tests)
+}
+
+func TestContinueStatement(t *testing.T) {
+	tests := []vmTestCase{
+		// var sum = 0; for (var i = 0; i < 10; i = i + 1) { if (i == 5) { continue; } sum = sum + i; } sum;
+		// Should skip adding 5, so sum = 0+1+2+3+4+6+7+8+9 = 40
+		{&ast.BlockStmt{
+			Statements: []ast.Stmt{
+				&ast.VarDeclStmt{
+					Name:        &token.Token{Type: token.IDENTIFIER, Lexeme: "sum"},
+					Initializer: &ast.LiteralExpr{Value: 0},
+					IsConst:     false,
+				},
+				&ast.ForStmt{
+					Initializer: &ast.VarDeclStmt{
+						Name:        &token.Token{Type: token.IDENTIFIER, Lexeme: "i"},
+						Initializer: &ast.LiteralExpr{Value: 0},
+						IsConst:     false,
+					},
+					Condition: &ast.BinaryExpr{
+						Left:     &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "i"}},
+						Right:    &ast.LiteralExpr{Value: 10},
+						Operator: &token.Token{Type: token.LESS},
+					},
+					Increment: &ast.AssignExpr{
+						Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "i"},
+						Value: &ast.BinaryExpr{
+							Left:     &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "i"}},
+							Right:    &ast.LiteralExpr{Value: 1},
+							Operator: &token.Token{Type: token.PLUS},
+						},
+					},
+					Body: &ast.BlockStmt{
+						Statements: []ast.Stmt{
+							&ast.IfStmt{
+								Condition: &ast.BinaryExpr{
+									Left:     &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "i"}},
+									Right:    &ast.LiteralExpr{Value: 5},
+									Operator: &token.Token{Type: token.EQUAL_EQUAL},
+								},
+								ThenBranch: &ast.BlockStmt{
+									Statements: []ast.Stmt{
+										&ast.ContinueStmt{Keyword: &token.Token{Type: token.CONTINUE}},
+									},
+								},
+							},
+							&ast.ExprStmt{
+								Expr: &ast.AssignExpr{
+									Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "sum"},
+									Value: &ast.BinaryExpr{
+										Left:     &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "sum"}},
+										Right:    &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "i"}},
+										Operator: &token.Token{Type: token.PLUS},
+									},
+								},
+							},
+						},
+					},
+				},
+				&ast.ExprStmt{
+					Expr: &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "sum"}},
+				},
+			},
+		}, 40}, // 0+1+2+3+4+6+7+8+9 = 40 (skips 5)
+		// var x = 0; var i = 0; while (i < 10) { i = i + 1; if (i == 5) { continue; } x = x + i; } x;
+		// Should skip adding 5, so x = 1+2+3+4+6+7+8+9+10 = 50
+		{&ast.BlockStmt{
+			Statements: []ast.Stmt{
+				&ast.VarDeclStmt{
+					Name:        &token.Token{Type: token.IDENTIFIER, Lexeme: "x"},
+					Initializer: &ast.LiteralExpr{Value: 0},
+					IsConst:     false,
+				},
+				&ast.VarDeclStmt{
+					Name:        &token.Token{Type: token.IDENTIFIER, Lexeme: "i"},
+					Initializer: &ast.LiteralExpr{Value: 0},
+					IsConst:     false,
+				},
+				&ast.WhileStmt{
+					Condition: &ast.BinaryExpr{
+						Left:     &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "i"}},
+						Right:    &ast.LiteralExpr{Value: 10},
+						Operator: &token.Token{Type: token.LESS},
+					},
+					Body: &ast.BlockStmt{
+						Statements: []ast.Stmt{
+							&ast.ExprStmt{
+								Expr: &ast.AssignExpr{
+									Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "i"},
+									Value: &ast.BinaryExpr{
+										Left:     &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "i"}},
+										Right:    &ast.LiteralExpr{Value: 1},
+										Operator: &token.Token{Type: token.PLUS},
+									},
+								},
+							},
+							&ast.IfStmt{
+								Condition: &ast.BinaryExpr{
+									Left:     &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "i"}},
+									Right:    &ast.LiteralExpr{Value: 5},
+									Operator: &token.Token{Type: token.EQUAL_EQUAL},
+								},
+								ThenBranch: &ast.BlockStmt{
+									Statements: []ast.Stmt{
+										&ast.ContinueStmt{Keyword: &token.Token{Type: token.CONTINUE}},
+									},
+								},
+							},
+							&ast.ExprStmt{
+								Expr: &ast.AssignExpr{
+									Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "x"},
+									Value: &ast.BinaryExpr{
+										Left:     &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "x"}},
+										Right:    &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "i"}},
+										Operator: &token.Token{Type: token.PLUS},
+									},
+								},
+							},
+						},
+					},
+				},
+				&ast.ExprStmt{
+					Expr: &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "x"}},
+				},
+			},
+		}, 50}, // 1+2+3+4+6+7+8+9+10 = 50 (skips 5)
+	}
+
+	runVmTests(t, tests)
+}

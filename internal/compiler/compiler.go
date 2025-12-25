@@ -14,6 +14,7 @@ type Compiler struct {
 	constants         []objects.Object
 	diagnosticHandler objects.DiagnosticHandler
 	symbolTable       *SymbolTable
+	loopStack         *LoopStack
 }
 
 func New(diagnosticHandler objects.DiagnosticHandler) *Compiler {
@@ -22,6 +23,7 @@ func New(diagnosticHandler objects.DiagnosticHandler) *Compiler {
 		constants:         []objects.Object{},
 		diagnosticHandler: diagnosticHandler,
 		symbolTable:       NewSymbolTable(),
+		loopStack:         NewLoopStack(),
 	}
 }
 
@@ -104,6 +106,105 @@ func (c *Compiler) compileStatement(stmt ast.Stmt) error {
 			return err
 		}
 		c.emit(code.OpPrint)
+		return nil
+
+	case *ast.WhileStmt:
+		// Record the start of the loop (where continue jumps to)
+		loopStart := len(c.instructions)
+		c.loopStack.Push(loopStart)
+
+		// Compile condition
+		if err := c.compileExpression(stmt.Condition); err != nil {
+			return err
+		}
+
+		// Jump out of loop if condition is false
+		exitJump := c.emit(code.OpJumpNotTruthy, 9999)
+
+		// Compile body
+		if err := c.compileStatement(stmt.Body); err != nil {
+			return err
+		}
+
+		// Jump back to condition
+		c.emit(code.OpJump, loopStart)
+
+		// Patch jumps and exit loop context
+		loopEnd := len(c.instructions)
+		c.changeOperand(exitJump, loopEnd)
+		c.patchBreakJumps(loopEnd)
+		c.loopStack.Pop()
+		return nil
+
+	case *ast.ForStmt:
+		if stmt.Initializer != nil {
+			if err := c.compileStatement(stmt.Initializer); err != nil {
+				return err
+			}
+		}
+
+		// Record the start of the condition check
+		loopStart := len(c.instructions)
+
+		// For for-loops, continue target is not yet known (it's before increment)
+		c.loopStack.Push(-1)
+
+		var exitJump int
+		if stmt.Condition != nil {
+			if err := c.compileExpression(stmt.Condition); err != nil {
+				return err
+			}
+			exitJump = c.emit(code.OpJumpNotTruthy, 9999)
+		}
+
+		// Compile body
+		if err := c.compileStatement(stmt.Body); err != nil {
+			return err
+		}
+
+		// Set and patch continue jumps to point here (before increment)
+		c.patchContinueJumps(len(c.instructions))
+
+		// Compile increment (if present)
+		if stmt.Increment != nil {
+			if err := c.compileExpression(stmt.Increment); err != nil {
+				return err
+			}
+			c.emit(code.OpPop) // discard increment result
+		}
+
+		// Jump back to condition
+		c.emit(code.OpJump, loopStart)
+
+		// Patch exit and break jumps
+		loopEnd := len(c.instructions)
+		if stmt.Condition != nil {
+			c.changeOperand(exitJump, loopEnd)
+		}
+		c.patchBreakJumps(loopEnd)
+		c.loopStack.Pop()
+		return nil
+
+	case *ast.BreakStmt:
+		if !c.loopStack.IsInLoop() {
+			return c.error(stmt.Keyword, "break statement outside of loop")
+		}
+		jumpPos := c.emit(code.OpJump, 9999)
+		c.loopStack.AddBreakJump(jumpPos)
+		return nil
+
+	case *ast.ContinueStmt:
+		if !c.loopStack.IsInLoop() {
+			return c.error(stmt.Keyword, "continue statement outside of loop")
+		}
+		if c.loopStack.ContinuePos() == -1 {
+			// For for-loops, continuePos isn't known yet, record jump for patching
+			jumpPos := c.emit(code.OpJump, 9999)
+			c.loopStack.AddContinueJump(jumpPos)
+		} else {
+			// For while-loops, continuePos is already known
+			c.emit(code.OpJump, c.loopStack.ContinuePos())
+		}
 		return nil
 
 	default:
@@ -251,6 +352,35 @@ func (c *Compiler) compileExpression(node ast.Expr) error {
 			return err
 		}
 		c.emit(code.OpSetIndex)
+
+	case *ast.LogicalExpr:
+		if err := c.compileExpression(node.Left); err != nil {
+			return err
+		}
+
+		switch node.Operator.Type {
+		case token.AND:
+			// Short-circuit AND: if left is falsy, return left; else return right
+			c.emit(code.OpDup)
+			jumpIfFalsy := c.emit(code.OpJumpNotTruthy, 9999)
+			c.emit(code.OpPop)
+			if err := c.compileExpression(node.Right); err != nil {
+				return err
+			}
+			c.changeOperand(jumpIfFalsy, len(c.instructions))
+
+		case token.OR:
+			// Short-circuit OR: if left is truthy, return left; else return right
+			c.emit(code.OpDup)
+			jumpIfFalsy := c.emit(code.OpJumpNotTruthy, 9999)
+			jumpToEnd := c.emit(code.OpJump, 9999)
+			c.changeOperand(jumpIfFalsy, len(c.instructions))
+			c.emit(code.OpPop)
+			if err := c.compileExpression(node.Right); err != nil {
+				return err
+			}
+			c.changeOperand(jumpToEnd, len(c.instructions))
+		}
 	}
 	return nil
 }
@@ -302,5 +432,18 @@ func (c *Compiler) error(tok *token.Token, message string) error {
 func (c *Compiler) warn(tok *token.Token, message string) {
 	if c.diagnosticHandler != nil && tok != nil {
 		c.diagnosticHandler.Warn(*tok, message)
+	}
+}
+
+func (c *Compiler) patchBreakJumps(loopEnd int) {
+	for _, jumpPos := range c.loopStack.BreakJumps() {
+		c.changeOperand(jumpPos, loopEnd)
+	}
+}
+
+func (c *Compiler) patchContinueJumps(continueTarget int) {
+	c.loopStack.SetContinuePos(continueTarget)
+	for _, jumpPos := range c.loopStack.ContinueJumps() {
+		c.changeOperand(jumpPos, continueTarget)
 	}
 }

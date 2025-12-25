@@ -33,6 +33,14 @@ func IsTruthy(v Object) bool {
 		return val.Value
 	case *Nil:
 		return false
+	case *Number:
+		return val.Value != 0
+	case *String:
+		return val.Value != ""
+	case *Array:
+		return len(val.Elements) > 0
+	case *Hash:
+		return len(val.Pairs) > 0
 	default:
 		return true
 	}

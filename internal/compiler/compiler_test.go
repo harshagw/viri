@@ -868,3 +868,420 @@ func TestGlobalAssignmentStatements(t *testing.T) {
 
 	runCompilerTests(t, tests)
 }
+
+func TestLogicalExpressions(t *testing.T) {
+	tests := []compilerTestCase{
+		{
+			// true and false
+			// With OpDup: duplicate left, check truthiness, if truthy pop and eval right
+			input: &ast.LogicalExpr{
+				Left:     &ast.LiteralExpr{Value: true},
+				Operator: &token.Token{Type: token.AND},
+				Right:    &ast.LiteralExpr{Value: false},
+			},
+			expectedConstants: []interface{}{},
+			expectedInstructions: []code.Instructions{
+				// 0000: OpTrue (left)
+				code.Make(code.OpTrue),
+				// 0001: OpDup
+				code.Make(code.OpDup),
+				// 0002: OpJumpNotTruthy -> 7 (end, keep left)
+				code.Make(code.OpJumpNotTruthy, 7),
+				// 0005: OpPop (discard truthy left)
+				code.Make(code.OpPop),
+				// 0006: OpFalse (right side)
+				code.Make(code.OpFalse),
+				// 0007: end
+			},
+		},
+		{
+			// false or true
+			// With OpDup: duplicate left, check truthiness, if falsy pop and eval right
+			input: &ast.LogicalExpr{
+				Left:     &ast.LiteralExpr{Value: false},
+				Operator: &token.Token{Type: token.OR},
+				Right:    &ast.LiteralExpr{Value: true},
+			},
+			expectedConstants: []interface{}{},
+			expectedInstructions: []code.Instructions{
+				// 0000: OpFalse (left)
+				code.Make(code.OpFalse),
+				// 0001: OpDup
+				code.Make(code.OpDup),
+				// 0002: OpJumpNotTruthy -> 8 (falsy, eval right)
+				code.Make(code.OpJumpNotTruthy, 8),
+				// 0005: OpJump -> 10 (truthy, skip to end with left)
+				code.Make(code.OpJump, 10),
+				// 0008: OpPop (discard falsy left)
+				code.Make(code.OpPop),
+				// 0009: OpTrue (right side)
+				code.Make(code.OpTrue),
+				// 0010: end
+			},
+		},
+	}
+
+	runCompilerTests(t, tests)
+}
+
+func TestWhileStatements(t *testing.T) {
+	tests := []compilerTestCase{
+		{
+			// while (true) { 10; }
+			input: &ast.WhileStmt{
+				Condition: &ast.LiteralExpr{Value: true},
+				Body: &ast.BlockStmt{
+					Statements: []ast.Stmt{
+						&ast.ExprStmt{Expr: &ast.LiteralExpr{Value: 10}},
+					},
+				},
+			},
+			expectedConstants: []interface{}{10},
+			expectedInstructions: []code.Instructions{
+				// 0000: OpTrue (condition)
+				code.Make(code.OpTrue),
+				// 0001: OpJumpNotTruthy -> 11 (exit loop)
+				code.Make(code.OpJumpNotTruthy, 11),
+				// 0004: OpConstant 0 (10)
+				code.Make(code.OpConstant, 0),
+				// 0007: OpPop
+				code.Make(code.OpPop),
+				// 0008: OpJump -> 0 (back to condition)
+				code.Make(code.OpJump, 0),
+				// 0011: end
+			},
+		},
+	}
+
+	runCompilerTests(t, tests)
+}
+
+func TestForStatements(t *testing.T) {
+	tests := []compilerTestCase{
+		{
+			// Full for loop: for (var i = 0; i < 10; i = i + 1) { 5; }
+			input: &ast.ForStmt{
+				Initializer: &ast.VarDeclStmt{
+					Name:        &token.Token{Type: token.IDENTIFIER, Lexeme: "i"},
+					Initializer: &ast.LiteralExpr{Value: 0},
+					IsConst:     false,
+				},
+				Condition: &ast.BinaryExpr{
+					Left:     &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "i"}},
+					Right:    &ast.LiteralExpr{Value: 10},
+					Operator: &token.Token{Type: token.LESS},
+				},
+				Increment: &ast.AssignExpr{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "i"},
+					Value: &ast.BinaryExpr{
+						Left:     &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "i"}},
+						Right:    &ast.LiteralExpr{Value: 1},
+						Operator: &token.Token{Type: token.PLUS},
+					},
+				},
+				Body: &ast.BlockStmt{
+					Statements: []ast.Stmt{
+						&ast.ExprStmt{Expr: &ast.LiteralExpr{Value: 5}},
+					},
+				},
+			},
+			expectedConstants: []interface{}{0, 10, 5, 1},
+			expectedInstructions: []code.Instructions{
+				// 0000: OpConstant 0 (0) - initializer
+				code.Make(code.OpConstant, 0),
+				// 0003: OpSetGlobal 0 (i)
+				code.Make(code.OpSetGlobal, 0),
+				// 0006: OpConstant 1 (10) - condition: i < 10 (compiled as 10 > i)
+				code.Make(code.OpConstant, 1),
+				// 0009: OpGetGlobal 0 (i)
+				code.Make(code.OpGetGlobal, 0),
+				// 0012: OpGreaterThan
+				code.Make(code.OpGreaterThan),
+				// 0013: OpJumpNotTruthy -> 37 (exit loop)
+				code.Make(code.OpJumpNotTruthy, 37),
+				// 0016: OpConstant 2 (5) - body
+				code.Make(code.OpConstant, 2),
+				// 0019: OpPop
+				code.Make(code.OpPop),
+				// 0020: OpGetGlobal 0 (i) - increment: i = i + 1
+				code.Make(code.OpGetGlobal, 0),
+				// 0023: OpConstant 3 (1)
+				code.Make(code.OpConstant, 3),
+				// 0026: OpAdd
+				code.Make(code.OpAdd),
+				// 0027: OpSetGlobal 0
+				code.Make(code.OpSetGlobal, 0),
+				// 0030: OpGetGlobal 0 (assignment returns value)
+				code.Make(code.OpGetGlobal, 0),
+				// 0033: OpPop (discard increment result)
+				code.Make(code.OpPop),
+				// 0034: OpJump -> 6 (back to condition)
+				code.Make(code.OpJump, 6),
+				// 0037: end
+			},
+		},
+		{
+			// No initializer: for (; i < 10; i = i + 1) { 5; }
+			// Assumes i is already defined (index 0)
+			input: &ast.BlockStmt{
+				Statements: []ast.Stmt{
+					&ast.VarDeclStmt{
+						Name:        &token.Token{Type: token.IDENTIFIER, Lexeme: "i"},
+						Initializer: &ast.LiteralExpr{Value: 0},
+						IsConst:     false,
+					},
+					&ast.ForStmt{
+						Initializer: nil, // No initializer
+						Condition: &ast.BinaryExpr{
+							Left:     &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "i"}},
+							Right:    &ast.LiteralExpr{Value: 10},
+							Operator: &token.Token{Type: token.LESS},
+						},
+						Increment: &ast.AssignExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "i"},
+							Value: &ast.BinaryExpr{
+								Left:     &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "i"}},
+								Right:    &ast.LiteralExpr{Value: 1},
+								Operator: &token.Token{Type: token.PLUS},
+							},
+						},
+						Body: &ast.BlockStmt{
+							Statements: []ast.Stmt{
+								&ast.ExprStmt{Expr: &ast.LiteralExpr{Value: 5}},
+							},
+						},
+					},
+				},
+			},
+			expectedConstants: []interface{}{0, 10, 5, 1},
+			expectedInstructions: []code.Instructions{
+				// var i = 0
+				code.Make(code.OpConstant, 0),
+				code.Make(code.OpSetGlobal, 0),
+				// for loop starts here (no initializer)
+				// 0006: condition
+				code.Make(code.OpConstant, 1),
+				code.Make(code.OpGetGlobal, 0),
+				code.Make(code.OpGreaterThan),
+				code.Make(code.OpJumpNotTruthy, 37),
+				// body
+				code.Make(code.OpConstant, 2),
+				code.Make(code.OpPop),
+				// increment
+				code.Make(code.OpGetGlobal, 0),
+				code.Make(code.OpConstant, 3),
+				code.Make(code.OpAdd),
+				code.Make(code.OpSetGlobal, 0),
+				code.Make(code.OpGetGlobal, 0),
+				code.Make(code.OpPop),
+				// jump back
+				code.Make(code.OpJump, 6),
+			},
+		},
+		{
+			// No increment: for (var i = 0; i < 3;) { 5; }
+			input: &ast.ForStmt{
+				Initializer: &ast.VarDeclStmt{
+					Name:        &token.Token{Type: token.IDENTIFIER, Lexeme: "i"},
+					Initializer: &ast.LiteralExpr{Value: 0},
+					IsConst:     false,
+				},
+				Condition: &ast.BinaryExpr{
+					Left:     &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "i"}},
+					Right:    &ast.LiteralExpr{Value: 3},
+					Operator: &token.Token{Type: token.LESS},
+				},
+				Increment: nil, // No increment
+				Body: &ast.BlockStmt{
+					Statements: []ast.Stmt{
+						&ast.ExprStmt{Expr: &ast.LiteralExpr{Value: 5}},
+					},
+				},
+			},
+			expectedConstants: []interface{}{0, 3, 5},
+			expectedInstructions: []code.Instructions{
+				// 0000: initializer: var i = 0
+				code.Make(code.OpConstant, 0),
+				// 0003:
+				code.Make(code.OpSetGlobal, 0),
+				// 0006: condition: i < 3 (compiled as 3 > i)
+				code.Make(code.OpConstant, 1),
+				// 0009:
+				code.Make(code.OpGetGlobal, 0),
+				// 0012:
+				code.Make(code.OpGreaterThan),
+				// 0013: jump to 23 if false
+				code.Make(code.OpJumpNotTruthy, 23),
+				// 0016: body: 5;
+				code.Make(code.OpConstant, 2),
+				// 0019:
+				code.Make(code.OpPop),
+				// 0020: no increment, just jump back to condition
+				code.Make(code.OpJump, 6),
+				// 0023: end
+			},
+		},
+		{
+			// No condition (infinite loop): for (var i = 0;; i = i + 1) { 5; }
+			input: &ast.ForStmt{
+				Initializer: &ast.VarDeclStmt{
+					Name:        &token.Token{Type: token.IDENTIFIER, Lexeme: "i"},
+					Initializer: &ast.LiteralExpr{Value: 0},
+					IsConst:     false,
+				},
+				Condition: nil, // No condition - infinite loop
+				Increment: &ast.AssignExpr{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "i"},
+					Value: &ast.BinaryExpr{
+						Left:     &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "i"}},
+						Right:    &ast.LiteralExpr{Value: 1},
+						Operator: &token.Token{Type: token.PLUS},
+					},
+				},
+				Body: &ast.BlockStmt{
+					Statements: []ast.Stmt{
+						&ast.ExprStmt{Expr: &ast.LiteralExpr{Value: 5}},
+					},
+				},
+			},
+			expectedConstants: []interface{}{0, 5, 1},
+			expectedInstructions: []code.Instructions{
+				// initializer: var i = 0
+				code.Make(code.OpConstant, 0),
+				code.Make(code.OpSetGlobal, 0),
+				// no condition - body starts immediately at position 6
+				// body: 5;
+				code.Make(code.OpConstant, 1),
+				code.Make(code.OpPop),
+				// increment: i = i + 1
+				code.Make(code.OpGetGlobal, 0),
+				code.Make(code.OpConstant, 2),
+				code.Make(code.OpAdd),
+				code.Make(code.OpSetGlobal, 0),
+				code.Make(code.OpGetGlobal, 0),
+				code.Make(code.OpPop),
+				// jump back to body (position 6)
+				code.Make(code.OpJump, 6),
+			},
+		},
+		{
+			// All parts empty: for (;;) { 5; }
+			input: &ast.ForStmt{
+				Initializer: nil,
+				Condition:   nil,
+				Increment:   nil,
+				Body: &ast.BlockStmt{
+					Statements: []ast.Stmt{
+						&ast.ExprStmt{Expr: &ast.LiteralExpr{Value: 5}},
+					},
+				},
+			},
+			expectedConstants: []interface{}{5},
+			expectedInstructions: []code.Instructions{
+				// no initializer, no condition - body starts at 0
+				// body: 5;
+				code.Make(code.OpConstant, 0),
+				code.Make(code.OpPop),
+				// no increment, jump back to start (position 0)
+				code.Make(code.OpJump, 0),
+			},
+		},
+	}
+
+	runCompilerTests(t, tests)
+}
+
+func TestBreakStatement(t *testing.T) {
+	tests := []compilerTestCase{
+		{
+			// while (true) { break; }
+			input: &ast.WhileStmt{
+				Condition: &ast.LiteralExpr{Value: true},
+				Body: &ast.BlockStmt{
+					Statements: []ast.Stmt{
+						&ast.BreakStmt{Keyword: &token.Token{Type: token.BREAK}},
+					},
+				},
+			},
+			expectedConstants: []interface{}{},
+			expectedInstructions: []code.Instructions{
+				// 0000: OpTrue (condition)
+				code.Make(code.OpTrue),
+				// 0001: OpJumpNotTruthy -> 10 (exit loop)
+				code.Make(code.OpJumpNotTruthy, 10),
+				// 0004: OpJump -> 10 (break)
+				code.Make(code.OpJump, 10),
+				// 0007: OpJump -> 0 (back to condition)
+				code.Make(code.OpJump, 0),
+				// 0010: end
+			},
+		},
+	}
+
+	runCompilerTests(t, tests)
+}
+
+func TestContinueStatement(t *testing.T) {
+	tests := []compilerTestCase{
+		{
+			// while (true) { continue; 10; }
+			input: &ast.WhileStmt{
+				Condition: &ast.LiteralExpr{Value: true},
+				Body: &ast.BlockStmt{
+					Statements: []ast.Stmt{
+						&ast.ContinueStmt{Keyword: &token.Token{Type: token.CONTINUE}},
+						&ast.ExprStmt{Expr: &ast.LiteralExpr{Value: 10}},
+					},
+				},
+			},
+			expectedConstants: []interface{}{10},
+			expectedInstructions: []code.Instructions{
+				// 0000: OpTrue (condition)
+				code.Make(code.OpTrue),
+				// 0001: OpJumpNotTruthy -> 14 (exit loop)
+				code.Make(code.OpJumpNotTruthy, 14),
+				// 0004: OpJump -> 0 (continue - back to condition)
+				code.Make(code.OpJump, 0),
+				// 0007: OpConstant 0 (10) - unreachable but compiled
+				code.Make(code.OpConstant, 0),
+				// 0010: OpPop
+				code.Make(code.OpPop),
+				// 0011: OpJump -> 0 (back to condition)
+				code.Make(code.OpJump, 0),
+				// 0014: end
+			},
+		},
+	}
+
+	runCompilerTests(t, tests)
+}
+
+func TestBreakOutsideLoop(t *testing.T) {
+	input := &ast.BreakStmt{Keyword: &token.Token{Type: token.BREAK, Lexeme: "break"}}
+
+	compiler := New(nil)
+	err := compiler.Compile(input)
+	if err == nil {
+		t.Fatalf("expected error for break outside loop, got none")
+	}
+
+	expected := "break statement outside of loop"
+	if err.Error() != expected {
+		t.Fatalf("wrong error. want=%q, got=%q", expected, err.Error())
+	}
+}
+
+func TestContinueOutsideLoop(t *testing.T) {
+	input := &ast.ContinueStmt{Keyword: &token.Token{Type: token.CONTINUE, Lexeme: "continue"}}
+
+	compiler := New(nil)
+	err := compiler.Compile(input)
+	if err == nil {
+		t.Fatalf("expected error for continue outside loop, got none")
+	}
+
+	expected := "continue statement outside of loop"
+	if err.Error() != expected {
+		t.Fatalf("wrong error. want=%q, got=%q", expected, err.Error())
+	}
+}

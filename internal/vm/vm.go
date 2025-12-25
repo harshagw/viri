@@ -105,6 +105,11 @@ func (vm *VM) Run() error {
 		case code.OpPop:
 			vm.pop()
 
+		case code.OpDup:
+			if err := vm.push(vm.stack[vm.sp-1]); err != nil {
+				return err
+			}
+
 		case code.OpSetGlobal:
 			def, _ := code.Lookup(byte(op))
 			operands, read := code.ReadOperands(def, vm.instructions[ip+1:])
