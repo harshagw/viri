@@ -35,6 +35,12 @@ const (
 	OpIndex
 	OpSetIndex
 	OpPrint
+	OpCall
+	OpReturnValue
+	OpReturn
+	OpSetLocal
+	OpGetLocal
+	OpGetNative
 )
 
 type Definition struct {
@@ -59,14 +65,20 @@ var definitions = map[Opcode]*Definition{
 	OpJump:          {"OpJump", []int{2}},
 	OpJumpNotTruthy: {"OpJumpNotTruthy", []int{2}}, // operand: jump position
 	OpPop:           {"OpPop", []int{}},
-	OpDup:           {"OpDup", []int{}},        // no operands: duplicates top of stack
-	OpSetGlobal:     {"OpSetGlobal", []int{2}}, // operand: index of global in globals array
-	OpGetGlobal:     {"OpGetGlobal", []int{2}}, // operand: index of global in globals array
-	OpArray:         {"OpArray", []int{2}},     // operand: number of elements
-	OpHash:          {"OpHash", []int{2}},      // operand: number of pairs * 2
-	OpIndex:         {"OpIndex", []int{}},      // no operands: obj and index on stack
-	OpSetIndex:      {"OpSetIndex", []int{}},   // no operands: obj, index, and value on stack
-	OpPrint:         {"OpPrint", []int{}},      // no operands: value on stack
+	OpDup:           {"OpDup", []int{}},         // no operands: duplicates top of stack
+	OpSetGlobal:     {"OpSetGlobal", []int{2}},  // operand: index of global in globals array
+	OpGetGlobal:     {"OpGetGlobal", []int{2}},  // operand: index of global in globals array
+	OpArray:         {"OpArray", []int{2}},      // operand: number of elements
+	OpHash:          {"OpHash", []int{2}},       // operand: number of pairs * 2
+	OpIndex:         {"OpIndex", []int{}},       // no operands: obj and index on stack
+	OpSetIndex:      {"OpSetIndex", []int{}},    // no operands: obj, index, and value on stack
+	OpPrint:         {"OpPrint", []int{}},       // no operands: value on stack
+	OpCall:          {"OpCall", []int{1}},       // operand: number of arguments
+	OpReturnValue:   {"OpReturnValue", []int{}}, // no operands: return value on stack
+	OpReturn:        {"OpReturn", []int{}},      // no operands: return nil
+	OpSetLocal:      {"OpSetLocal", []int{1}},   // operand: local index
+	OpGetLocal:      {"OpGetLocal", []int{1}},   // operand: local index
+	OpGetNative:     {"OpGetNative", []int{1}},  // operand: native function index
 }
 
 func Lookup(op byte) (*Definition, error) {
@@ -95,6 +107,8 @@ func Make(op Opcode, operands ...int) []byte {
 	for i, o := range operands {
 		width := def.OperandWidths[i]
 		switch width {
+		case 1:
+			instruction[offset] = byte(o)
 		case 2:
 			binary.BigEndian.PutUint16(instruction[offset:], uint16(o))
 		}
@@ -148,6 +162,8 @@ func ReadOperands(def *Definition, ins Instructions) ([]int, int) {
 
 	for i, width := range def.OperandWidths {
 		switch width {
+		case 1:
+			operands[i] = int(ins[offset])
 		case 2:
 			operands[i] = int(binary.BigEndian.Uint16(ins[offset:]))
 		}

@@ -389,6 +389,17 @@ func testConstants(t *testing.T, expected []interface{}, actual []objects.Object
 				return fmt.Errorf("constant %d - testStringObject failed: %s",
 					i, err)
 			}
+		case []code.Instructions:
+			fn, ok := actual[i].(*objects.CompiledFunction)
+			if !ok {
+				return fmt.Errorf("constant %d - not a function: %T",
+					i, actual[i])
+			}
+			err := testInstructions(constant, fn.Instructions)
+			if err != nil {
+				return fmt.Errorf("constant %d - testInstructions failed: %s",
+					i, err)
+			}
 		}
 	}
 
@@ -425,8 +436,9 @@ func testIntegerObject(expected int64, actual objects.Object) error {
 	return nil
 }
 
-func TestGlobalVarStatements(t *testing.T) {
+func TestVarStatements(t *testing.T) {
 	tests := []compilerTestCase{
+		// Global scope tests
 		{
 			// var one = 1;
 			input: &ast.VarDeclStmt{
@@ -519,6 +531,132 @@ func TestGlobalVarStatements(t *testing.T) {
 				code.Make(code.OpSetGlobal, 1),
 				code.Make(code.OpGetGlobal, 1),
 				code.Make(code.OpPop),
+			},
+		},
+		// Local scope tests (inside functions)
+		{
+			// var num = 55; fun() { return num; }  (accessing global from function)
+			input: &ast.BlockStmt{
+				Statements: []ast.Stmt{
+					&ast.VarDeclStmt{
+						Name:        &token.Token{Type: token.IDENTIFIER, Lexeme: "num"},
+						Initializer: &ast.LiteralExpr{Value: 55},
+						IsConst:     false,
+					},
+					&ast.ExprStmt{
+						Expr: &ast.FunctionExpr{
+							Params: []*token.Token{},
+							Body: &ast.BlockStmt{
+								Statements: []ast.Stmt{
+									&ast.ReturnStmt{
+										Keyword: &token.Token{Type: token.RETURN},
+										Value: &ast.VariableExpr{
+											Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "num"},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedConstants: []interface{}{
+				55,
+				[]code.Instructions{
+					code.Make(code.OpGetGlobal, 0),
+					code.Make(code.OpReturnValue),
+					code.Make(code.OpReturn),
+				},
+			},
+			expectedInstructions: []code.Instructions{
+				code.Make(code.OpConstant, 0),
+				code.Make(code.OpSetGlobal, 0),
+				code.Make(code.OpConstant, 1),
+				code.Make(code.OpPop),
+			},
+		},
+		{
+			// fun() { var num = 55; return num; }  (local variable)
+			input: &ast.FunctionExpr{
+				Params: []*token.Token{},
+				Body: &ast.BlockStmt{
+					Statements: []ast.Stmt{
+						&ast.VarDeclStmt{
+							Name:        &token.Token{Type: token.IDENTIFIER, Lexeme: "num"},
+							Initializer: &ast.LiteralExpr{Value: 55},
+							IsConst:     false,
+						},
+						&ast.ReturnStmt{
+							Keyword: &token.Token{Type: token.RETURN},
+							Value: &ast.VariableExpr{
+								Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "num"},
+							},
+						},
+					},
+				},
+			},
+			expectedConstants: []interface{}{
+				55,
+				[]code.Instructions{
+					code.Make(code.OpConstant, 0),
+					code.Make(code.OpSetLocal, 0),
+					code.Make(code.OpGetLocal, 0),
+					code.Make(code.OpReturnValue),
+					code.Make(code.OpReturn),
+				},
+			},
+			expectedInstructions: []code.Instructions{
+				code.Make(code.OpConstant, 1),
+			},
+		},
+		{
+			// fun() { var a = 55; var b = 77; return a + b; }  (multiple locals)
+			input: &ast.FunctionExpr{
+				Params: []*token.Token{},
+				Body: &ast.BlockStmt{
+					Statements: []ast.Stmt{
+						&ast.VarDeclStmt{
+							Name:        &token.Token{Type: token.IDENTIFIER, Lexeme: "a"},
+							Initializer: &ast.LiteralExpr{Value: 55},
+							IsConst:     false,
+						},
+						&ast.VarDeclStmt{
+							Name:        &token.Token{Type: token.IDENTIFIER, Lexeme: "b"},
+							Initializer: &ast.LiteralExpr{Value: 77},
+							IsConst:     false,
+						},
+						&ast.ReturnStmt{
+							Keyword: &token.Token{Type: token.RETURN},
+							Value: &ast.BinaryExpr{
+								Left: &ast.VariableExpr{
+									Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "a"},
+								},
+								Right: &ast.VariableExpr{
+									Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "b"},
+								},
+								Operator: &token.Token{Type: token.PLUS},
+							},
+						},
+					},
+				},
+			},
+			expectedConstants: []interface{}{
+				55,
+				77,
+				[]code.Instructions{
+					code.Make(code.OpConstant, 0),
+					code.Make(code.OpSetLocal, 0),
+					code.Make(code.OpConstant, 1),
+					code.Make(code.OpSetLocal, 1),
+					code.Make(code.OpGetLocal, 0),
+					code.Make(code.OpGetLocal, 1),
+					code.Make(code.OpAdd),
+					code.Make(code.OpReturnValue),
+					code.Make(code.OpReturn),
+				},
+			},
+			expectedInstructions: []code.Instructions{
+				code.Make(code.OpConstant, 2),
 			},
 		},
 	}
@@ -1284,4 +1422,438 @@ func TestContinueOutsideLoop(t *testing.T) {
 	if err.Error() != expected {
 		t.Fatalf("wrong error. want=%q, got=%q", expected, err.Error())
 	}
+}
+
+func TestFunctionExpressions(t *testing.T) {
+	tests := []compilerTestCase{
+		{
+			// fun() { return 5 + 10; }
+			input: &ast.FunctionExpr{
+				Params: []*token.Token{},
+				Body: &ast.BlockStmt{
+					Statements: []ast.Stmt{
+						&ast.ReturnStmt{
+							Keyword: &token.Token{Type: token.RETURN},
+							Value: &ast.BinaryExpr{
+								Left:     &ast.LiteralExpr{Value: 5},
+								Right:    &ast.LiteralExpr{Value: 10},
+								Operator: &token.Token{Type: token.PLUS},
+							},
+						},
+					},
+				},
+			},
+			expectedConstants: []interface{}{
+				5,
+				10,
+				[]code.Instructions{
+					code.Make(code.OpConstant, 0),
+					code.Make(code.OpConstant, 1),
+					code.Make(code.OpAdd),
+					code.Make(code.OpReturnValue),
+					code.Make(code.OpReturn),
+				},
+			},
+			expectedInstructions: []code.Instructions{
+				code.Make(code.OpConstant, 2),
+			},
+		},
+		{
+			// fun() { 5 + 10; }  (no return, should return nil)
+			input: &ast.FunctionExpr{
+				Params: []*token.Token{},
+				Body: &ast.BlockStmt{
+					Statements: []ast.Stmt{
+						&ast.ExprStmt{
+							Expr: &ast.BinaryExpr{
+								Left:     &ast.LiteralExpr{Value: 5},
+								Right:    &ast.LiteralExpr{Value: 10},
+								Operator: &token.Token{Type: token.PLUS},
+							},
+						},
+					},
+				},
+			},
+			expectedConstants: []interface{}{
+				5,
+				10,
+				[]code.Instructions{
+					code.Make(code.OpConstant, 0),
+					code.Make(code.OpConstant, 1),
+					code.Make(code.OpAdd),
+					code.Make(code.OpPop),
+					code.Make(code.OpReturn),
+				},
+			},
+			expectedInstructions: []code.Instructions{
+				code.Make(code.OpConstant, 2),
+			},
+		},
+		{
+			// fun() { return; }
+			input: &ast.FunctionExpr{
+				Params: []*token.Token{},
+				Body: &ast.BlockStmt{
+					Statements: []ast.Stmt{
+						&ast.ReturnStmt{
+							Keyword: &token.Token{Type: token.RETURN},
+							Value:   nil,
+						},
+					},
+				},
+			},
+			expectedConstants: []interface{}{
+				[]code.Instructions{
+					code.Make(code.OpReturn),
+					code.Make(code.OpReturn),
+				},
+			},
+			expectedInstructions: []code.Instructions{
+				code.Make(code.OpConstant, 0),
+			},
+		},
+	}
+
+	runCompilerTests(t, tests)
+}
+
+func TestFunctionStatements(t *testing.T) {
+	tests := []compilerTestCase{
+		{
+			// fun add() { return 5 + 10; }
+			input: &ast.FunctionStmt{
+				Name:   &token.Token{Type: token.IDENTIFIER, Lexeme: "add"},
+				Params: []*token.Token{},
+				Body: &ast.BlockStmt{
+					Statements: []ast.Stmt{
+						&ast.ReturnStmt{
+							Keyword: &token.Token{Type: token.RETURN},
+							Value: &ast.BinaryExpr{
+								Left:     &ast.LiteralExpr{Value: 5},
+								Right:    &ast.LiteralExpr{Value: 10},
+								Operator: &token.Token{Type: token.PLUS},
+							},
+						},
+					},
+				},
+			},
+			expectedConstants: []interface{}{
+				5,
+				10,
+				[]code.Instructions{
+					code.Make(code.OpConstant, 0),
+					code.Make(code.OpConstant, 1),
+					code.Make(code.OpAdd),
+					code.Make(code.OpReturnValue),
+					code.Make(code.OpReturn),
+				},
+			},
+			expectedInstructions: []code.Instructions{
+				code.Make(code.OpConstant, 2),
+				code.Make(code.OpSetGlobal, 0),
+			},
+		},
+		{
+			// fun identity(a) { return a; }
+			input: &ast.FunctionStmt{
+				Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "identity"},
+				Params: []*token.Token{
+					{Type: token.IDENTIFIER, Lexeme: "a"},
+				},
+				Body: &ast.BlockStmt{
+					Statements: []ast.Stmt{
+						&ast.ReturnStmt{
+							Keyword: &token.Token{Type: token.RETURN},
+							Value: &ast.VariableExpr{
+								Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "a"},
+							},
+						},
+					},
+				},
+			},
+			expectedConstants: []interface{}{
+				[]code.Instructions{
+					code.Make(code.OpGetLocal, 0),
+					code.Make(code.OpReturnValue),
+					code.Make(code.OpReturn),
+				},
+			},
+			expectedInstructions: []code.Instructions{
+				code.Make(code.OpConstant, 0),
+				code.Make(code.OpSetGlobal, 0),
+			},
+		},
+		{
+			// fun add(a, b) { return a + b; }
+			input: &ast.FunctionStmt{
+				Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "add"},
+				Params: []*token.Token{
+					{Type: token.IDENTIFIER, Lexeme: "a"},
+					{Type: token.IDENTIFIER, Lexeme: "b"},
+				},
+				Body: &ast.BlockStmt{
+					Statements: []ast.Stmt{
+						&ast.ReturnStmt{
+							Keyword: &token.Token{Type: token.RETURN},
+							Value: &ast.BinaryExpr{
+								Left: &ast.VariableExpr{
+									Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "a"},
+								},
+								Right: &ast.VariableExpr{
+									Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "b"},
+								},
+								Operator: &token.Token{Type: token.PLUS},
+							},
+						},
+					},
+				},
+			},
+			expectedConstants: []interface{}{
+				[]code.Instructions{
+					code.Make(code.OpGetLocal, 0),
+					code.Make(code.OpGetLocal, 1),
+					code.Make(code.OpAdd),
+					code.Make(code.OpReturnValue),
+					code.Make(code.OpReturn),
+				},
+			},
+			expectedInstructions: []code.Instructions{
+				code.Make(code.OpConstant, 0),
+				code.Make(code.OpSetGlobal, 0),
+			},
+		},
+		{
+			// fun greet() { }  (empty body, returns nil)
+			input: &ast.FunctionStmt{
+				Name:   &token.Token{Type: token.IDENTIFIER, Lexeme: "greet"},
+				Params: []*token.Token{},
+				Body: &ast.BlockStmt{
+					Statements: []ast.Stmt{},
+				},
+			},
+			expectedConstants: []interface{}{
+				[]code.Instructions{
+					code.Make(code.OpReturn),
+				},
+			},
+			expectedInstructions: []code.Instructions{
+				code.Make(code.OpConstant, 0),
+				code.Make(code.OpSetGlobal, 0),
+			},
+		},
+	}
+
+	runCompilerTests(t, tests)
+}
+
+func TestFunctionCalls(t *testing.T) {
+	tests := []compilerTestCase{
+		{
+			// fun() { return 24; }();
+			input: &ast.ExprStmt{
+				Expr: &ast.CallExpr{
+					Callee: &ast.FunctionExpr{
+						Params: []*token.Token{},
+						Body: &ast.BlockStmt{
+							Statements: []ast.Stmt{
+								&ast.ReturnStmt{
+									Keyword: &token.Token{Type: token.RETURN},
+									Value:   &ast.LiteralExpr{Value: 24},
+								},
+							},
+						},
+					},
+					Arguments: []ast.Expr{},
+				},
+			},
+			expectedConstants: []interface{}{
+				24,
+				[]code.Instructions{
+					code.Make(code.OpConstant, 0),
+					code.Make(code.OpReturnValue),
+					code.Make(code.OpReturn),
+				},
+			},
+			expectedInstructions: []code.Instructions{
+				code.Make(code.OpConstant, 1),
+				code.Make(code.OpCall, 0),
+				code.Make(code.OpPop),
+			},
+		},
+		{
+			// var noArg = fun() { return 24; }; noArg();
+			input: &ast.BlockStmt{
+				Statements: []ast.Stmt{
+					&ast.VarDeclStmt{
+						Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "noArg"},
+						Initializer: &ast.FunctionExpr{
+							Params: []*token.Token{},
+							Body: &ast.BlockStmt{
+								Statements: []ast.Stmt{
+									&ast.ReturnStmt{
+										Keyword: &token.Token{Type: token.RETURN},
+										Value:   &ast.LiteralExpr{Value: 24},
+									},
+								},
+							},
+						},
+						IsConst: false,
+					},
+					&ast.ExprStmt{
+						Expr: &ast.CallExpr{
+							Callee: &ast.VariableExpr{
+								Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "noArg"},
+							},
+							Arguments: []ast.Expr{},
+						},
+					},
+				},
+			},
+			expectedConstants: []interface{}{
+				24,
+				[]code.Instructions{
+					code.Make(code.OpConstant, 0),
+					code.Make(code.OpReturnValue),
+					code.Make(code.OpReturn),
+				},
+			},
+			expectedInstructions: []code.Instructions{
+				code.Make(code.OpConstant, 1),
+				code.Make(code.OpSetGlobal, 0),
+				code.Make(code.OpGetGlobal, 0),
+				code.Make(code.OpCall, 0),
+				code.Make(code.OpPop),
+			},
+		},
+		{
+			// var oneArg = fun(a) { return a; }; oneArg(24);
+			input: &ast.BlockStmt{
+				Statements: []ast.Stmt{
+					&ast.VarDeclStmt{
+						Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "oneArg"},
+						Initializer: &ast.FunctionExpr{
+							Params: []*token.Token{
+								{Type: token.IDENTIFIER, Lexeme: "a"},
+							},
+							Body: &ast.BlockStmt{
+								Statements: []ast.Stmt{
+									&ast.ReturnStmt{
+										Keyword: &token.Token{Type: token.RETURN},
+										Value: &ast.VariableExpr{
+											Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "a"},
+										},
+									},
+								},
+							},
+						},
+						IsConst: false,
+					},
+					&ast.ExprStmt{
+						Expr: &ast.CallExpr{
+							Callee: &ast.VariableExpr{
+								Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "oneArg"},
+							},
+							Arguments: []ast.Expr{
+								&ast.LiteralExpr{Value: 24},
+							},
+						},
+					},
+				},
+			},
+			expectedConstants: []interface{}{
+				[]code.Instructions{
+					code.Make(code.OpGetLocal, 0),
+					code.Make(code.OpReturnValue),
+					code.Make(code.OpReturn),
+				},
+				24,
+			},
+			expectedInstructions: []code.Instructions{
+				code.Make(code.OpConstant, 0),
+				code.Make(code.OpSetGlobal, 0),
+				code.Make(code.OpGetGlobal, 0),
+				code.Make(code.OpConstant, 1),
+				code.Make(code.OpCall, 1),
+				code.Make(code.OpPop),
+			},
+		},
+		{
+			// var manyArg = fun(a, b, c) { return a + b + c; }; manyArg(24, 25, 26);
+			input: &ast.BlockStmt{
+				Statements: []ast.Stmt{
+					&ast.VarDeclStmt{
+						Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "manyArg"},
+						Initializer: &ast.FunctionExpr{
+							Params: []*token.Token{
+								{Type: token.IDENTIFIER, Lexeme: "a"},
+								{Type: token.IDENTIFIER, Lexeme: "b"},
+								{Type: token.IDENTIFIER, Lexeme: "c"},
+							},
+							Body: &ast.BlockStmt{
+								Statements: []ast.Stmt{
+									&ast.ReturnStmt{
+										Keyword: &token.Token{Type: token.RETURN},
+										Value: &ast.BinaryExpr{
+											Left: &ast.BinaryExpr{
+												Left: &ast.VariableExpr{
+													Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "a"},
+												},
+												Right: &ast.VariableExpr{
+													Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "b"},
+												},
+												Operator: &token.Token{Type: token.PLUS},
+											},
+											Right: &ast.VariableExpr{
+												Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "c"},
+											},
+											Operator: &token.Token{Type: token.PLUS},
+										},
+									},
+								},
+							},
+						},
+						IsConst: false,
+					},
+					&ast.ExprStmt{
+						Expr: &ast.CallExpr{
+							Callee: &ast.VariableExpr{
+								Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "manyArg"},
+							},
+							Arguments: []ast.Expr{
+								&ast.LiteralExpr{Value: 24},
+								&ast.LiteralExpr{Value: 25},
+								&ast.LiteralExpr{Value: 26},
+							},
+						},
+					},
+				},
+			},
+			expectedConstants: []interface{}{
+				[]code.Instructions{
+					code.Make(code.OpGetLocal, 0),
+					code.Make(code.OpGetLocal, 1),
+					code.Make(code.OpAdd),
+					code.Make(code.OpGetLocal, 2),
+					code.Make(code.OpAdd),
+					code.Make(code.OpReturnValue),
+					code.Make(code.OpReturn),
+				},
+				24,
+				25,
+				26,
+			},
+			expectedInstructions: []code.Instructions{
+				code.Make(code.OpConstant, 0),
+				code.Make(code.OpSetGlobal, 0),
+				code.Make(code.OpGetGlobal, 0),
+				code.Make(code.OpConstant, 1),
+				code.Make(code.OpConstant, 2),
+				code.Make(code.OpConstant, 3),
+				code.Make(code.OpCall, 3),
+				code.Make(code.OpPop),
+			},
+		},
+	}
+
+	runCompilerTests(t, tests)
 }

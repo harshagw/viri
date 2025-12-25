@@ -4,17 +4,18 @@ package objects
 type Type string
 
 const (
-	TypeNumber    Type = "NUMBER"
-	TypeString    Type = "STRING"
-	TypeBool      Type = "BOOL"
-	TypeNil       Type = "NIL"
-	TypeFunction  Type = "FUNCTION"
-	TypeClass     Type = "CLASS"
-	TypeInstance  Type = "INSTANCE"
-	TypeNativeFun Type = "NATIVE_FUNCTION"
-	TypeArray     Type = "ARRAY"
-	TypeHash      Type = "HASH"
-	TypeNamespace Type = "NAMESPACE"
+	TypeNumber           Type = "NUMBER"
+	TypeString           Type = "STRING"
+	TypeBool             Type = "BOOL"
+	TypeNil              Type = "NIL"
+	TypeFunction         Type = "FUNCTION"
+	TypeClass            Type = "CLASS"
+	TypeInstance         Type = "INSTANCE"
+	TypeNativeFun        Type = "NATIVE_FUNCTION"
+	TypeArray            Type = "ARRAY"
+	TypeHash             Type = "HASH"
+	TypeNamespace        Type = "NAMESPACE"
+	TypeCompiledFunction Type = "COMPILED_FUNCTION"
 )
 
 // Object is a runtime value.

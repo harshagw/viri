@@ -2,41 +2,58 @@ package objects
 
 import (
 	"errors"
+	"fmt"
 	"time"
 )
 
-type Clock struct{}
+type NativeFunctionFn func(args ...Object) (Object, error)
 
-func NewClock() *Clock {
-	return &Clock{}
+type NativeFunction struct {
+	Name    string
+	NumArgs int // -1 means variadic
+	Fn      NativeFunctionFn
 }
 
-func (c *Clock) Call(exec BlockExecutor, arguments []Object) (Object, error) {
+func (n *NativeFunction) Type() Type      { return TypeNativeFun }
+func (n *NativeFunction) Inspect() string { return fmt.Sprintf("<native_fun %s>", n.Name) }
+
+func (n *NativeFunction) Call(exec BlockExecutor, arguments []Object) (Object, error) {
+	return n.Fn(arguments...)
+}
+
+func (n *NativeFunction) Arity() int {
+	return n.NumArgs
+}
+
+func (n *NativeFunction) String() string {
+	return n.Inspect()
+}
+
+var NativeFunctions = []*NativeFunction{
+	{Name: "clock", NumArgs: 0, Fn: nativeClock},
+	{Name: "len", NumArgs: 1, Fn: nativeLen},
+}
+
+func GetNativeFunctionByIndex(index int) *NativeFunction {
+	if index < 0 || index >= len(NativeFunctions) {
+		return nil
+	}
+	return NativeFunctions[index]
+}
+
+func nativeClock(args ...Object) (Object, error) {
 	return NewNumber(float64(time.Now().Unix())), nil
 }
 
-func (c *Clock) Arity() int {
-	return 0
-}
+func nativeLen(args ...Object) (Object, error) {
+	if len(args) != 1 {
+		return nil, fmt.Errorf("wrong number of arguments. got=%d, want=1", len(args))
+	}
 
-func (c *Clock) String() string {
-	return "<native_fun clock>"
-}
-
-func (c *Clock) Inspect() string { return c.String() }
-func (c *Clock) Type() Type      { return TypeNativeFun }
-
-type Len struct{}
-
-func NewLen() *Len {
-	return &Len{}
-}
-
-func (l *Len) Call(exec BlockExecutor, arguments []Object) (Object, error) {
-	value := arguments[0]
+	value := args[0]
 	switch value.Type() {
 	case TypeString:
-		return NewNumber(float64(len(value.Inspect()))), nil
+		return NewNumber(float64(len(value.(*String).Value))), nil
 	case TypeArray:
 		if arr, ok := value.(*Array); ok {
 			return NewNumber(float64(len(arr.Elements))), nil
@@ -48,14 +65,3 @@ func (l *Len) Call(exec BlockExecutor, arguments []Object) (Object, error) {
 	}
 	return nil, errors.New("invalid argument type for len function: " + string(value.Type()))
 }
-
-func (l *Len) Arity() int {
-	return 1
-}
-
-func (l *Len) String() string {
-	return "<native_fun len>"
-}
-
-func (l *Len) Inspect() string { return l.String() }
-func (l *Len) Type() Type      { return TypeNativeFun }

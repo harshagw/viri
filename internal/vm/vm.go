@@ -10,30 +10,56 @@ import (
 
 const StackSize = 2048
 const GlobalsSize = 65536
+const MaxFrames = 1024
 
 type VM struct {
-	constants    []objects.Object
-	instructions code.Instructions
+	constants []objects.Object
 
 	stack []objects.Object
 	sp    int // Always points to the next value. Top of stack is stack[sp-1]
 
 	globals []objects.Object
+
+	frames      []*Frame
+	framesIndex int // Always points to the next frame to be used. Top of frame is frames[framesIndex-1]
 }
 
 func New(bytecode *compiler.Bytecode) *VM {
+	// Wrap the main program in a compiled function
+	mainFn := &objects.CompiledFunction{Instructions: bytecode.Instructions}
+	mainFrame := NewFrame(mainFn, 0)
+
+	frames := make([]*Frame, MaxFrames)
+	frames[0] = mainFrame
+
 	return &VM{
-		instructions: bytecode.Instructions,
-		constants:    bytecode.Constants,
+		constants: bytecode.Constants,
 
 		stack:   make([]objects.Object, StackSize),
 		sp:      0,
 		globals: make([]objects.Object, GlobalsSize),
+
+		frames:      frames,
+		framesIndex: 1,
 	}
 }
 
 func (vm *VM) UpdateGlobals(globals []objects.Object) {
 	vm.globals = globals
+}
+
+func (vm *VM) currentFrame() *Frame {
+	return vm.frames[vm.framesIndex-1]
+}
+
+func (vm *VM) pushFrame(f *Frame) {
+	vm.frames[vm.framesIndex] = f
+	vm.framesIndex++
+}
+
+func (vm *VM) popFrame() *Frame {
+	vm.framesIndex--
+	return vm.frames[vm.framesIndex]
 }
 
 func (vm *VM) StackTop() objects.Object {
@@ -43,15 +69,29 @@ func (vm *VM) StackTop() objects.Object {
 	return vm.stack[vm.sp-1]
 }
 
+// readOperands reads the operands for the current opcode and advances the instruction pointer.
+func (vm *VM) readOperands(op code.Opcode, ins code.Instructions, ip int) []int {
+	def, _ := code.Lookup(byte(op))
+	operands, read := code.ReadOperands(def, ins[ip+1:])
+	vm.currentFrame().ip += read
+	return operands
+}
+
 func (vm *VM) Run() error {
-	for ip := 0; ip < len(vm.instructions); ip++ {
-		op := code.Opcode(vm.instructions[ip])
+	var ip int
+	var ins code.Instructions
+	var op code.Opcode
+
+	for vm.currentFrame().ip < len(vm.currentFrame().Instructions())-1 {
+		vm.currentFrame().ip++
+
+		ip = vm.currentFrame().ip
+		ins = vm.currentFrame().Instructions()
+		op = code.Opcode(ins[ip])
 
 		switch op {
 		case code.OpConstant:
-			def, _ := code.Lookup(byte(op))
-			operands, read := code.ReadOperands(def, vm.instructions[ip+1:])
-			ip += read
+			operands := vm.readOperands(op, ins, ip)
 			if err := vm.push(vm.constants[operands[0]]); err != nil {
 				return err
 			}
@@ -92,18 +132,14 @@ func (vm *VM) Run() error {
 			}
 
 		case code.OpJump:
-			def, _ := code.Lookup(byte(op))
-			pos, _ := code.ReadOperands(def, vm.instructions[ip+1:])
-			ip = pos[0] - 1 // -1 because the loop will increment ip
+			pos := vm.readOperands(op, ins, ip)
+			vm.currentFrame().ip = pos[0] - 1 // -1 because the loop will increment ip
 
 		case code.OpJumpNotTruthy:
-			def, _ := code.Lookup(byte(op))
-			pos, read := code.ReadOperands(def, vm.instructions[ip+1:])
-			ip += read
-
+			pos := vm.readOperands(op, ins, ip)
 			condition := vm.pop()
 			if !objects.IsTruthy(condition) {
-				ip = pos[0] - 1 // -1 because the loop will increment ip
+				vm.currentFrame().ip = pos[0] - 1 // -1 because the loop will increment ip
 			}
 
 		case code.OpPop:
@@ -115,47 +151,44 @@ func (vm *VM) Run() error {
 			}
 
 		case code.OpSetGlobal:
-			def, _ := code.Lookup(byte(op))
-			operands, read := code.ReadOperands(def, vm.instructions[ip+1:])
-			ip += read
-
-			globalIndex := operands[0]
-			vm.globals[globalIndex] = vm.pop()
+			operands := vm.readOperands(op, ins, ip)
+			vm.globals[operands[0]] = vm.pop()
 
 		case code.OpGetGlobal:
-			def, _ := code.Lookup(byte(op))
-			operands, read := code.ReadOperands(def, vm.instructions[ip+1:])
-			ip += read
-
+			operands := vm.readOperands(op, ins, ip)
 			if err := vm.push(vm.globals[operands[0]]); err != nil {
 				return err
 			}
 
-		case code.OpArray:
-			def, _ := code.Lookup(byte(op))
-			operands, read := code.ReadOperands(def, vm.instructions[ip+1:])
-			ip += read
+		case code.OpSetLocal:
+			operands := vm.readOperands(op, ins, ip)
+			frame := vm.currentFrame()
+			vm.stack[frame.basePointer+operands[0]] = vm.pop()
 
+		case code.OpGetLocal:
+			operands := vm.readOperands(op, ins, ip)
+			frame := vm.currentFrame()
+			if err := vm.push(vm.stack[frame.basePointer+operands[0]]); err != nil {
+				return err
+			}
+
+		case code.OpArray:
+			operands := vm.readOperands(op, ins, ip)
 			numElements := operands[0]
 			array := vm.buildArray(vm.sp-numElements, vm.sp)
-			vm.sp = vm.sp - numElements
-
+			vm.sp -= numElements
 			if err := vm.push(array); err != nil {
 				return err
 			}
 
 		case code.OpHash:
-			def, _ := code.Lookup(byte(op))
-			operands, read := code.ReadOperands(def, vm.instructions[ip+1:])
-			ip += read
-
+			operands := vm.readOperands(op, ins, ip)
 			numElements := operands[0]
 			hash, err := vm.buildHash(vm.sp-numElements, vm.sp)
 			if err != nil {
 				return err
 			}
-			vm.sp = vm.sp - numElements
-
+			vm.sp -= numElements
 			if err := vm.push(hash); err != nil {
 				return err
 			}
@@ -180,8 +213,87 @@ func (vm *VM) Run() error {
 		case code.OpPrint:
 			value := vm.pop()
 			fmt.Println(objects.Stringify(value))
+
+		case code.OpCall:
+			operands := vm.readOperands(op, ins, ip)
+			if err := vm.executeCall(operands[0]); err != nil {
+				return err
+			}
+
+		case code.OpReturnValue:
+			returnValue := vm.pop()
+
+			frame := vm.popFrame()
+			vm.sp = frame.basePointer - 1 // -1 to also pop the function itself
+
+			if err := vm.push(returnValue); err != nil {
+				return err
+			}
+
+		case code.OpReturn:
+			frame := vm.popFrame()
+			vm.sp = frame.basePointer - 1 // -1 to also pop the function itself
+
+			if err := vm.push(objects.NilValue); err != nil {
+				return err
+			}
+
+		case code.OpGetNative:
+			operands := vm.readOperands(op, ins, ip)
+			nativeIndex := operands[0]
+
+			nativeFn := objects.GetNativeFunctionByIndex(nativeIndex)
+			if nativeFn == nil {
+				return fmt.Errorf("native function index out of bounds: %d", nativeIndex)
+			}
+
+			if err := vm.push(nativeFn); err != nil {
+				return err
+			}
 		}
 	}
+
+	return nil
+}
+
+func (vm *VM) executeCall(numArgs int) error {
+	callee := vm.stack[vm.sp-1-numArgs]
+
+	switch fn := callee.(type) {
+	case *objects.CompiledFunction:
+		return vm.callFunction(fn, numArgs)
+	case *objects.NativeFunction:
+		return vm.callNativeFunction(fn, numArgs)
+	default:
+		return fmt.Errorf("calling non-function: %s", callee.Type())
+	}
+}
+
+func (vm *VM) callNativeFunction(fn *objects.NativeFunction, numArgs int) error {
+	args := vm.stack[vm.sp-numArgs : vm.sp]
+
+	result, err := fn.Fn(args...)
+	if err != nil {
+		return err
+	}
+
+	vm.sp = vm.sp - numArgs - 1 // pop arguments and the function itself
+
+	if result != nil {
+		return vm.push(result)
+	}
+	return vm.push(objects.NilValue)
+}
+
+func (vm *VM) callFunction(fn *objects.CompiledFunction, numArgs int) error {
+	if numArgs != fn.NumParameters {
+		return fmt.Errorf("wrong number of arguments: want=%d, got=%d",
+			fn.NumParameters, numArgs)
+	}
+
+	frame := NewFrame(fn, vm.sp-numArgs)
+	vm.pushFrame(frame)
+	vm.sp = frame.basePointer + fn.NumLocals
 
 	return nil
 }

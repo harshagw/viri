@@ -29,8 +29,10 @@ func NewInterpreter(globals *objects.Environment) *Interpreter {
 	if globals == nil {
 		globals = objects.NewEnvironment(nil)
 	}
-	globals.Define("clock", objects.NewClock())
-	globals.Define("len", objects.NewLen())
+	// Define all native functions
+	for _, nativeFn := range objects.NativeFunctions {
+		globals.Define(nativeFn.Name, nativeFn)
+	}
 	return &Interpreter{
 		environment:   globals,
 		globals:       globals,

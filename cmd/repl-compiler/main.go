@@ -73,8 +73,7 @@ func main() {
 
 		newStmts := lineModule.GetAllStatements()
 
-		comp := compiler.New(handler)
-		comp.UpdateSymbolTable(symbolTable)
+		comp := compiler.NewWithState(handler, symbolTable)
 		err = comp.Compile(newStmts[0])
 		if err != nil {
 			color.New(color.FgRed).Fprintf(color.Error, "Compilation error: %v\n", err)

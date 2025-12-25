@@ -9,26 +9,71 @@ import (
 	"github.com/harshagw/viri/internal/token"
 )
 
+type CompilationScope struct {
+	instructions code.Instructions
+}
+
 type Compiler struct {
-	instructions      code.Instructions
 	constants         []objects.Object
 	diagnosticHandler objects.DiagnosticHandler
 	symbolTable       *SymbolTable
 	loopStack         *LoopStack
+
+	scopes     []CompilationScope
+	scopeIndex int
 }
 
 func New(diagnosticHandler objects.DiagnosticHandler) *Compiler {
+	return NewWithState(diagnosticHandler, nil)
+}
+
+func NewWithState(diagnosticHandler objects.DiagnosticHandler, symbolTable *SymbolTable) *Compiler {
+	mainScope := CompilationScope{
+		instructions: code.Instructions{},
+	}
+
+	if symbolTable == nil {
+		symbolTable = NewSymbolTable()
+	}
+
+	// Ensure native functions are always defined in the symbol table
+	for i, nativeFn := range objects.NativeFunctions {
+		if _, exists := symbolTable.store[nativeFn.Name]; !exists {
+			symbolTable.DefineNative(i, nativeFn.Name)
+		}
+	}
+
 	return &Compiler{
-		instructions:      code.Instructions{},
 		constants:         []objects.Object{},
 		diagnosticHandler: diagnosticHandler,
-		symbolTable:       NewSymbolTable(),
+		symbolTable:       symbolTable,
 		loopStack:         NewLoopStack(),
+		scopes:            []CompilationScope{mainScope},
+		scopeIndex:        0,
 	}
 }
 
-func (c *Compiler) UpdateSymbolTable(symbolTable *SymbolTable) {
-	c.symbolTable = symbolTable
+func (c *Compiler) currentInstructions() code.Instructions {
+	return c.scopes[c.scopeIndex].instructions
+}
+
+func (c *Compiler) enterScope() {
+	scope := CompilationScope{
+		instructions: code.Instructions{},
+	}
+	c.scopes = append(c.scopes, scope)
+	c.scopeIndex++
+	c.symbolTable = NewEnclosedSymbolTable(c.symbolTable)
+}
+
+func (c *Compiler) leaveScope() code.Instructions {
+	instructions := c.currentInstructions()
+
+	c.scopes = c.scopes[:len(c.scopes)-1]
+	c.scopeIndex--
+	c.symbolTable = c.symbolTable.Outer
+
+	return instructions
 }
 
 func (c *Compiler) Compile(node interface{}) error {
@@ -76,17 +121,17 @@ func (c *Compiler) compileStatement(stmt ast.Stmt) error {
 			jumpPos := c.emit(code.OpJump, 9999)
 
 			// Patch the OpJumpNotTruthy to jump to else branch
-			c.changeOperand(jumpNotTruthyPos, len(c.instructions))
+			c.changeOperand(jumpNotTruthyPos, len(c.currentInstructions()))
 
 			if err := c.compileStatement(stmt.ElseBranch); err != nil {
 				return err
 			}
 
 			// Patch the OpJump to jump past else branch
-			c.changeOperand(jumpPos, len(c.instructions))
+			c.changeOperand(jumpPos, len(c.currentInstructions()))
 		} else {
 			// No else branch - patch jump to skip if branch
-			c.changeOperand(jumpNotTruthyPos, len(c.instructions))
+			c.changeOperand(jumpNotTruthyPos, len(c.currentInstructions()))
 		}
 
 		return nil
@@ -102,7 +147,7 @@ func (c *Compiler) compileStatement(stmt ast.Stmt) error {
 			c.emit(code.OpNil) // Default to nil if no initializer
 		}
 
-		c.emit(code.OpSetGlobal, symbol.Index)
+		c.emitSetSymbol(symbol)
 		return nil
 
 	case *ast.PrintStmt:
@@ -114,7 +159,7 @@ func (c *Compiler) compileStatement(stmt ast.Stmt) error {
 
 	case *ast.WhileStmt:
 		// Record the start of the loop (where continue jumps to)
-		loopStart := len(c.instructions)
+		loopStart := len(c.currentInstructions())
 		c.loopStack.Push(loopStart)
 
 		// Compile condition
@@ -134,7 +179,7 @@ func (c *Compiler) compileStatement(stmt ast.Stmt) error {
 		c.emit(code.OpJump, loopStart)
 
 		// Patch jumps and exit loop context
-		loopEnd := len(c.instructions)
+		loopEnd := len(c.currentInstructions())
 		c.changeOperand(exitJump, loopEnd)
 		c.patchBreakJumps(loopEnd)
 		c.loopStack.Pop()
@@ -148,7 +193,7 @@ func (c *Compiler) compileStatement(stmt ast.Stmt) error {
 		}
 
 		// Record the start of the condition check
-		loopStart := len(c.instructions)
+		loopStart := len(c.currentInstructions())
 
 		// For for-loops, continue target is not yet known (it's before increment)
 		c.loopStack.Push(-1)
@@ -167,7 +212,7 @@ func (c *Compiler) compileStatement(stmt ast.Stmt) error {
 		}
 
 		// Set and patch continue jumps to point here (before increment)
-		c.patchContinueJumps(len(c.instructions))
+		c.patchContinueJumps(len(c.currentInstructions()))
 
 		// Compile increment (if present)
 		if stmt.Increment != nil {
@@ -181,7 +226,7 @@ func (c *Compiler) compileStatement(stmt ast.Stmt) error {
 		c.emit(code.OpJump, loopStart)
 
 		// Patch exit and break jumps
-		loopEnd := len(c.instructions)
+		loopEnd := len(c.currentInstructions())
 		if stmt.Condition != nil {
 			c.changeOperand(exitJump, loopEnd)
 		}
@@ -208,6 +253,29 @@ func (c *Compiler) compileStatement(stmt ast.Stmt) error {
 		} else {
 			// For while-loops, continuePos is already known
 			c.emit(code.OpJump, c.loopStack.ContinuePos())
+		}
+		return nil
+
+	case *ast.FunctionStmt:
+		// Define the function name in the current scope
+		symbol := c.symbolTable.Define(stmt.Name.Lexeme, false)
+
+		// Compile the function body
+		if err := c.compileFunction(stmt.Params, stmt.Body); err != nil {
+			return err
+		}
+
+		c.emitSetSymbol(symbol)
+		return nil
+
+	case *ast.ReturnStmt:
+		if stmt.Value != nil {
+			if err := c.compileExpression(stmt.Value); err != nil {
+				return err
+			}
+			c.emit(code.OpReturnValue)
+		} else {
+			c.emit(code.OpReturn)
 		}
 		return nil
 
@@ -326,7 +394,7 @@ func (c *Compiler) compileExpression(node ast.Expr) error {
 		if !ok {
 			return c.error(node.Name, fmt.Sprintf("undefined variable %s", node.Name.Lexeme))
 		}
-		c.emit(code.OpGetGlobal, symbol.Index)
+		c.emitGetSymbol(symbol)
 
 	case *ast.AssignExpr:
 		symbol, ok := c.symbolTable.Resolve(node.Name.Lexeme)
@@ -340,9 +408,10 @@ func (c *Compiler) compileExpression(node ast.Expr) error {
 		if err := c.compileExpression(node.Value); err != nil {
 			return err
 		}
-		c.emit(code.OpSetGlobal, symbol.Index)
+
+		c.emitSetSymbol(symbol)
 		// Assignment is an expression, so we need to leave the value on the stack
-		c.emit(code.OpGetGlobal, symbol.Index)
+		c.emitGetSymbol(symbol)
 
 	case *ast.ArrayLiteralExpr:
 		for _, elem := range node.Elements {
@@ -398,19 +467,37 @@ func (c *Compiler) compileExpression(node ast.Expr) error {
 			if err := c.compileExpression(node.Right); err != nil {
 				return err
 			}
-			c.changeOperand(jumpIfFalsy, len(c.instructions))
+			c.changeOperand(jumpIfFalsy, len(c.currentInstructions()))
 
 		case token.OR:
 			// Short-circuit OR: if left is truthy, return left; else return right
 			c.emit(code.OpDup)
 			jumpIfFalsy := c.emit(code.OpJumpNotTruthy, 9999)
 			jumpToEnd := c.emit(code.OpJump, 9999)
-			c.changeOperand(jumpIfFalsy, len(c.instructions))
+			c.changeOperand(jumpIfFalsy, len(c.currentInstructions()))
 			c.emit(code.OpPop)
 			if err := c.compileExpression(node.Right); err != nil {
 				return err
 			}
-			c.changeOperand(jumpToEnd, len(c.instructions))
+			c.changeOperand(jumpToEnd, len(c.currentInstructions()))
+		}
+
+	case *ast.CallExpr:
+		if err := c.compileExpression(node.Callee); err != nil {
+			return err
+		}
+
+		for _, arg := range node.Arguments {
+			if err := c.compileExpression(arg); err != nil {
+				return err
+			}
+		}
+
+		c.emit(code.OpCall, len(node.Arguments))
+
+	case *ast.FunctionExpr:
+		if err := c.compileFunction(node.Params, node.Body); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -418,7 +505,7 @@ func (c *Compiler) compileExpression(node ast.Expr) error {
 
 func (c *Compiler) Bytecode() *Bytecode {
 	return &Bytecode{
-		Instructions: c.instructions,
+		Instructions: c.currentInstructions(),
 		Constants:    c.constants,
 	}
 }
@@ -430,22 +517,71 @@ func (c *Compiler) emit(op code.Opcode, operands ...int) int {
 }
 
 func (c *Compiler) changeOperand(opPos int, operands ...int) {
-	op := code.Opcode(c.instructions[opPos])
+	op := code.Opcode(c.currentInstructions()[opPos])
 	newInstruction := code.Make(op, operands...)
 	for i := 0; i < len(newInstruction); i++ {
-		c.instructions[opPos+i] = newInstruction[i]
+		c.scopes[c.scopeIndex].instructions[opPos+i] = newInstruction[i]
 	}
 }
 
 func (c *Compiler) addInstruction(ins []byte) int {
-	posNewInstruction := len(c.instructions)
-	c.instructions = append(c.instructions, ins...)
+	posNewInstruction := len(c.currentInstructions())
+	c.scopes[c.scopeIndex].instructions = append(c.scopes[c.scopeIndex].instructions, ins...)
 	return posNewInstruction
 }
 
 func (c *Compiler) emitConstant(obj objects.Object) int {
 	c.constants = append(c.constants, obj)
 	return c.emit(code.OpConstant, len(c.constants)-1)
+}
+
+func (c *Compiler) emitGetSymbol(s Symbol) {
+	switch s.Scope {
+	case GlobalScope:
+		c.emit(code.OpGetGlobal, s.Index)
+	case LocalScope:
+		c.emit(code.OpGetLocal, s.Index)
+	case NativeScope:
+		c.emit(code.OpGetNative, s.Index)
+	}
+}
+
+func (c *Compiler) emitSetSymbol(s Symbol) {
+	switch s.Scope {
+	case GlobalScope:
+		c.emit(code.OpSetGlobal, s.Index)
+	case LocalScope:
+		c.emit(code.OpSetLocal, s.Index)
+	}
+}
+
+func (c *Compiler) compileFunction(params []*token.Token, body *ast.BlockStmt) error {
+	c.enterScope()
+
+	// Define parameters as local variables
+	for _, param := range params {
+		c.symbolTable.Define(param.Lexeme, false)
+	}
+
+	// Compile the function body
+	if err := c.compileStatement(body); err != nil {
+		return err
+	}
+
+	// If the function doesn't have an explicit return, emit OpReturn
+	c.emit(code.OpReturn)
+
+	numLocals := c.symbolTable.NumDefinitions()
+	instructions := c.leaveScope()
+
+	compiledFn := &objects.CompiledFunction{
+		Instructions:  instructions,
+		NumLocals:     numLocals,
+		NumParameters: len(params),
+	}
+
+	c.emitConstant(compiledFn)
+	return nil
 }
 
 type Bytecode struct {
