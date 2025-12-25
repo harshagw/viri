@@ -2618,3 +2618,899 @@ func TestClockNativeFunction(t *testing.T) {
 		t.Fatalf("clock() should return a positive number, got %f", num)
 	}
 }
+
+func TestClosures(t *testing.T) {
+	tests := []vmTestCase{
+		// Simple closure that captures a variable
+		// var newClosure = fun(a) { return fun() { return a; }; };
+		// var closure = newClosure(99);
+		// closure(); => 99
+		{&ast.BlockStmt{
+			Statements: []ast.Stmt{
+				&ast.VarDeclStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "newClosure"},
+					Initializer: &ast.FunctionExpr{
+						Params: []*token.Token{
+							{Type: token.IDENTIFIER, Lexeme: "a"},
+						},
+						Body: &ast.BlockStmt{
+							Statements: []ast.Stmt{
+								&ast.ReturnStmt{
+									Keyword: &token.Token{Type: token.RETURN},
+									Value: &ast.FunctionExpr{
+										Params: []*token.Token{},
+										Body: &ast.BlockStmt{
+											Statements: []ast.Stmt{
+												&ast.ReturnStmt{
+													Keyword: &token.Token{Type: token.RETURN},
+													Value: &ast.VariableExpr{
+														Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "a"},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				&ast.VarDeclStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "closure"},
+					Initializer: &ast.CallExpr{
+						Callee: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "newClosure"},
+						},
+						Arguments: []ast.Expr{
+							&ast.LiteralExpr{Value: 99},
+						},
+					},
+				},
+				&ast.ExprStmt{
+					Expr: &ast.CallExpr{
+						Callee: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "closure"},
+						},
+						Arguments: []ast.Expr{},
+					},
+				},
+			},
+		}, 99},
+		// Closure capturing a local variable defined in outer function
+		// fun() { var x = 10; return fun() { return x; }; }()(); => 10
+		{&ast.ExprStmt{
+			Expr: &ast.CallExpr{
+				Callee: &ast.CallExpr{
+					Callee: &ast.FunctionExpr{
+						Params: []*token.Token{},
+						Body: &ast.BlockStmt{
+							Statements: []ast.Stmt{
+								&ast.VarDeclStmt{
+									Name:        &token.Token{Type: token.IDENTIFIER, Lexeme: "x"},
+									Initializer: &ast.LiteralExpr{Value: 10},
+									IsConst:     false,
+								},
+								&ast.ReturnStmt{
+									Keyword: &token.Token{Type: token.RETURN},
+									Value: &ast.FunctionExpr{
+										Params: []*token.Token{},
+										Body: &ast.BlockStmt{
+											Statements: []ast.Stmt{
+												&ast.ReturnStmt{
+													Keyword: &token.Token{Type: token.RETURN},
+													Value: &ast.VariableExpr{
+														Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "x"},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					Arguments: []ast.Expr{},
+				},
+				Arguments: []ast.Expr{},
+			},
+		}, 10},
+		// Closure that captures and uses a variable in computation
+		// var newAdder = fun(a) { return fun(b) { return a + b; }; };
+		// var addTwo = newAdder(2);
+		// addTwo(3); => 5
+		{&ast.BlockStmt{
+			Statements: []ast.Stmt{
+				&ast.VarDeclStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "newAdder"},
+					Initializer: &ast.FunctionExpr{
+						Params: []*token.Token{
+							{Type: token.IDENTIFIER, Lexeme: "a"},
+						},
+						Body: &ast.BlockStmt{
+							Statements: []ast.Stmt{
+								&ast.ReturnStmt{
+									Keyword: &token.Token{Type: token.RETURN},
+									Value: &ast.FunctionExpr{
+										Params: []*token.Token{
+											{Type: token.IDENTIFIER, Lexeme: "b"},
+										},
+										Body: &ast.BlockStmt{
+											Statements: []ast.Stmt{
+												&ast.ReturnStmt{
+													Keyword: &token.Token{Type: token.RETURN},
+													Value: &ast.BinaryExpr{
+														Left: &ast.VariableExpr{
+															Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "a"},
+														},
+														Right: &ast.VariableExpr{
+															Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "b"},
+														},
+														Operator: &token.Token{Type: token.PLUS},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				&ast.VarDeclStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "addTwo"},
+					Initializer: &ast.CallExpr{
+						Callee: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "newAdder"},
+						},
+						Arguments: []ast.Expr{
+							&ast.LiteralExpr{Value: 2},
+						},
+					},
+				},
+				&ast.ExprStmt{
+					Expr: &ast.CallExpr{
+						Callee: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "addTwo"},
+						},
+						Arguments: []ast.Expr{
+							&ast.LiteralExpr{Value: 3},
+						},
+					},
+				},
+			},
+		}, 5},
+		// Multiple closures from same factory
+		// var newAdder = fun(a) { return fun(b) { return a + b; }; };
+		// var addTwo = newAdder(2);
+		// var addThree = newAdder(3);
+		// addTwo(2) + addThree(2); => 4 + 5 = 9
+		{&ast.BlockStmt{
+			Statements: []ast.Stmt{
+				&ast.VarDeclStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "newAdder"},
+					Initializer: &ast.FunctionExpr{
+						Params: []*token.Token{
+							{Type: token.IDENTIFIER, Lexeme: "a"},
+						},
+						Body: &ast.BlockStmt{
+							Statements: []ast.Stmt{
+								&ast.ReturnStmt{
+									Keyword: &token.Token{Type: token.RETURN},
+									Value: &ast.FunctionExpr{
+										Params: []*token.Token{
+											{Type: token.IDENTIFIER, Lexeme: "b"},
+										},
+										Body: &ast.BlockStmt{
+											Statements: []ast.Stmt{
+												&ast.ReturnStmt{
+													Keyword: &token.Token{Type: token.RETURN},
+													Value: &ast.BinaryExpr{
+														Left: &ast.VariableExpr{
+															Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "a"},
+														},
+														Right: &ast.VariableExpr{
+															Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "b"},
+														},
+														Operator: &token.Token{Type: token.PLUS},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				&ast.VarDeclStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "addTwo"},
+					Initializer: &ast.CallExpr{
+						Callee: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "newAdder"},
+						},
+						Arguments: []ast.Expr{
+							&ast.LiteralExpr{Value: 2},
+						},
+					},
+				},
+				&ast.VarDeclStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "addThree"},
+					Initializer: &ast.CallExpr{
+						Callee: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "newAdder"},
+						},
+						Arguments: []ast.Expr{
+							&ast.LiteralExpr{Value: 3},
+						},
+					},
+				},
+				&ast.ExprStmt{
+					Expr: &ast.BinaryExpr{
+						Left: &ast.CallExpr{
+							Callee: &ast.VariableExpr{
+								Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "addTwo"},
+							},
+							Arguments: []ast.Expr{
+								&ast.LiteralExpr{Value: 2},
+							},
+						},
+						Right: &ast.CallExpr{
+							Callee: &ast.VariableExpr{
+								Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "addThree"},
+							},
+							Arguments: []ast.Expr{
+								&ast.LiteralExpr{Value: 2},
+							},
+						},
+						Operator: &token.Token{Type: token.PLUS},
+					},
+				},
+			},
+		}, 9},
+		// Nested closures - capturing from multiple levels
+		// var newAdderOuter = fun(a) {
+		//   return fun(b) {
+		//     return fun(c) { return a + b + c; };
+		//   };
+		// };
+		// var newAdderInner = newAdderOuter(1);
+		// var adder = newAdderInner(2);
+		// adder(3); => 6
+		{&ast.BlockStmt{
+			Statements: []ast.Stmt{
+				&ast.VarDeclStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "newAdderOuter"},
+					Initializer: &ast.FunctionExpr{
+						Params: []*token.Token{
+							{Type: token.IDENTIFIER, Lexeme: "a"},
+						},
+						Body: &ast.BlockStmt{
+							Statements: []ast.Stmt{
+								&ast.ReturnStmt{
+									Keyword: &token.Token{Type: token.RETURN},
+									Value: &ast.FunctionExpr{
+										Params: []*token.Token{
+											{Type: token.IDENTIFIER, Lexeme: "b"},
+										},
+										Body: &ast.BlockStmt{
+											Statements: []ast.Stmt{
+												&ast.ReturnStmt{
+													Keyword: &token.Token{Type: token.RETURN},
+													Value: &ast.FunctionExpr{
+														Params: []*token.Token{
+															{Type: token.IDENTIFIER, Lexeme: "c"},
+														},
+														Body: &ast.BlockStmt{
+															Statements: []ast.Stmt{
+																&ast.ReturnStmt{
+																	Keyword: &token.Token{Type: token.RETURN},
+																	Value: &ast.BinaryExpr{
+																		Left: &ast.BinaryExpr{
+																			Left: &ast.VariableExpr{
+																				Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "a"},
+																			},
+																			Right: &ast.VariableExpr{
+																				Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "b"},
+																			},
+																			Operator: &token.Token{Type: token.PLUS},
+																		},
+																		Right: &ast.VariableExpr{
+																			Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "c"},
+																		},
+																		Operator: &token.Token{Type: token.PLUS},
+																	},
+																},
+															},
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				&ast.VarDeclStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "newAdderInner"},
+					Initializer: &ast.CallExpr{
+						Callee: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "newAdderOuter"},
+						},
+						Arguments: []ast.Expr{
+							&ast.LiteralExpr{Value: 1},
+						},
+					},
+				},
+				&ast.VarDeclStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "adder"},
+					Initializer: &ast.CallExpr{
+						Callee: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "newAdderInner"},
+						},
+						Arguments: []ast.Expr{
+							&ast.LiteralExpr{Value: 2},
+						},
+					},
+				},
+				&ast.ExprStmt{
+					Expr: &ast.CallExpr{
+						Callee: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "adder"},
+						},
+						Arguments: []ast.Expr{
+							&ast.LiteralExpr{Value: 3},
+						},
+					},
+				},
+			},
+		}, 6},
+		// Closure with global variable access (not captured as free)
+		// var globalVar = 100;
+		// var closure = fun(a) { return fun() { return a + globalVar; }; };
+		// closure(5)(); => 105
+		{&ast.BlockStmt{
+			Statements: []ast.Stmt{
+				&ast.VarDeclStmt{
+					Name:        &token.Token{Type: token.IDENTIFIER, Lexeme: "globalVar"},
+					Initializer: &ast.LiteralExpr{Value: 100},
+					IsConst:     false,
+				},
+				&ast.VarDeclStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "closure"},
+					Initializer: &ast.FunctionExpr{
+						Params: []*token.Token{
+							{Type: token.IDENTIFIER, Lexeme: "a"},
+						},
+						Body: &ast.BlockStmt{
+							Statements: []ast.Stmt{
+								&ast.ReturnStmt{
+									Keyword: &token.Token{Type: token.RETURN},
+									Value: &ast.FunctionExpr{
+										Params: []*token.Token{},
+										Body: &ast.BlockStmt{
+											Statements: []ast.Stmt{
+												&ast.ReturnStmt{
+													Keyword: &token.Token{Type: token.RETURN},
+													Value: &ast.BinaryExpr{
+														Left: &ast.VariableExpr{
+															Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "a"},
+														},
+														Right: &ast.VariableExpr{
+															Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "globalVar"},
+														},
+														Operator: &token.Token{Type: token.PLUS},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				&ast.ExprStmt{
+					Expr: &ast.CallExpr{
+						Callee: &ast.CallExpr{
+							Callee: &ast.VariableExpr{
+								Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "closure"},
+							},
+							Arguments: []ast.Expr{
+								&ast.LiteralExpr{Value: 5},
+							},
+						},
+						Arguments: []ast.Expr{},
+					},
+				},
+			},
+		}, 105},
+		// Multiple closures from same scope should have independent captures
+		// var makeCounter = fun(start) {
+		//   return fun() { return start; };
+		// };
+		// var c1 = makeCounter(10);
+		// var c2 = makeCounter(20);
+		// c1() + c2(); => 30
+		{&ast.BlockStmt{
+			Statements: []ast.Stmt{
+				&ast.VarDeclStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "makeCounter"},
+					Initializer: &ast.FunctionExpr{
+						Params: []*token.Token{
+							{Type: token.IDENTIFIER, Lexeme: "start"},
+						},
+						Body: &ast.BlockStmt{
+							Statements: []ast.Stmt{
+								&ast.ReturnStmt{
+									Keyword: &token.Token{Type: token.RETURN},
+									Value: &ast.FunctionExpr{
+										Params: []*token.Token{},
+										Body: &ast.BlockStmt{
+											Statements: []ast.Stmt{
+												&ast.ReturnStmt{
+													Keyword: &token.Token{Type: token.RETURN},
+													Value: &ast.VariableExpr{
+														Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "start"},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				&ast.VarDeclStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "c1"},
+					Initializer: &ast.CallExpr{
+						Callee: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "makeCounter"},
+						},
+						Arguments: []ast.Expr{
+							&ast.LiteralExpr{Value: 10},
+						},
+					},
+				},
+				&ast.VarDeclStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "c2"},
+					Initializer: &ast.CallExpr{
+						Callee: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "makeCounter"},
+						},
+						Arguments: []ast.Expr{
+							&ast.LiteralExpr{Value: 20},
+						},
+					},
+				},
+				&ast.ExprStmt{
+					Expr: &ast.BinaryExpr{
+						Left: &ast.CallExpr{
+							Callee: &ast.VariableExpr{
+								Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "c1"},
+							},
+							Arguments: []ast.Expr{},
+						},
+						Right: &ast.CallExpr{
+							Callee: &ast.VariableExpr{
+								Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "c2"},
+							},
+							Arguments: []ast.Expr{},
+						},
+						Operator: &token.Token{Type: token.PLUS},
+					},
+				},
+			},
+		}, 30},
+		// Closure capturing multiple variables
+		// var makePair = fun(a, b) { return fun() { return a + b; }; };
+		// makePair(3, 7)(); => 10
+		{&ast.BlockStmt{
+			Statements: []ast.Stmt{
+				&ast.VarDeclStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "makePair"},
+					Initializer: &ast.FunctionExpr{
+						Params: []*token.Token{
+							{Type: token.IDENTIFIER, Lexeme: "a"},
+							{Type: token.IDENTIFIER, Lexeme: "b"},
+						},
+						Body: &ast.BlockStmt{
+							Statements: []ast.Stmt{
+								&ast.ReturnStmt{
+									Keyword: &token.Token{Type: token.RETURN},
+									Value: &ast.FunctionExpr{
+										Params: []*token.Token{},
+										Body: &ast.BlockStmt{
+											Statements: []ast.Stmt{
+												&ast.ReturnStmt{
+													Keyword: &token.Token{Type: token.RETURN},
+													Value: &ast.BinaryExpr{
+														Left: &ast.VariableExpr{
+															Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "a"},
+														},
+														Right: &ast.VariableExpr{
+															Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "b"},
+														},
+														Operator: &token.Token{Type: token.PLUS},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				&ast.ExprStmt{
+					Expr: &ast.CallExpr{
+						Callee: &ast.CallExpr{
+							Callee: &ast.VariableExpr{
+								Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "makePair"},
+							},
+							Arguments: []ast.Expr{
+								&ast.LiteralExpr{Value: 3},
+								&ast.LiteralExpr{Value: 7},
+							},
+						},
+						Arguments: []ast.Expr{},
+					},
+				},
+			},
+		}, 10},
+	}
+
+	runVmTests(t, tests)
+}
+
+func TestMutableClosures(t *testing.T) {
+	tests := []vmTestCase{
+		// Counter closure - closure modifies captured variable
+		// var makeCounter = fun() {
+		//   var count = 0;
+		//   return fun() {
+		//     count = count + 1;
+		//     return count;
+		//   };
+		// };
+		// var counter = makeCounter();
+		// counter(); counter(); counter(); => 3
+		{&ast.BlockStmt{
+			Statements: []ast.Stmt{
+				&ast.VarDeclStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "makeCounter"},
+					Initializer: &ast.FunctionExpr{
+						Params: []*token.Token{},
+						Body: &ast.BlockStmt{
+							Statements: []ast.Stmt{
+								&ast.VarDeclStmt{
+									Name:        &token.Token{Type: token.IDENTIFIER, Lexeme: "count"},
+									Initializer: &ast.LiteralExpr{Value: 0},
+									IsConst:     false,
+								},
+								&ast.ReturnStmt{
+									Keyword: &token.Token{Type: token.RETURN},
+									Value: &ast.FunctionExpr{
+										Params: []*token.Token{},
+										Body: &ast.BlockStmt{
+											Statements: []ast.Stmt{
+												&ast.ExprStmt{
+													Expr: &ast.AssignExpr{
+														Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "count"},
+														Value: &ast.BinaryExpr{
+															Left: &ast.VariableExpr{
+																Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "count"},
+															},
+															Right:    &ast.LiteralExpr{Value: 1},
+															Operator: &token.Token{Type: token.PLUS},
+														},
+													},
+												},
+												&ast.ReturnStmt{
+													Keyword: &token.Token{Type: token.RETURN},
+													Value: &ast.VariableExpr{
+														Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "count"},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				&ast.VarDeclStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "counter"},
+					Initializer: &ast.CallExpr{
+						Callee: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "makeCounter"},
+						},
+						Arguments: []ast.Expr{},
+					},
+				},
+				// Call counter 3 times
+				&ast.ExprStmt{
+					Expr: &ast.CallExpr{
+						Callee: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "counter"},
+						},
+						Arguments: []ast.Expr{},
+					},
+				},
+				&ast.ExprStmt{
+					Expr: &ast.CallExpr{
+						Callee: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "counter"},
+						},
+						Arguments: []ast.Expr{},
+					},
+				},
+				&ast.ExprStmt{
+					Expr: &ast.CallExpr{
+						Callee: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "counter"},
+						},
+						Arguments: []ast.Expr{},
+					},
+				},
+			},
+		}, 3},
+		// Two independent counters
+		// var makeCounter = fun() {
+		//   var count = 0;
+		//   return fun() { count = count + 1; return count; };
+		// };
+		// var c1 = makeCounter();
+		// var c2 = makeCounter();
+		// c1(); c1(); c2(); c1() + c2(); => 3 + 2 = 5
+		{&ast.BlockStmt{
+			Statements: []ast.Stmt{
+				&ast.VarDeclStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "makeCounter"},
+					Initializer: &ast.FunctionExpr{
+						Params: []*token.Token{},
+						Body: &ast.BlockStmt{
+							Statements: []ast.Stmt{
+								&ast.VarDeclStmt{
+									Name:        &token.Token{Type: token.IDENTIFIER, Lexeme: "count"},
+									Initializer: &ast.LiteralExpr{Value: 0},
+									IsConst:     false,
+								},
+								&ast.ReturnStmt{
+									Keyword: &token.Token{Type: token.RETURN},
+									Value: &ast.FunctionExpr{
+										Params: []*token.Token{},
+										Body: &ast.BlockStmt{
+											Statements: []ast.Stmt{
+												&ast.ExprStmt{
+													Expr: &ast.AssignExpr{
+														Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "count"},
+														Value: &ast.BinaryExpr{
+															Left: &ast.VariableExpr{
+																Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "count"},
+															},
+															Right:    &ast.LiteralExpr{Value: 1},
+															Operator: &token.Token{Type: token.PLUS},
+														},
+													},
+												},
+												&ast.ReturnStmt{
+													Keyword: &token.Token{Type: token.RETURN},
+													Value: &ast.VariableExpr{
+														Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "count"},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				&ast.VarDeclStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "c1"},
+					Initializer: &ast.CallExpr{
+						Callee: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "makeCounter"},
+						},
+						Arguments: []ast.Expr{},
+					},
+				},
+				&ast.VarDeclStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "c2"},
+					Initializer: &ast.CallExpr{
+						Callee: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "makeCounter"},
+						},
+						Arguments: []ast.Expr{},
+					},
+				},
+				// c1() twice
+				&ast.ExprStmt{
+					Expr: &ast.CallExpr{
+						Callee: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "c1"},
+						},
+						Arguments: []ast.Expr{},
+					},
+				},
+				&ast.ExprStmt{
+					Expr: &ast.CallExpr{
+						Callee: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "c1"},
+						},
+						Arguments: []ast.Expr{},
+					},
+				},
+				// c2() once
+				&ast.ExprStmt{
+					Expr: &ast.CallExpr{
+						Callee: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "c2"},
+						},
+						Arguments: []ast.Expr{},
+					},
+				},
+				// c1() + c2() => 3 + 2 = 5
+				&ast.ExprStmt{
+					Expr: &ast.BinaryExpr{
+						Left: &ast.CallExpr{
+							Callee: &ast.VariableExpr{
+								Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "c1"},
+							},
+							Arguments: []ast.Expr{},
+						},
+						Right: &ast.CallExpr{
+							Callee: &ast.VariableExpr{
+								Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "c2"},
+							},
+							Arguments: []ast.Expr{},
+						},
+						Operator: &token.Token{Type: token.PLUS},
+					},
+				},
+			},
+		}, 5},
+		// Closure with setter and getter
+		// var makeBox = fun(initial) {
+		//   var value = initial;
+		//   var get = fun() { return value; };
+		//   var set = fun(v) { value = v; };
+		//   return [get, set];
+		// };
+		// var box = makeBox(10);
+		// var get = box[0];
+		// var set = box[1];
+		// set(42);
+		// get(); => 42
+		{&ast.BlockStmt{
+			Statements: []ast.Stmt{
+				&ast.VarDeclStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "makeBox"},
+					Initializer: &ast.FunctionExpr{
+						Params: []*token.Token{
+							{Type: token.IDENTIFIER, Lexeme: "initial"},
+						},
+						Body: &ast.BlockStmt{
+							Statements: []ast.Stmt{
+								&ast.VarDeclStmt{
+									Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "value"},
+									Initializer: &ast.VariableExpr{
+										Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "initial"},
+									},
+									IsConst: false,
+								},
+								&ast.VarDeclStmt{
+									Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "get"},
+									Initializer: &ast.FunctionExpr{
+										Params: []*token.Token{},
+										Body: &ast.BlockStmt{
+											Statements: []ast.Stmt{
+												&ast.ReturnStmt{
+													Keyword: &token.Token{Type: token.RETURN},
+													Value: &ast.VariableExpr{
+														Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "value"},
+													},
+												},
+											},
+										},
+									},
+									IsConst: false,
+								},
+								&ast.VarDeclStmt{
+									Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "set"},
+									Initializer: &ast.FunctionExpr{
+										Params: []*token.Token{
+											{Type: token.IDENTIFIER, Lexeme: "v"},
+										},
+										Body: &ast.BlockStmt{
+											Statements: []ast.Stmt{
+												&ast.ExprStmt{
+													Expr: &ast.AssignExpr{
+														Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "value"},
+														Value: &ast.VariableExpr{
+															Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "v"},
+														},
+													},
+												},
+											},
+										},
+									},
+									IsConst: false,
+								},
+								&ast.ReturnStmt{
+									Keyword: &token.Token{Type: token.RETURN},
+									Value: &ast.ArrayLiteralExpr{
+										Elements: []ast.Expr{
+											&ast.VariableExpr{
+												Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "get"},
+											},
+											&ast.VariableExpr{
+												Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "set"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				&ast.VarDeclStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "box"},
+					Initializer: &ast.CallExpr{
+						Callee: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "makeBox"},
+						},
+						Arguments: []ast.Expr{
+							&ast.LiteralExpr{Value: 10},
+						},
+					},
+				},
+				&ast.VarDeclStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "getter"},
+					Initializer: &ast.IndexExpr{
+						Object: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "box"},
+						},
+						Index: &ast.LiteralExpr{Value: 0},
+					},
+				},
+				&ast.VarDeclStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "setter"},
+					Initializer: &ast.IndexExpr{
+						Object: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "box"},
+						},
+						Index: &ast.LiteralExpr{Value: 1},
+					},
+				},
+				// Call setter with 42
+				&ast.ExprStmt{
+					Expr: &ast.CallExpr{
+						Callee: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "setter"},
+						},
+						Arguments: []ast.Expr{
+							&ast.LiteralExpr{Value: 42},
+						},
+					},
+				},
+				// Call getter
+				&ast.ExprStmt{
+					Expr: &ast.CallExpr{
+						Callee: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "getter"},
+						},
+						Arguments: []ast.Expr{},
+					},
+				},
+			},
+		}, 42},
+	}
+
+	runVmTests(t, tests)
+}

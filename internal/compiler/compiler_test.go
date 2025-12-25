@@ -571,7 +571,7 @@ func TestVarStatements(t *testing.T) {
 			expectedInstructions: []code.Instructions{
 				code.Make(code.OpConstant, 0),
 				code.Make(code.OpSetGlobal, 0),
-				code.Make(code.OpConstant, 1),
+				code.Make(code.OpClosure, 1, 0),
 				code.Make(code.OpPop),
 			},
 		},
@@ -606,7 +606,7 @@ func TestVarStatements(t *testing.T) {
 				},
 			},
 			expectedInstructions: []code.Instructions{
-				code.Make(code.OpConstant, 1),
+				code.Make(code.OpClosure, 1, 0),
 			},
 		},
 		{
@@ -656,7 +656,7 @@ func TestVarStatements(t *testing.T) {
 				},
 			},
 			expectedInstructions: []code.Instructions{
-				code.Make(code.OpConstant, 2),
+				code.Make(code.OpClosure, 2),
 			},
 		},
 	}
@@ -1455,7 +1455,7 @@ func TestFunctionExpressions(t *testing.T) {
 				},
 			},
 			expectedInstructions: []code.Instructions{
-				code.Make(code.OpConstant, 2),
+				code.Make(code.OpClosure, 2, 0),
 			},
 		},
 		{
@@ -1486,7 +1486,7 @@ func TestFunctionExpressions(t *testing.T) {
 				},
 			},
 			expectedInstructions: []code.Instructions{
-				code.Make(code.OpConstant, 2),
+				code.Make(code.OpClosure, 2, 0),
 			},
 		},
 		{
@@ -1509,7 +1509,7 @@ func TestFunctionExpressions(t *testing.T) {
 				},
 			},
 			expectedInstructions: []code.Instructions{
-				code.Make(code.OpConstant, 0),
+				code.Make(code.OpClosure, 0, 0),
 			},
 		},
 	}
@@ -1549,7 +1549,7 @@ func TestFunctionStatements(t *testing.T) {
 				},
 			},
 			expectedInstructions: []code.Instructions{
-				code.Make(code.OpConstant, 2),
+				code.Make(code.OpClosure, 2, 0),
 				code.Make(code.OpSetGlobal, 0),
 			},
 		},
@@ -1579,7 +1579,7 @@ func TestFunctionStatements(t *testing.T) {
 				},
 			},
 			expectedInstructions: []code.Instructions{
-				code.Make(code.OpConstant, 0),
+				code.Make(code.OpClosure, 0, 0),
 				code.Make(code.OpSetGlobal, 0),
 			},
 		},
@@ -1618,7 +1618,7 @@ func TestFunctionStatements(t *testing.T) {
 				},
 			},
 			expectedInstructions: []code.Instructions{
-				code.Make(code.OpConstant, 0),
+				code.Make(code.OpClosure, 0, 0),
 				code.Make(code.OpSetGlobal, 0),
 			},
 		},
@@ -1637,8 +1637,210 @@ func TestFunctionStatements(t *testing.T) {
 				},
 			},
 			expectedInstructions: []code.Instructions{
-				code.Make(code.OpConstant, 0),
+				code.Make(code.OpClosure, 0, 0),
 				code.Make(code.OpSetGlobal, 0),
+			},
+		},
+	}
+
+	runCompilerTests(t, tests)
+}
+
+func TestClosures(t *testing.T) {
+	tests := []compilerTestCase{
+		{
+			// fun(a) { return fun(b) { return a + b; }; }
+			// Outer function takes 'a', inner function captures 'a' as free variable
+			input: &ast.FunctionExpr{
+				Params: []*token.Token{
+					{Type: token.IDENTIFIER, Lexeme: "a"},
+				},
+				Body: &ast.BlockStmt{
+					Statements: []ast.Stmt{
+						&ast.ReturnStmt{
+							Keyword: &token.Token{Type: token.RETURN},
+							Value: &ast.FunctionExpr{
+								Params: []*token.Token{
+									{Type: token.IDENTIFIER, Lexeme: "b"},
+								},
+								Body: &ast.BlockStmt{
+									Statements: []ast.Stmt{
+										&ast.ReturnStmt{
+											Keyword: &token.Token{Type: token.RETURN},
+											Value: &ast.BinaryExpr{
+												Left: &ast.VariableExpr{
+													Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "a"},
+												},
+												Right: &ast.VariableExpr{
+													Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "b"},
+												},
+												Operator: &token.Token{Type: token.PLUS},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedConstants: []interface{}{
+				// Inner function: uses free variable 'a' and local 'b'
+				[]code.Instructions{
+					code.Make(code.OpGetFree, 0),  // get 'a' from free variables
+					code.Make(code.OpGetLocal, 0), // get 'b' from locals
+					code.Make(code.OpAdd),
+					code.Make(code.OpReturnValue),
+					code.Make(code.OpReturn),
+				},
+				// Outer function
+				[]code.Instructions{
+					code.Make(code.OpMakeCell, 0),   // wrap 'a' in Cell for closure capture
+					code.Make(code.OpClosure, 0, 1), // create closure with 1 free variable
+					code.Make(code.OpReturnValue),
+					code.Make(code.OpReturn),
+				},
+			},
+			expectedInstructions: []code.Instructions{
+				code.Make(code.OpClosure, 1, 0), // outer function has no free variables
+			},
+		},
+		{
+			// fun(a) { return fun(b) { return fun(c) { return a + b + c; }; }; }
+			// Triple nested closure - innermost captures from two levels up
+			input: &ast.FunctionExpr{
+				Params: []*token.Token{
+					{Type: token.IDENTIFIER, Lexeme: "a"},
+				},
+				Body: &ast.BlockStmt{
+					Statements: []ast.Stmt{
+						&ast.ReturnStmt{
+							Keyword: &token.Token{Type: token.RETURN},
+							Value: &ast.FunctionExpr{
+								Params: []*token.Token{
+									{Type: token.IDENTIFIER, Lexeme: "b"},
+								},
+								Body: &ast.BlockStmt{
+									Statements: []ast.Stmt{
+										&ast.ReturnStmt{
+											Keyword: &token.Token{Type: token.RETURN},
+											Value: &ast.FunctionExpr{
+												Params: []*token.Token{
+													{Type: token.IDENTIFIER, Lexeme: "c"},
+												},
+												Body: &ast.BlockStmt{
+													Statements: []ast.Stmt{
+														&ast.ReturnStmt{
+															Keyword: &token.Token{Type: token.RETURN},
+															Value: &ast.BinaryExpr{
+																Left: &ast.BinaryExpr{
+																	Left: &ast.VariableExpr{
+																		Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "a"},
+																	},
+																	Right: &ast.VariableExpr{
+																		Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "b"},
+																	},
+																	Operator: &token.Token{Type: token.PLUS},
+																},
+																Right: &ast.VariableExpr{
+																	Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "c"},
+																},
+																Operator: &token.Token{Type: token.PLUS},
+															},
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedConstants: []interface{}{
+				// Innermost function: uses free 'a', free 'b', and local 'c'
+				[]code.Instructions{
+					code.Make(code.OpGetFree, 0), // get 'a' from free variables
+					code.Make(code.OpGetFree, 1), // get 'b' from free variables
+					code.Make(code.OpAdd),
+					code.Make(code.OpGetLocal, 0), // get 'c' from locals
+					code.Make(code.OpAdd),
+					code.Make(code.OpReturnValue),
+					code.Make(code.OpReturn),
+				},
+				// Middle function: captures 'a' as free, has local 'b'
+				[]code.Instructions{
+					code.Make(code.OpGetFree, 0),    // push 'a' (already a Cell) for inner closure
+					code.Make(code.OpMakeCell, 0),   // wrap 'b' in Cell for inner closure
+					code.Make(code.OpClosure, 0, 2), // create inner closure with 2 free vars
+					code.Make(code.OpReturnValue),
+					code.Make(code.OpReturn),
+				},
+				// Outer function: has local 'a'
+				[]code.Instructions{
+					code.Make(code.OpMakeCell, 0),   // wrap 'a' in Cell for middle closure
+					code.Make(code.OpClosure, 1, 1), // create middle closure with 1 free var
+					code.Make(code.OpReturnValue),
+					code.Make(code.OpReturn),
+				},
+			},
+			expectedInstructions: []code.Instructions{
+				code.Make(code.OpClosure, 2, 0), // outer function has no free variables
+			},
+		},
+		{
+			// Closure capturing a local variable defined in outer function
+			// fun() { var x = 10; return fun() { return x; }; }
+			input: &ast.FunctionExpr{
+				Params: []*token.Token{},
+				Body: &ast.BlockStmt{
+					Statements: []ast.Stmt{
+						&ast.VarDeclStmt{
+							Name:        &token.Token{Type: token.IDENTIFIER, Lexeme: "x"},
+							Initializer: &ast.LiteralExpr{Value: 10},
+							IsConst:     false,
+						},
+						&ast.ReturnStmt{
+							Keyword: &token.Token{Type: token.RETURN},
+							Value: &ast.FunctionExpr{
+								Params: []*token.Token{},
+								Body: &ast.BlockStmt{
+									Statements: []ast.Stmt{
+										&ast.ReturnStmt{
+											Keyword: &token.Token{Type: token.RETURN},
+											Value: &ast.VariableExpr{
+												Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "x"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedConstants: []interface{}{
+				10,
+				// Inner function: captures 'x' as free variable
+				[]code.Instructions{
+					code.Make(code.OpGetFree, 0), // get 'x' from free variables
+					code.Make(code.OpReturnValue),
+					code.Make(code.OpReturn),
+				},
+				// Outer function
+				[]code.Instructions{
+					code.Make(code.OpConstant, 0),   // push 10
+					code.Make(code.OpSetLocal, 0),   // set local 'x'
+					code.Make(code.OpMakeCell, 0),   // wrap 'x' in Cell for closure
+					code.Make(code.OpClosure, 1, 1), // create closure with 1 free variable
+					code.Make(code.OpReturnValue),
+					code.Make(code.OpReturn),
+				},
+			},
+			expectedInstructions: []code.Instructions{
+				code.Make(code.OpClosure, 2, 0),
 			},
 		},
 	}
@@ -1675,7 +1877,7 @@ func TestFunctionCalls(t *testing.T) {
 				},
 			},
 			expectedInstructions: []code.Instructions{
-				code.Make(code.OpConstant, 1),
+				code.Make(code.OpClosure, 1, 0),
 				code.Make(code.OpCall, 0),
 				code.Make(code.OpPop),
 			},
@@ -1718,7 +1920,7 @@ func TestFunctionCalls(t *testing.T) {
 				},
 			},
 			expectedInstructions: []code.Instructions{
-				code.Make(code.OpConstant, 1),
+				code.Make(code.OpClosure, 1, 0),
 				code.Make(code.OpSetGlobal, 0),
 				code.Make(code.OpGetGlobal, 0),
 				code.Make(code.OpCall, 0),
@@ -1769,7 +1971,7 @@ func TestFunctionCalls(t *testing.T) {
 				24,
 			},
 			expectedInstructions: []code.Instructions{
-				code.Make(code.OpConstant, 0),
+				code.Make(code.OpClosure, 0, 0),
 				code.Make(code.OpSetGlobal, 0),
 				code.Make(code.OpGetGlobal, 0),
 				code.Make(code.OpConstant, 1),
@@ -1843,7 +2045,7 @@ func TestFunctionCalls(t *testing.T) {
 				26,
 			},
 			expectedInstructions: []code.Instructions{
-				code.Make(code.OpConstant, 0),
+				code.Make(code.OpClosure, 0, 0),
 				code.Make(code.OpSetGlobal, 0),
 				code.Make(code.OpGetGlobal, 0),
 				code.Make(code.OpConstant, 1),

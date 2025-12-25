@@ -17,6 +17,7 @@ var vmSupportedFiles = []string{
 	"conditionals.viri",
 	"loops.viri",
 	"functions.viri",
+	"anonymous_functions.viri",
 }
 
 func TestE2E_VM(t *testing.T) {

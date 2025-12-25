@@ -2,6 +2,7 @@ package internal
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/fatih/color"
 	"github.com/harshagw/viri/internal/ast"
@@ -100,11 +101,20 @@ func (v *Viri) runWithVM(filePath string) {
 		}
 	}
 
+	if v.config.DebugMode {
+		fmt.Println(comp.Bytecode().Instructions.String())
+	}
+
 	machine := vm.New(comp.Bytecode())
+	startTime := time.Now()
 	if err := machine.Run(); err != nil {
 		color.New(color.FgRed).Fprintln(color.Error, "Runtime error:", err)
 		v.hasErrors = true
 		return
+	}
+	elapsed := time.Since(startTime)
+	if v.config.DebugMode {
+		fmt.Printf("Time taken: %s\n", elapsed)
 	}
 }
 
@@ -138,6 +148,7 @@ func (v *Viri) runWithInterpreter(filePath string) {
 	interpreter.SetResolvedModules(res.GetResolvedModules())
 	interpreter.SetCurrentModule(mod.Path)
 
+	startTime := time.Now()
 	if _, err := interpreter.Interpret(mod.GetAllStatements()); err != nil {
 		if runtimeErr, ok := err.(*objects.RuntimeError); ok {
 			if runtimeErr.Token != nil {
@@ -154,5 +165,9 @@ func (v *Viri) runWithInterpreter(filePath string) {
 		}
 		v.hasErrors = true
 		return
+	}
+	elapsed := time.Since(startTime)
+	if v.config.DebugMode {
+		fmt.Printf("Time taken: %s\n", elapsed)
 	}
 }

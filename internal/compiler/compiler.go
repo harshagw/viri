@@ -13,6 +13,11 @@ type CompilationScope struct {
 	instructions code.Instructions
 }
 
+type Bytecode struct {
+	Instructions code.Instructions
+	Constants    []objects.Object
+}
+
 type Compiler struct {
 	constants         []objects.Object
 	diagnosticHandler objects.DiagnosticHandler
@@ -530,9 +535,14 @@ func (c *Compiler) addInstruction(ins []byte) int {
 	return posNewInstruction
 }
 
-func (c *Compiler) emitConstant(obj objects.Object) int {
+func (c *Compiler) addConstant(obj objects.Object) int {
 	c.constants = append(c.constants, obj)
-	return c.emit(code.OpConstant, len(c.constants)-1)
+	return len(c.constants) - 1
+}
+
+func (c *Compiler) emitConstant(obj objects.Object) int {
+	constIdx := c.addConstant(obj)
+	return c.emit(code.OpConstant, constIdx)
 }
 
 func (c *Compiler) emitGetSymbol(s Symbol) {
@@ -543,6 +553,8 @@ func (c *Compiler) emitGetSymbol(s Symbol) {
 		c.emit(code.OpGetLocal, s.Index)
 	case NativeScope:
 		c.emit(code.OpGetNative, s.Index)
+	case FreeScope:
+		c.emit(code.OpGetFree, s.Index)
 	}
 }
 
@@ -552,6 +564,8 @@ func (c *Compiler) emitSetSymbol(s Symbol) {
 		c.emit(code.OpSetGlobal, s.Index)
 	case LocalScope:
 		c.emit(code.OpSetLocal, s.Index)
+	case FreeScope:
+		c.emit(code.OpSetFree, s.Index)
 	}
 }
 
@@ -571,6 +585,7 @@ func (c *Compiler) compileFunction(params []*token.Token, body *ast.BlockStmt) e
 	// If the function doesn't have an explicit return, emit OpReturn
 	c.emit(code.OpReturn)
 
+	freeSymbols := c.symbolTable.FreeSymbols
 	numLocals := c.symbolTable.NumDefinitions()
 	instructions := c.leaveScope()
 
@@ -580,26 +595,25 @@ func (c *Compiler) compileFunction(params []*token.Token, body *ast.BlockStmt) e
 		NumParameters: len(params),
 	}
 
-	c.emitConstant(compiledFn)
+	// Emit instructions to load free variables onto the stack
+	// Use OpMakeCell for local variables to ensure they're wrapped in Cells
+	// and the Cell is stored back in the local slot for sharing
+	for _, s := range freeSymbols {
+		switch s.Scope {
+		case LocalScope:
+			// Use OpMakeCell to wrap the local in a Cell and store it back
+			// This ensures multiple closures share the same Cell
+			c.emit(code.OpMakeCell, s.Index)
+		case FreeScope:
+			// Free variables are already Cells, just push them
+			c.emit(code.OpGetFree, s.Index)
+		}
+	}
+
+	constIdx := c.addConstant(compiledFn)
+	c.emit(code.OpClosure, constIdx, len(freeSymbols))
+
 	return nil
-}
-
-type Bytecode struct {
-	Instructions code.Instructions
-	Constants    []objects.Object
-}
-
-func (c *Compiler) error(tok *token.Token, message string) error {
-	if c.diagnosticHandler != nil && tok != nil {
-		c.diagnosticHandler.Error(*tok, message)
-	}
-	return fmt.Errorf("%s", message)
-}
-
-func (c *Compiler) warn(tok *token.Token, message string) {
-	if c.diagnosticHandler != nil && tok != nil {
-		c.diagnosticHandler.Warn(*tok, message)
-	}
 }
 
 func (c *Compiler) patchBreakJumps(loopEnd int) {
@@ -613,4 +627,11 @@ func (c *Compiler) patchContinueJumps(continueTarget int) {
 	for _, jumpPos := range c.loopStack.ContinueJumps() {
 		c.changeOperand(jumpPos, continueTarget)
 	}
+}
+
+func (c *Compiler) error(tok *token.Token, message string) error {
+	if c.diagnosticHandler != nil && tok != nil {
+		c.diagnosticHandler.Error(*tok, message)
+	}
+	return fmt.Errorf("%s", message)
 }

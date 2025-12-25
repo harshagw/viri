@@ -41,6 +41,11 @@ const (
 	OpSetLocal
 	OpGetLocal
 	OpGetNative
+	OpClosure
+	OpGetFree
+	OpSetFree
+	OpCurrentClosure
+	OpMakeCell
 )
 
 type Definition struct {
@@ -49,36 +54,41 @@ type Definition struct {
 }
 
 var definitions = map[Opcode]*Definition{
-	OpConstant:      {"OpConstant", []int{2}}, // operand: index of constant in constants array
-	OpAdd:           {"OpAdd", []int{}},
-	OpSub:           {"OpSub", []int{}},
-	OpMul:           {"OpMul", []int{}},
-	OpDiv:           {"OpDiv", []int{}},
-	OpTrue:          {"OpTrue", []int{}},
-	OpFalse:         {"OpFalse", []int{}},
-	OpNil:           {"OpNil", []int{}},
-	OpEqual:         {"OpEqual", []int{}},
-	OpNotEqual:      {"OpNotEqual", []int{}},
-	OpGreaterThan:   {"OpGreaterThan", []int{}},
-	OpMinus:         {"OpMinus", []int{}},
-	OpBang:          {"OpBang", []int{}},
-	OpJump:          {"OpJump", []int{2}},
-	OpJumpNotTruthy: {"OpJumpNotTruthy", []int{2}}, // operand: jump position
-	OpPop:           {"OpPop", []int{}},
-	OpDup:           {"OpDup", []int{}},         // no operands: duplicates top of stack
-	OpSetGlobal:     {"OpSetGlobal", []int{2}},  // operand: index of global in globals array
-	OpGetGlobal:     {"OpGetGlobal", []int{2}},  // operand: index of global in globals array
-	OpArray:         {"OpArray", []int{2}},      // operand: number of elements
-	OpHash:          {"OpHash", []int{2}},       // operand: number of pairs * 2
-	OpIndex:         {"OpIndex", []int{}},       // no operands: obj and index on stack
-	OpSetIndex:      {"OpSetIndex", []int{}},    // no operands: obj, index, and value on stack
-	OpPrint:         {"OpPrint", []int{}},       // no operands: value on stack
-	OpCall:          {"OpCall", []int{1}},       // operand: number of arguments
-	OpReturnValue:   {"OpReturnValue", []int{}}, // no operands: return value on stack
-	OpReturn:        {"OpReturn", []int{}},      // no operands: return nil
-	OpSetLocal:      {"OpSetLocal", []int{1}},   // operand: local index
-	OpGetLocal:      {"OpGetLocal", []int{1}},   // operand: local index
-	OpGetNative:     {"OpGetNative", []int{1}},  // operand: native function index
+	OpConstant:       {"OpConstant", []int{2}}, // operand: index of constant in constants array
+	OpAdd:            {"OpAdd", []int{}},
+	OpSub:            {"OpSub", []int{}},
+	OpMul:            {"OpMul", []int{}},
+	OpDiv:            {"OpDiv", []int{}},
+	OpTrue:           {"OpTrue", []int{}},
+	OpFalse:          {"OpFalse", []int{}},
+	OpNil:            {"OpNil", []int{}},
+	OpEqual:          {"OpEqual", []int{}},
+	OpNotEqual:       {"OpNotEqual", []int{}},
+	OpGreaterThan:    {"OpGreaterThan", []int{}},
+	OpMinus:          {"OpMinus", []int{}},
+	OpBang:           {"OpBang", []int{}},
+	OpJump:           {"OpJump", []int{2}},          // operand: jump position
+	OpJumpNotTruthy:  {"OpJumpNotTruthy", []int{2}}, // operand: jump position
+	OpPop:            {"OpPop", []int{}},
+	OpDup:            {"OpDup", []int{}},         // no operands: duplicates top of stack
+	OpSetGlobal:      {"OpSetGlobal", []int{2}},  // operand: index of global in globals array
+	OpGetGlobal:      {"OpGetGlobal", []int{2}},  // operand: index of global in globals array
+	OpArray:          {"OpArray", []int{2}},      // operand: number of elements
+	OpHash:           {"OpHash", []int{2}},       // operand: number of pairs * 2
+	OpIndex:          {"OpIndex", []int{}},       // no operands: obj and index on stack
+	OpSetIndex:       {"OpSetIndex", []int{}},    // no operands: obj, index, and value on stack
+	OpPrint:          {"OpPrint", []int{}},       // no operands: value on stack
+	OpCall:           {"OpCall", []int{1}},       // operand: number of arguments
+	OpReturnValue:    {"OpReturnValue", []int{}}, // no operands: return value on stack
+	OpReturn:         {"OpReturn", []int{}},      // no operands: return nil
+	OpSetLocal:       {"OpSetLocal", []int{1}},   // operand: local index
+	OpGetLocal:       {"OpGetLocal", []int{1}},   // operand: local index
+	OpGetNative:      {"OpGetNative", []int{1}},  // operand: native function index
+	OpClosure:        {"OpClosure", []int{2, 1}}, // operand: index on constants to find CompiledFunction, number of free variables used by the compiled function
+	OpGetFree:        {"OpGetFree", []int{1}},    // operand: free variable index
+	OpSetFree:        {"OpSetFree", []int{1}},    // operand: free variable index
+	OpCurrentClosure: {"OpCurrentClosure", []int{}},
+	OpMakeCell:       {"OpMakeCell", []int{1}}, // operand: local index - wraps local in Cell, stores back, and pushes Cell
 }
 
 func Lookup(op byte) (*Definition, error) {
@@ -151,6 +161,8 @@ func (ins Instructions) fmtInstruction(def *Definition, operands []int) string {
 		return def.Name
 	case 1:
 		return fmt.Sprintf("%s %d", def.Name, operands[0])
+	case 2:
+		return fmt.Sprintf("%s %d %d", def.Name, operands[0], operands[1])
 	}
 
 	return fmt.Sprintf("ERROR: unhandled operandCount for %s\n", def.Name)

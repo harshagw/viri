@@ -6,6 +6,7 @@ const (
 	GlobalScope SymbolScope = "GLOBAL"
 	LocalScope  SymbolScope = "LOCAL"
 	NativeScope SymbolScope = "NATIVE"
+	FreeScope   SymbolScope = "FREE"
 )
 
 // Symbol represents a named binding in the symbol table
@@ -18,13 +19,15 @@ type Symbol struct {
 
 type SymbolTable struct {
 	Outer          *SymbolTable
+	FreeSymbols    []Symbol
 	store          map[string]Symbol
 	numDefinitions int
 }
 
 func NewSymbolTable() *SymbolTable {
 	return &SymbolTable{
-		store: make(map[string]Symbol),
+		store:       make(map[string]Symbol),
+		FreeSymbols: []Symbol{},
 	}
 }
 
@@ -38,6 +41,17 @@ func (s *SymbolTable) DefineNative(index int, name string) Symbol {
 	}
 	s.store[name] = symbol
 	return symbol
+}
+
+func (s *SymbolTable) defineFree(symbol Symbol) Symbol {
+	s.FreeSymbols = append(s.FreeSymbols, symbol)
+	newSymbol := Symbol{
+		Name:  symbol.Name,
+		Scope: FreeScope,
+		Index: len(s.FreeSymbols) - 1,
+	}
+	s.store[symbol.Name] = newSymbol
+	return newSymbol
 }
 
 func NewEnclosedSymbolTable(outer *SymbolTable) *SymbolTable {
@@ -65,11 +79,22 @@ func (s *SymbolTable) Define(name string, isConst bool) Symbol {
 	return symbol
 }
 
-// Resolve looks up a symbol by name, checking outer scopes if necessary
+// Resolve looks up a symbol by name
 func (s *SymbolTable) Resolve(name string) (Symbol, bool) {
 	obj, ok := s.store[name]
+	// If the symbol is not found in this scope, check the outer scope
 	if !ok && s.Outer != nil {
-		return s.Outer.Resolve(name)
+		obj, ok = s.Outer.Resolve(name)
+		if !ok {
+			return obj, ok
+		}
+		// Global and native symbols don't need to be captured as free variables
+		if obj.Scope == GlobalScope || obj.Scope == NativeScope {
+			return obj, ok
+		}
+		// Local or free variables from outer scopes become free variables in this scope
+		free := s.defineFree(obj)
+		return free, true
 	}
 	return obj, ok
 }

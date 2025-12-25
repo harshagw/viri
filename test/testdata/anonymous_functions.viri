@@ -41,3 +41,12 @@ var makeCounter = fun() {
 var counter = makeCounter();
 print counter();
 print counter();
+
+
+var newAdder = fun(a) {
+  var adder = fun(b) { return a + b; };
+  return adder;
+};
+
+var addTwo = newAdder(2);
+print addTwo(3);

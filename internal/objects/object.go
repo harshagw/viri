@@ -16,6 +16,8 @@ const (
 	TypeHash             Type = "HASH"
 	TypeNamespace        Type = "NAMESPACE"
 	TypeCompiledFunction Type = "COMPILED_FUNCTION"
+	TypeClosure          Type = "CLOSURE"
+	TypeCell             Type = "CELL"
 )
 
 // Object is a runtime value.

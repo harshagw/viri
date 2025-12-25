@@ -36,7 +36,18 @@ type Bool struct {
 	Value bool
 }
 
-func NewBool(v bool) *Bool { return &Bool{Value: v} }
+// TrueValue and FalseValue are cached boolean instances to avoid allocations
+var (
+	TrueValue  = &Bool{Value: true}
+	FalseValue = &Bool{Value: false}
+)
+
+func NewBool(v bool) *Bool {
+	if v {
+		return TrueValue
+	}
+	return FalseValue
+}
 func (b *Bool) Type() Type { return TypeBool }
 func (b *Bool) Inspect() string {
 	return strconv.FormatBool(b.Value)

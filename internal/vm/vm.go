@@ -27,7 +27,7 @@ type VM struct {
 func New(bytecode *compiler.Bytecode) *VM {
 	// Wrap the main program in a compiled function
 	mainFn := &objects.CompiledFunction{Instructions: bytecode.Instructions}
-	mainFrame := NewFrame(mainFn, 0)
+	mainFrame := NewFrame(objects.NewClosure(mainFn, nil), 0)
 
 	frames := make([]*Frame, MaxFrames)
 	frames[0] = mainFrame
@@ -66,33 +66,38 @@ func (vm *VM) StackTop() objects.Object {
 	if vm.sp == 0 {
 		return nil
 	}
-	return vm.stack[vm.sp-1]
+	return unwrapCell(vm.stack[vm.sp-1])
 }
 
-// readOperands reads the operands for the current opcode and advances the instruction pointer.
-func (vm *VM) readOperands(op code.Opcode, ins code.Instructions, ip int) []int {
-	def, _ := code.Lookup(byte(op))
-	operands, read := code.ReadOperands(def, ins[ip+1:])
-	vm.currentFrame().ip += read
-	return operands
+// readUint16 reads a 2-byte big-endian operand at ip+1
+func readUint16(ins code.Instructions, ip int) int {
+	return int(ins[ip+1])<<8 | int(ins[ip+2])
+}
+
+// readUint8 reads a 1-byte operand at ip+1
+func readUint8(ins code.Instructions, ip int) int {
+	return int(ins[ip+1])
 }
 
 func (vm *VM) Run() error {
 	var ip int
 	var ins code.Instructions
 	var op code.Opcode
+	var frame *Frame
 
-	for vm.currentFrame().ip < len(vm.currentFrame().Instructions())-1 {
-		vm.currentFrame().ip++
+	frame = vm.currentFrame()
+	ins = frame.cl.Fn.Instructions
 
-		ip = vm.currentFrame().ip
-		ins = vm.currentFrame().Instructions()
+	for frame.ip < len(ins)-1 {
+		frame.ip++
+		ip = frame.ip
 		op = code.Opcode(ins[ip])
 
 		switch op {
 		case code.OpConstant:
-			operands := vm.readOperands(op, ins, ip)
-			if err := vm.push(vm.constants[operands[0]]); err != nil {
+			constIndex := readUint16(ins, ip)
+			frame.ip += 2
+			if err := vm.push(vm.constants[constIndex]); err != nil {
 				return err
 			}
 
@@ -102,12 +107,12 @@ func (vm *VM) Run() error {
 			}
 
 		case code.OpTrue:
-			if err := vm.push(objects.NewBool(true)); err != nil {
+			if err := vm.push(objects.TrueValue); err != nil {
 				return err
 			}
 
 		case code.OpFalse:
-			if err := vm.push(objects.NewBool(false)); err != nil {
+			if err := vm.push(objects.FalseValue); err != nil {
 				return err
 			}
 
@@ -132,49 +137,53 @@ func (vm *VM) Run() error {
 			}
 
 		case code.OpJump:
-			pos := vm.readOperands(op, ins, ip)
-			vm.currentFrame().ip = pos[0] - 1 // -1 because the loop will increment ip
+			pos := readUint16(ins, ip)
+			frame.ip = pos - 1
 
 		case code.OpJumpNotTruthy:
-			pos := vm.readOperands(op, ins, ip)
+			pos := readUint16(ins, ip)
+			frame.ip += 2
 			condition := vm.pop()
 			if !objects.IsTruthy(condition) {
-				vm.currentFrame().ip = pos[0] - 1 // -1 because the loop will increment ip
+				frame.ip = pos - 1
 			}
 
 		case code.OpPop:
 			vm.pop()
 
 		case code.OpDup:
+			// Don't unwrap - we want to duplicate the exact value (including Cells)
 			if err := vm.push(vm.stack[vm.sp-1]); err != nil {
 				return err
 			}
 
 		case code.OpSetGlobal:
-			operands := vm.readOperands(op, ins, ip)
-			vm.globals[operands[0]] = vm.pop()
+			globalIndex := readUint16(ins, ip)
+			frame.ip += 2
+			vm.globals[globalIndex] = vm.pop()
 
 		case code.OpGetGlobal:
-			operands := vm.readOperands(op, ins, ip)
-			if err := vm.push(vm.globals[operands[0]]); err != nil {
+			globalIndex := readUint16(ins, ip)
+			frame.ip += 2
+			if err := vm.push(vm.globals[globalIndex]); err != nil {
 				return err
 			}
 
 		case code.OpSetLocal:
-			operands := vm.readOperands(op, ins, ip)
-			frame := vm.currentFrame()
-			vm.stack[frame.basePointer+operands[0]] = vm.pop()
+			localIndex := readUint8(ins, ip)
+			frame.ip += 1
+			vm.stack[frame.basePointer+localIndex] = vm.pop()
 
 		case code.OpGetLocal:
-			operands := vm.readOperands(op, ins, ip)
-			frame := vm.currentFrame()
-			if err := vm.push(vm.stack[frame.basePointer+operands[0]]); err != nil {
+			localIndex := readUint8(ins, ip)
+			frame.ip += 1
+			if err := vm.push(vm.stack[frame.basePointer+localIndex]); err != nil {
 				return err
 			}
 
 		case code.OpArray:
-			operands := vm.readOperands(op, ins, ip)
-			numElements := operands[0]
+			numElements := readUint16(ins, ip)
+			frame.ip += 2
 			array := vm.buildArray(vm.sp-numElements, vm.sp)
 			vm.sp -= numElements
 			if err := vm.push(array); err != nil {
@@ -182,8 +191,8 @@ func (vm *VM) Run() error {
 			}
 
 		case code.OpHash:
-			operands := vm.readOperands(op, ins, ip)
-			numElements := operands[0]
+			numElements := readUint16(ins, ip)
+			frame.ip += 2
 			hash, err := vm.buildHash(vm.sp-numElements, vm.sp)
 			if err != nil {
 				return err
@@ -215,32 +224,52 @@ func (vm *VM) Run() error {
 			fmt.Println(objects.Stringify(value))
 
 		case code.OpCall:
-			operands := vm.readOperands(op, ins, ip)
-			if err := vm.executeCall(operands[0]); err != nil {
+			numArgs := readUint8(ins, ip)
+			frame.ip += 1
+
+			newFrame, err := vm.executeCall(numArgs)
+			if err != nil {
 				return err
+			}
+			if newFrame != nil {
+				frame = newFrame
+				ins = frame.cl.Fn.Instructions
 			}
 
 		case code.OpReturnValue:
 			returnValue := vm.pop()
 
-			frame := vm.popFrame()
-			vm.sp = frame.basePointer - 1 // -1 to also pop the function itself
+			poppedFrame := vm.popFrame()
+			frame = vm.currentFrame()
+			vm.sp = poppedFrame.basePointer - 1
 
 			if err := vm.push(returnValue); err != nil {
 				return err
 			}
+			ins = frame.cl.Fn.Instructions
 
 		case code.OpReturn:
-			frame := vm.popFrame()
-			vm.sp = frame.basePointer - 1 // -1 to also pop the function itself
+			poppedFrame := vm.popFrame()
+			frame = vm.currentFrame()
+			vm.sp = poppedFrame.basePointer - 1
 
 			if err := vm.push(objects.NilValue); err != nil {
 				return err
 			}
+			ins = frame.cl.Fn.Instructions
+
+		case code.OpClosure:
+			constIndex := readUint16(ins, ip)
+			numFree := int(ins[ip+3])
+			frame.ip += 3
+
+			if err := vm.pushClosure(constIndex, numFree); err != nil {
+				return err
+			}
 
 		case code.OpGetNative:
-			operands := vm.readOperands(op, ins, ip)
-			nativeIndex := operands[0]
+			nativeIndex := readUint8(ins, ip)
+			frame.ip += 1
 
 			nativeFn := objects.GetNativeFunctionByIndex(nativeIndex)
 			if nativeFn == nil {
@@ -250,27 +279,99 @@ func (vm *VM) Run() error {
 			if err := vm.push(nativeFn); err != nil {
 				return err
 			}
+
+		case code.OpGetFree:
+			freeIndex := readUint8(ins, ip)
+			frame.ip += 1
+
+			currentClosure := frame.cl
+			cell := currentClosure.Free[freeIndex]
+			if err := vm.push(cell); err != nil {
+				return err
+			}
+
+		case code.OpSetFree:
+			freeIndex := readUint8(ins, ip)
+			frame.ip += 1
+
+			currentClosure := frame.cl
+			currentClosure.Free[freeIndex].Value = vm.pop()
+
+		case code.OpCurrentClosure:
+			if err := vm.push(frame.cl); err != nil {
+				return err
+			}
+
+		case code.OpMakeCell:
+			localIndex := readUint8(ins, ip)
+			frame.ip += 1
+
+			slotIdx := frame.basePointer + localIndex
+			obj := vm.stack[slotIdx]
+
+			// If already a Cell, just push it
+			if cell, ok := obj.(*objects.Cell); ok {
+				if err := vm.push(cell); err != nil {
+					return err
+				}
+			} else {
+				// Wrap in a new Cell, store it back, and push it
+				cell := objects.NewCell(obj)
+				vm.stack[slotIdx] = cell
+				if err := vm.push(cell); err != nil {
+					return err
+				}
+			}
 		}
 	}
 
 	return nil
 }
 
-func (vm *VM) executeCall(numArgs int) error {
-	callee := vm.stack[vm.sp-1-numArgs]
+func (vm *VM) pushClosure(constIndex int, numFree int) error {
+	fnObj := vm.constants[constIndex]
+	function, ok := fnObj.(*objects.CompiledFunction)
+	if !ok {
+		return fmt.Errorf("expected compiled function, got %s", fnObj.Type())
+	}
+
+	// Collect free variables from the stack
+	free := make([]*objects.Cell, numFree)
+	for i := 0; i < numFree; i++ {
+		obj := vm.stack[vm.sp-numFree+i]
+		if cell, ok := obj.(*objects.Cell); ok {
+			// Reuse the existing cell
+			free[i] = cell
+		} else {
+			// Wrap in a new cell (for local variables)
+			free[i] = objects.NewCell(obj)
+		}
+	}
+	vm.sp = vm.sp - numFree
+
+	cl := objects.NewClosure(function, free)
+	return vm.push(cl)
+}
+
+func (vm *VM) executeCall(numArgs int) (*Frame, error) {
+	callee := unwrapCell(vm.stack[vm.sp-1-numArgs])
 
 	switch fn := callee.(type) {
-	case *objects.CompiledFunction:
-		return vm.callFunction(fn, numArgs)
+	case *objects.Closure:
+		return vm.callClosure(fn, numArgs)
 	case *objects.NativeFunction:
-		return vm.callNativeFunction(fn, numArgs)
+		return nil, vm.callNativeFunction(fn, numArgs)
 	default:
-		return fmt.Errorf("calling non-function: %s", callee.Type())
+		return nil, fmt.Errorf("calling non-function: %s", callee.Type())
 	}
 }
 
 func (vm *VM) callNativeFunction(fn *objects.NativeFunction, numArgs int) error {
-	args := vm.stack[vm.sp-numArgs : vm.sp]
+	// Unwrap any Cell arguments
+	args := make([]objects.Object, numArgs)
+	for i := 0; i < numArgs; i++ {
+		args[i] = unwrapCell(vm.stack[vm.sp-numArgs+i])
+	}
 
 	result, err := fn.Fn(args...)
 	if err != nil {
@@ -285,17 +386,18 @@ func (vm *VM) callNativeFunction(fn *objects.NativeFunction, numArgs int) error 
 	return vm.push(objects.NilValue)
 }
 
-func (vm *VM) callFunction(fn *objects.CompiledFunction, numArgs int) error {
+func (vm *VM) callClosure(cl *objects.Closure, numArgs int) (*Frame, error) {
+	fn := cl.Fn
 	if numArgs != fn.NumParameters {
-		return fmt.Errorf("wrong number of arguments: want=%d, got=%d",
+		return nil, fmt.Errorf("wrong number of arguments: want=%d, got=%d",
 			fn.NumParameters, numArgs)
 	}
 
-	frame := NewFrame(fn, vm.sp-numArgs)
+	frame := NewFrame(cl, vm.sp-numArgs)
 	vm.pushFrame(frame)
 	vm.sp = frame.basePointer + fn.NumLocals
 
-	return nil
+	return frame, nil
 }
 
 func (vm *VM) push(o objects.Object) error {
@@ -309,14 +411,26 @@ func (vm *VM) push(o objects.Object) error {
 	return nil
 }
 
+// unwrapCell returns the value inside a Cell, or the object itself if not a Cell
+func unwrapCell(o objects.Object) objects.Object {
+	if cell, ok := o.(*objects.Cell); ok {
+		return cell.Value
+	}
+	return o
+}
+
 func (vm *VM) pop() objects.Object {
 	o := vm.stack[vm.sp-1]
 	vm.sp--
+	// Unwrap Cell if needed (for free variables)
+	if cell, ok := o.(*objects.Cell); ok {
+		return cell.Value
+	}
 	return o
 }
 
 func (vm *VM) LastPoppedStackElem() objects.Object {
-	return vm.stack[vm.sp]
+	return unwrapCell(vm.stack[vm.sp])
 }
 
 func (vm *VM) executeBinaryOperation(op code.Opcode) error {
