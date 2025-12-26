@@ -3,10 +3,11 @@ package compiler
 type SymbolScope string
 
 const (
-	GlobalScope SymbolScope = "GLOBAL"
-	LocalScope  SymbolScope = "LOCAL"
-	NativeScope SymbolScope = "NATIVE"
-	FreeScope   SymbolScope = "FREE"
+	GlobalScope   SymbolScope = "GLOBAL"
+	LocalScope    SymbolScope = "LOCAL"
+	NativeScope   SymbolScope = "NATIVE"
+	FreeScope     SymbolScope = "FREE"
+	FunctionScope SymbolScope = "FUNCTION" // For recursive self-reference
 )
 
 // Symbol represents a named binding in the symbol table
@@ -22,6 +23,7 @@ type SymbolTable struct {
 	FreeSymbols    []Symbol
 	store          map[string]Symbol
 	numDefinitions int
+	functionName   string
 }
 
 func NewSymbolTable() *SymbolTable {
@@ -54,9 +56,10 @@ func (s *SymbolTable) defineFree(symbol Symbol) Symbol {
 	return newSymbol
 }
 
-func NewEnclosedSymbolTable(outer *SymbolTable) *SymbolTable {
+func NewEnclosedSymbolTable(outer *SymbolTable, functionName string) *SymbolTable {
 	s := NewSymbolTable()
 	s.Outer = outer
+	s.functionName = functionName
 	return s
 }
 
@@ -82,14 +85,19 @@ func (s *SymbolTable) Define(name string, isConst bool) Symbol {
 // Resolve looks up a symbol by name
 func (s *SymbolTable) Resolve(name string) (Symbol, bool) {
 	obj, ok := s.store[name]
+	// If the symbol is not found in this scope, check for recursive self-reference
+	if !ok && s.functionName == name {
+		// This is a recursive call - return a special FunctionScope symbol
+		return Symbol{Name: name, Scope: FunctionScope, Index: 0}, true
+	}
 	// If the symbol is not found in this scope, check the outer scope
 	if !ok && s.Outer != nil {
 		obj, ok = s.Outer.Resolve(name)
 		if !ok {
 			return obj, ok
 		}
-		// Global and native symbols don't need to be captured as free variables
-		if obj.Scope == GlobalScope || obj.Scope == NativeScope {
+		// Global, native, and function symbols don't need to be captured as free variables
+		if obj.Scope == GlobalScope || obj.Scope == NativeScope || obj.Scope == FunctionScope {
 			return obj, ok
 		}
 		// Local or free variables from outer scopes become free variables in this scope

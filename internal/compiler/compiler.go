@@ -62,13 +62,13 @@ func (c *Compiler) currentInstructions() code.Instructions {
 	return c.scopes[c.scopeIndex].instructions
 }
 
-func (c *Compiler) enterScope() {
+func (c *Compiler) enterScope(functionName string) {
 	scope := CompilationScope{
 		instructions: code.Instructions{},
 	}
 	c.scopes = append(c.scopes, scope)
 	c.scopeIndex++
-	c.symbolTable = NewEnclosedSymbolTable(c.symbolTable)
+	c.symbolTable = NewEnclosedSymbolTable(c.symbolTable, functionName)
 }
 
 func (c *Compiler) leaveScope() code.Instructions {
@@ -145,8 +145,15 @@ func (c *Compiler) compileStatement(stmt ast.Stmt) error {
 		symbol := c.symbolTable.Define(stmt.Name.Lexeme, stmt.IsConst)
 
 		if stmt.Initializer != nil {
-			if err := c.compileExpression(stmt.Initializer); err != nil {
-				return err
+			// Check if the initializer is a function expression for recursive support
+			if fnExpr, ok := stmt.Initializer.(*ast.FunctionExpr); ok {
+				if err := c.compileFunction(fnExpr.Params, fnExpr.Body, stmt.Name.Lexeme); err != nil {
+					return err
+				}
+			} else {
+				if err := c.compileExpression(stmt.Initializer); err != nil {
+					return err
+				}
 			}
 		} else {
 			c.emit(code.OpNil) // Default to nil if no initializer
@@ -266,7 +273,7 @@ func (c *Compiler) compileStatement(stmt ast.Stmt) error {
 		symbol := c.symbolTable.Define(stmt.Name.Lexeme, false)
 
 		// Compile the function body
-		if err := c.compileFunction(stmt.Params, stmt.Body); err != nil {
+		if err := c.compileFunction(stmt.Params, stmt.Body, stmt.Name.Lexeme); err != nil {
 			return err
 		}
 
@@ -501,7 +508,8 @@ func (c *Compiler) compileExpression(node ast.Expr) error {
 		c.emit(code.OpCall, len(node.Arguments))
 
 	case *ast.FunctionExpr:
-		if err := c.compileFunction(node.Params, node.Body); err != nil {
+		// Anonymous function - no name for recursion
+		if err := c.compileFunction(node.Params, node.Body, ""); err != nil {
 			return err
 		}
 	}
@@ -555,6 +563,8 @@ func (c *Compiler) emitGetSymbol(s Symbol) {
 		c.emit(code.OpGetNative, s.Index)
 	case FreeScope:
 		c.emit(code.OpGetFree, s.Index)
+	case FunctionScope:
+		c.emit(code.OpCurrentClosure)
 	}
 }
 
@@ -569,8 +579,8 @@ func (c *Compiler) emitSetSymbol(s Symbol) {
 	}
 }
 
-func (c *Compiler) compileFunction(params []*token.Token, body *ast.BlockStmt) error {
-	c.enterScope()
+func (c *Compiler) compileFunction(params []*token.Token, body *ast.BlockStmt, functionName string) error {
+	c.enterScope(functionName)
 
 	// Define parameters as local variables
 	for _, param := range params {
