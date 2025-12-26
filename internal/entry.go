@@ -16,6 +16,7 @@ import (
 
 type ViriRuntimeConfig struct {
 	DebugMode      bool
+	StatsMode      bool
 	DisableWarning bool
 	Engine         string // "interpreter" or "vm"
 }
@@ -31,6 +32,7 @@ func NewViriRuntime(config *ViriRuntimeConfig) *Viri {
 	if config == nil {
 		config = &ViriRuntimeConfig{
 			DebugMode:      false,
+			StatsMode:      false,
 			DisableWarning: false,
 		}
 	}
@@ -113,7 +115,7 @@ func (v *Viri) runWithVM(filePath string) {
 		return
 	}
 	elapsed := time.Since(startTime)
-	if v.config.DebugMode {
+	if v.config.StatsMode {
 		fmt.Printf("Time taken: %s\n", elapsed)
 	}
 }
@@ -167,7 +169,7 @@ func (v *Viri) runWithInterpreter(filePath string) {
 		return
 	}
 	elapsed := time.Since(startTime)
-	if v.config.DebugMode {
+	if v.config.StatsMode {
 		fmt.Printf("Time taken: %s\n", elapsed)
 	}
 }

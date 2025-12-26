@@ -76,14 +76,29 @@ func (vm *VM) StackTop() objects.Object {
 	return unwrapCell(vm.stack[vm.sp-1])
 }
 
-// readUint16 reads a 2-byte big-endian operand at ip+1
-func readUint16(ins code.Instructions, ip int) int {
-	return int(ins[ip+1])<<8 | int(ins[ip+2])
+func (vm *VM) push(o objects.Object) error {
+	if vm.sp >= StackSize {
+		return fmt.Errorf("stack overflow")
+	}
+
+	vm.stack[vm.sp] = o
+	vm.sp++
+
+	return nil
 }
 
-// readUint8 reads a 1-byte operand at ip+1
-func readUint8(ins code.Instructions, ip int) int {
-	return int(ins[ip+1])
+func (vm *VM) pop() objects.Object {
+	o := vm.stack[vm.sp-1]
+	vm.sp--
+	// Unwrap Cell if needed (for free variables)
+	if cell, ok := o.(*objects.Cell); ok {
+		return cell.Value
+	}
+	return o
+}
+
+func (vm *VM) LastPoppedStackElem() objects.Object {
+	return unwrapCell(vm.stack[vm.sp])
 }
 
 func (vm *VM) Run() error {
@@ -105,7 +120,7 @@ func (vm *VM) Run() error {
 		}
 
 		switch op {
-		case code.OpConstant:
+		case code.OpGetConstant:
 			constIndex := readUint16(ins, ip)
 			frame.ip += 2
 			if err := vm.push(vm.constants[constIndex]); err != nil {
@@ -241,19 +256,6 @@ func (vm *VM) Run() error {
 				fmt.Println(output)
 			}
 
-		case code.OpCall:
-			numArgs := readUint8(ins, ip)
-			frame.ip += 1
-
-			newFrame, err := vm.executeCall(numArgs)
-			if err != nil {
-				return err
-			}
-			if newFrame != nil {
-				frame = newFrame
-				ins = frame.cl.Fn.Instructions
-			}
-
 		case code.OpReturnValue:
 			returnValue := vm.pop()
 
@@ -276,15 +278,6 @@ func (vm *VM) Run() error {
 			}
 			ins = frame.cl.Fn.Instructions
 
-		case code.OpClosure:
-			constIndex := readUint16(ins, ip)
-			numFree := int(ins[ip+3])
-			frame.ip += 3
-
-			if err := vm.pushClosure(constIndex, numFree); err != nil {
-				return err
-			}
-
 		case code.OpGetNative:
 			nativeIndex := readUint8(ins, ip)
 			frame.ip += 1
@@ -302,8 +295,7 @@ func (vm *VM) Run() error {
 			freeIndex := readUint8(ins, ip)
 			frame.ip += 1
 
-			currentClosure := frame.cl
-			cell := currentClosure.Free[freeIndex]
+			cell := frame.cl.Free[freeIndex]
 			if err := vm.push(cell); err != nil {
 				return err
 			}
@@ -312,10 +304,9 @@ func (vm *VM) Run() error {
 			freeIndex := readUint8(ins, ip)
 			frame.ip += 1
 
-			currentClosure := frame.cl
-			currentClosure.Free[freeIndex].Value = vm.pop()
+			frame.cl.Free[freeIndex].Value = vm.pop()
 
-		case code.OpCurrentClosure:
+		case code.OpGetCurrentClosure:
 			if err := vm.push(frame.cl); err != nil {
 				return err
 			}
@@ -340,13 +331,36 @@ func (vm *VM) Run() error {
 					return err
 				}
 			}
+
+		case code.OpGetClosure:
+			constIndex := readUint16(ins, ip)
+			numFree := int(ins[ip+3])
+			frame.ip += 3
+
+			if err := vm.executeClosure(constIndex, numFree); err != nil {
+				return err
+			}
+
+		case code.OpCall:
+			numArgs := readUint8(ins, ip)
+			frame.ip += 1
+
+			newFrame, err := vm.executeCall(numArgs)
+			if err != nil {
+				return err
+			}
+			if newFrame != nil {
+				frame = newFrame
+				ins = frame.cl.Fn.Instructions
+			}
+
 		}
 	}
 
 	return nil
 }
 
-func (vm *VM) pushClosure(constIndex int, numFree int) error {
+func (vm *VM) executeClosure(constIndex int, numFree int) error {
 	fnObj := vm.constants[constIndex]
 	function, ok := fnObj.(*objects.CompiledFunction)
 	if !ok {
@@ -416,39 +430,6 @@ func (vm *VM) callClosure(cl *objects.Closure, numArgs int) (*Frame, error) {
 	vm.sp = frame.basePointer + fn.NumLocals
 
 	return frame, nil
-}
-
-func (vm *VM) push(o objects.Object) error {
-	if vm.sp >= StackSize {
-		return fmt.Errorf("stack overflow")
-	}
-
-	vm.stack[vm.sp] = o
-	vm.sp++
-
-	return nil
-}
-
-// unwrapCell returns the value inside a Cell, or the object itself if not a Cell
-func unwrapCell(o objects.Object) objects.Object {
-	if cell, ok := o.(*objects.Cell); ok {
-		return cell.Value
-	}
-	return o
-}
-
-func (vm *VM) pop() objects.Object {
-	o := vm.stack[vm.sp-1]
-	vm.sp--
-	// Unwrap Cell if needed (for free variables)
-	if cell, ok := o.(*objects.Cell); ok {
-		return cell.Value
-	}
-	return o
-}
-
-func (vm *VM) LastPoppedStackElem() objects.Object {
-	return unwrapCell(vm.stack[vm.sp])
 }
 
 func (vm *VM) executeBinaryOperation(op code.Opcode) error {

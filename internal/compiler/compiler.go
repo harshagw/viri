@@ -19,13 +19,14 @@ type Bytecode struct {
 }
 
 type Compiler struct {
-	constants         []objects.Object
-	diagnosticHandler objects.DiagnosticHandler
-	symbolTable       *SymbolTable
-	loopStack         *LoopStack
+	constants   []objects.Object
+	symbolTable *SymbolTable
+	loopStack   *LoopStack
 
 	scopes     []CompilationScope
 	scopeIndex int
+
+	diagnosticHandler objects.DiagnosticHandler
 }
 
 func New(diagnosticHandler objects.DiagnosticHandler) *Compiler {
@@ -55,6 +56,13 @@ func NewWithState(diagnosticHandler objects.DiagnosticHandler, symbolTable *Symb
 		loopStack:         NewLoopStack(),
 		scopes:            []CompilationScope{mainScope},
 		scopeIndex:        0,
+	}
+}
+
+func (c *Compiler) Bytecode() *Bytecode {
+	return &Bytecode{
+		Instructions: c.currentInstructions(),
+		Constants:    c.constants,
 	}
 }
 
@@ -150,6 +158,7 @@ func (c *Compiler) compileStatement(stmt ast.Stmt) error {
 
 		if stmt.Initializer != nil {
 			// Check if the initializer is a function expression for recursive support
+			// We don't want to body of the function to create a block scope, so we compile the function directly
 			if fnExpr, ok := stmt.Initializer.(*ast.FunctionExpr); ok {
 				if err := c.compileFunction(fnExpr.Params, fnExpr.Body, stmt.Name.Lexeme); err != nil {
 					return err
@@ -306,13 +315,16 @@ func (c *Compiler) compileExpression(node ast.Expr) error {
 		switch value := node.Value.(type) {
 		case int:
 			integer := &objects.Number{Value: float64(value)}
-			c.emitConstant(integer)
+			constIdx := c.addConstant(integer)
+			c.emit(code.OpGetConstant, constIdx)
 		case float64:
 			number := &objects.Number{Value: value}
-			c.emitConstant(number)
+			constIdx := c.addConstant(number)
+			c.emit(code.OpGetConstant, constIdx)
 		case string:
 			str := &objects.String{Value: value}
-			c.emitConstant(str)
+			constIdx := c.addConstant(str)
+			c.emit(code.OpGetConstant, constIdx)
 		case bool:
 			if value {
 				c.emit(code.OpTrue)
@@ -520,17 +532,16 @@ func (c *Compiler) compileExpression(node ast.Expr) error {
 	return nil
 }
 
-func (c *Compiler) Bytecode() *Bytecode {
-	return &Bytecode{
-		Instructions: c.currentInstructions(),
-		Constants:    c.constants,
-	}
-}
-
 func (c *Compiler) emit(op code.Opcode, operands ...int) int {
 	ins := code.Make(op, operands...)
-	pos := c.addInstruction(ins)
+	pos := len(c.currentInstructions())
+	c.scopes[c.scopeIndex].instructions = append(c.scopes[c.scopeIndex].instructions, ins...)
 	return pos
+}
+
+func (c *Compiler) addConstant(obj objects.Object) int {
+	c.constants = append(c.constants, obj)
+	return len(c.constants) - 1
 }
 
 func (c *Compiler) changeOperand(opPos int, operands ...int) {
@@ -539,22 +550,6 @@ func (c *Compiler) changeOperand(opPos int, operands ...int) {
 	for i := 0; i < len(newInstruction); i++ {
 		c.scopes[c.scopeIndex].instructions[opPos+i] = newInstruction[i]
 	}
-}
-
-func (c *Compiler) addInstruction(ins []byte) int {
-	posNewInstruction := len(c.currentInstructions())
-	c.scopes[c.scopeIndex].instructions = append(c.scopes[c.scopeIndex].instructions, ins...)
-	return posNewInstruction
-}
-
-func (c *Compiler) addConstant(obj objects.Object) int {
-	c.constants = append(c.constants, obj)
-	return len(c.constants) - 1
-}
-
-func (c *Compiler) emitConstant(obj objects.Object) int {
-	constIdx := c.addConstant(obj)
-	return c.emit(code.OpConstant, constIdx)
 }
 
 func (c *Compiler) emitGetSymbol(s Symbol) {
@@ -568,7 +563,7 @@ func (c *Compiler) emitGetSymbol(s Symbol) {
 	case FreeScope:
 		c.emit(code.OpGetFree, s.Index)
 	case FunctionScope:
-		c.emit(code.OpCurrentClosure)
+		c.emit(code.OpGetCurrentClosure)
 	}
 }
 
@@ -627,7 +622,7 @@ func (c *Compiler) compileFunction(params []*token.Token, body *ast.BlockStmt, f
 	}
 
 	constIdx := c.addConstant(compiledFn)
-	c.emit(code.OpClosure, constIdx, len(freeSymbols))
+	c.emit(code.OpGetClosure, constIdx, len(freeSymbols))
 
 	return nil
 }

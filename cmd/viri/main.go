@@ -13,6 +13,7 @@ const FILE_EXTENSION = ".viri"
 func main() {
 	var fileName string
 	var debugMode bool
+	var statsMode bool
 	var engine string = "interpreter" // default to interpreter
 	showWarning := true
 
@@ -22,6 +23,8 @@ func main() {
 			debugMode = true
 		} else if arg == "--no-warning" {
 			showWarning = false
+		} else if arg == "--stats" {
+			statsMode = true
 		} else if val, found := strings.CutPrefix(arg, "--engine="); found {
 			engine = val
 		} else if strings.HasSuffix(arg, FILE_EXTENSION) {
@@ -30,7 +33,7 @@ func main() {
 	}
 
 	if fileName == "" {
-		fmt.Println("Usage: viri [--debug] [--engine=interpreter|vm] <file>")
+		fmt.Println("Usage: viri [--debug] [--stats] [--engine=interpreter|vm] <file>")
 		os.Exit(64) // usage error
 	}
 
@@ -41,6 +44,7 @@ func main() {
 
 	config := &internal.ViriRuntimeConfig{
 		DebugMode:      debugMode,
+		StatsMode:      statsMode,
 		DisableWarning: !showWarning,
 		Engine:         engine,
 	}
