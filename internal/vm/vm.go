@@ -22,6 +22,9 @@ type VM struct {
 
 	frames      []*Frame
 	framesIndex int // Always points to the next frame to be used. Top of frame is frames[framesIndex-1]
+
+	onStep func()   // Debug callback, called before each opcode execution
+	output []string // Capture print output
 }
 
 func New(bytecode *compiler.Bytecode) *VM {
@@ -46,6 +49,10 @@ func New(bytecode *compiler.Bytecode) *VM {
 
 func (vm *VM) UpdateGlobals(globals []objects.Object) {
 	vm.globals = globals
+}
+
+func (vm *VM) SetOnStep(fn func()) {
+	vm.onStep = fn
 }
 
 func (vm *VM) currentFrame() *Frame {
@@ -92,6 +99,10 @@ func (vm *VM) Run() error {
 		frame.ip++
 		ip = frame.ip
 		op = code.Opcode(ins[ip])
+
+		if vm.onStep != nil {
+			vm.onStep()
+		}
 
 		switch op {
 		case code.OpConstant:
@@ -221,7 +232,14 @@ func (vm *VM) Run() error {
 
 		case code.OpPrint:
 			value := vm.pop()
-			fmt.Println(objects.Stringify(value))
+			output := objects.Stringify(value)
+			if vm.onStep != nil {
+				// Debug mode
+				vm.output = append(vm.output, output)
+			} else {
+				// Normal mode - print to stdout
+				fmt.Println(output)
+			}
 
 		case code.OpCall:
 			numArgs := readUint8(ins, ip)

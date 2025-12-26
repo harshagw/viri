@@ -1,4 +1,4 @@
-.PHONY: viri repl tidy test wasm build e2e repl-compiler
+.PHONY: viri repl tidy test wasm build e2e repl-compiler debugger
 
 viri:
 	go run cmd/viri/main.go examples/demo.viri
@@ -8,6 +8,11 @@ repl:
 
 repl-compiler:
 	go run cmd/repl-compiler/main.go
+
+debugger:
+	go build -o debugger cmd/debugger/*.go
+	./debugger examples/demo.viri
+	rm -f debugger
 
 tidy:
 	go mod tidy
