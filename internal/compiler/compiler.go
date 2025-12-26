@@ -68,7 +68,7 @@ func (c *Compiler) enterScope(functionName string) {
 	}
 	c.scopes = append(c.scopes, scope)
 	c.scopeIndex++
-	c.symbolTable = NewEnclosedSymbolTable(c.symbolTable, functionName)
+	c.symbolTable = NewFunctionScope(c.symbolTable, functionName)
 }
 
 func (c *Compiler) leaveScope() code.Instructions {
@@ -102,11 +102,15 @@ func (c *Compiler) compileStatement(stmt ast.Stmt) error {
 		return nil
 
 	case *ast.BlockStmt:
+		// Create a new block scope (same frame, new lexical scope)
+		c.symbolTable = NewBlockScope(c.symbolTable)
 		for _, s := range stmt.Statements {
 			if err := c.compileStatement(s); err != nil {
 				return err
 			}
 		}
+		// Restore parent scope
+		c.symbolTable = c.symbolTable.Outer
 		return nil
 
 	case *ast.IfStmt:
@@ -587,9 +591,11 @@ func (c *Compiler) compileFunction(params []*token.Token, body *ast.BlockStmt, f
 		c.symbolTable.Define(param.Lexeme, false)
 	}
 
-	// Compile the function body
-	if err := c.compileStatement(body); err != nil {
-		return err
+	// Compile the function body statements directly (don't create an extra block scope)
+	for _, stmt := range body.Statements {
+		if err := c.compileStatement(stmt); err != nil {
+			return err
+		}
 	}
 
 	// If the function doesn't have an explicit return, emit OpReturn

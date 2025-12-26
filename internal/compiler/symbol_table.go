@@ -12,10 +12,11 @@ const (
 
 // Symbol represents a named binding in the symbol table
 type Symbol struct {
-	Name    string
-	Scope   SymbolScope
-	Index   int
-	IsConst bool
+	Name       string
+	Scope      SymbolScope
+	Index      int
+	IsConst    bool
+	FrameDepth int // function nesting level when defined
 }
 
 type SymbolTable struct {
@@ -24,22 +25,52 @@ type SymbolTable struct {
 	store          map[string]Symbol
 	numDefinitions int
 	functionName   string
+	frameDepth     int // function nesting level (0 = global)
 }
 
 func NewSymbolTable() *SymbolTable {
 	return &SymbolTable{
 		store:       make(map[string]Symbol),
 		FreeSymbols: []Symbol{},
+		frameDepth:  0,
+	}
+}
+
+// NewFunctionScope creates a new scope for a function.
+// This increments frameDepth and resets numDefinitions.
+func NewFunctionScope(outer *SymbolTable, functionName string) *SymbolTable {
+	s := &SymbolTable{
+		store:          make(map[string]Symbol),
+		FreeSymbols:    []Symbol{},
+		Outer:          outer,
+		functionName:   functionName,
+		frameDepth:     outer.frameDepth + 1,
+		numDefinitions: 0,
+	}
+	return s
+}
+
+// NewBlockScope creates a new scope for a block within the same function.
+// This keeps the same frameDepth and inherits numDefinitions.
+func NewBlockScope(outer *SymbolTable) *SymbolTable {
+	return &SymbolTable{
+		store:          make(map[string]Symbol),
+		FreeSymbols:    outer.FreeSymbols, // share free symbols with parent
+		Outer:          outer,
+		functionName:   outer.functionName,
+		frameDepth:     outer.frameDepth,     // same frame
+		numDefinitions: outer.numDefinitions, // inherit counter
 	}
 }
 
 // DefineNative defines a native function in the symbol table
 func (s *SymbolTable) DefineNative(index int, name string) Symbol {
 	symbol := Symbol{
-		Name:    name,
-		Scope:   NativeScope,
-		Index:   index,
-		IsConst: true,
+		Name:       name,
+		Scope:      NativeScope,
+		Index:      index,
+		IsConst:    true,
+		FrameDepth: 0,
 	}
 	s.store[name] = symbol
 	return symbol
@@ -48,30 +79,25 @@ func (s *SymbolTable) DefineNative(index int, name string) Symbol {
 func (s *SymbolTable) defineFree(symbol Symbol) Symbol {
 	s.FreeSymbols = append(s.FreeSymbols, symbol)
 	newSymbol := Symbol{
-		Name:  symbol.Name,
-		Scope: FreeScope,
-		Index: len(s.FreeSymbols) - 1,
+		Name:       symbol.Name,
+		Scope:      FreeScope,
+		Index:      len(s.FreeSymbols) - 1,
+		FrameDepth: s.frameDepth,
 	}
 	s.store[symbol.Name] = newSymbol
 	return newSymbol
 }
 
-func NewEnclosedSymbolTable(outer *SymbolTable, functionName string) *SymbolTable {
-	s := NewSymbolTable()
-	s.Outer = outer
-	s.functionName = functionName
-	return s
-}
-
 // Define creates a new symbol in the table
 func (s *SymbolTable) Define(name string, isConst bool) Symbol {
 	symbol := Symbol{
-		Name:    name,
-		Index:   s.numDefinitions,
-		IsConst: isConst,
+		Name:       name,
+		Index:      s.numDefinitions,
+		IsConst:    isConst,
+		FrameDepth: s.frameDepth,
 	}
 
-	if s.Outer == nil {
+	if s.frameDepth == 0 {
 		symbol.Scope = GlobalScope
 	} else {
 		symbol.Scope = LocalScope
@@ -88,7 +114,7 @@ func (s *SymbolTable) Resolve(name string) (Symbol, bool) {
 	// If the symbol is not found in this scope, check for recursive self-reference
 	if !ok && s.functionName == name {
 		// This is a recursive call - return a special FunctionScope symbol
-		return Symbol{Name: name, Scope: FunctionScope, Index: 0}, true
+		return Symbol{Name: name, Scope: FunctionScope, Index: 0, FrameDepth: s.frameDepth}, true
 	}
 	// If the symbol is not found in this scope, check the outer scope
 	if !ok && s.Outer != nil {
@@ -100,7 +126,11 @@ func (s *SymbolTable) Resolve(name string) (Symbol, bool) {
 		if obj.Scope == GlobalScope || obj.Scope == NativeScope || obj.Scope == FunctionScope {
 			return obj, ok
 		}
-		// Local or free variables from outer scopes become free variables in this scope
+		// If the resolved symbol is in the same frame, return it as-is (block scope)
+		if obj.FrameDepth == s.frameDepth {
+			return obj, ok
+		}
+		// Local or free variables from outer function scopes become free variables
 		free := s.defineFree(obj)
 		return free, true
 	}

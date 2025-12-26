@@ -11,3 +11,5 @@ viri-syntax-plugin/*.vsix
 *.exe
 
 /node_modules
+
+.cursor/*
