@@ -1,0 +1,170 @@
+// Helper class for composition tests
+class Point {
+  init(x, y) {
+    this.x = x;
+    this.y = y;
+  }
+}
+
+// Class with closure in method
+
+class Adder {
+  init(base) {
+    this.base = base;
+  }
+
+  makeAdder() {
+    var base = this.base;
+    fun adder(n) {
+      return base + n;
+    }
+    return adder;
+  }
+}
+
+var adder = Adder(10);
+var addTen = adder.makeAdder();
+print addTen(5);
+print addTen(20);
+
+// Passing class instance to function
+
+fun printPoint(point) {
+  print point.x;
+  print point.y;
+}
+
+var pt = Point(100, 200);
+printPoint(pt);
+
+// Storing class instance in array
+
+var points = [Point(1, 2), Point(3, 4), Point(5, 6)];
+print points[0].x;
+print points[1].y;
+print points[2].x;
+
+// Storing class instance in hash
+
+var shapes = {"origin": Point(0, 0), "corner": Point(10, 10)};
+print shapes["origin"].x;
+print shapes["corner"].y;
+
+// Method with multiple parameters
+
+class Rectangle {
+  init(width, height) {
+    this.width = width;
+    this.height = height;
+  }
+
+  resize(newWidth, newHeight) {
+    this.width = newWidth;
+    this.height = newHeight;
+  }
+
+  area() {
+    return this.width * this.height;
+  }
+
+  perimeter() {
+    return 2 * (this.width + this.height);
+  }
+}
+
+var rect = Rectangle(5, 10);
+print rect.area();
+print rect.perimeter();
+rect.resize(8, 12);
+print rect.area();
+
+// Class using other class instances (composition)
+
+class Line {
+  init(start, end) {
+    this.start = start;
+    this.end = end;
+  }
+
+  midpoint() {
+    var mx = (this.start.x + this.end.x) / 2;
+    var my = (this.start.y + this.end.y) / 2;
+    return Point(mx, my);
+  }
+}
+
+var line = Line(Point(0, 0), Point(10, 10));
+var mid = line.midpoint();
+print mid.x;
+print mid.y;
+
+// Method returning this for builder pattern
+
+class StringBuilder {
+  init() {
+    this.str = "";
+  }
+
+  append(s) {
+    this.str = this.str + s;
+    return this;
+  }
+
+  build() {
+    return this.str;
+  }
+}
+
+var sb = StringBuilder();
+print sb.append("Hello").append(" ").append("World").build();
+
+// Class with conditional logic in methods
+
+class NumberChecker {
+  init(n) {
+    this.n = n;
+  }
+
+  isPositive() {
+    return this.n > 0;
+  }
+
+  isGreaterThanTen() {
+    return this.n > 10;
+  }
+
+  classify() {
+    if (this.isPositive()) {
+      if (this.isGreaterThanTen()) {
+        return "positive large";
+      } else {
+        return "positive small";
+      }
+    } else {
+      return "non-positive";
+    }
+  }
+}
+
+var checker1 = NumberChecker(4);
+var checker2 = NumberChecker(20);
+var checker3 = NumberChecker(-2);
+print checker1.classify();
+print checker2.classify();
+print checker3.classify();
+
+// Class with loop in method
+
+class Summer {
+  sumTo(n) {
+    var total = 0;
+    for (var i = 1; i <= n; i = i + 1) {
+      total = total + i;
+    }
+    return total;
+  }
+}
+
+var summer = Summer();
+print summer.sumTo(10);
+

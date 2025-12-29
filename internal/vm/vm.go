@@ -354,6 +354,109 @@ func (vm *VM) Run() error {
 				ins = frame.cl.Fn.Instructions
 			}
 
+		case code.OpClass:
+			nameIdx := readUint16(ins, ip)
+			numMethods := readUint8(ins, ip+2)
+			frame.ip += 3
+
+			// Get class name from constants
+			className := vm.constants[nameIdx].(*objects.String).Value
+
+			// Pop methods from stack (they have names in CompiledFunction)
+			methods := make(map[string]*objects.Closure)
+			for i := 0; i < numMethods; i++ {
+				closure := vm.stack[vm.sp-numMethods+i].(*objects.Closure)
+				methods[closure.Fn.Name] = closure
+			}
+			vm.sp -= numMethods
+
+			// Pop superclass (nil or CompiledClass)
+			var superClass *objects.CompiledClass
+			superObj := vm.pop()
+			if _, ok := superObj.(*objects.Nil); !ok {
+				var ok bool
+				superClass, ok = superObj.(*objects.CompiledClass)
+				if !ok {
+					return fmt.Errorf("superclass must be a class, got %s", superObj.Type())
+				}
+			}
+
+			class := &objects.CompiledClass{
+				Name:       className,
+				Methods:    methods,
+				SuperClass: superClass,
+			}
+			if err := vm.push(class); err != nil {
+				return err
+			}
+
+		case code.OpGetProperty:
+			nameIdx := readUint16(ins, ip)
+			frame.ip += 2
+
+			name := vm.constants[nameIdx].(*objects.String).Value
+			obj := vm.pop()
+
+			switch target := obj.(type) {
+			case *objects.CompiledInstance:
+				// Check fields first
+				if val, ok := target.Fields[name]; ok {
+					if err := vm.push(val); err != nil {
+						return err
+					}
+				} else if method, ok := target.Class.LookupMethod(name); ok {
+					// Bind method to instance
+					bound := &objects.BoundMethod{Receiver: target, Method: method}
+					if err := vm.push(bound); err != nil {
+						return err
+					}
+				} else {
+					return fmt.Errorf("undefined property '%s' on %s instance",
+						name, target.Class.Name)
+				}
+			default:
+				return fmt.Errorf("only instances have properties, got %s", obj.Type())
+			}
+
+		case code.OpSetProperty:
+			nameIdx := readUint16(ins, ip)
+			frame.ip += 2
+
+			name := vm.constants[nameIdx].(*objects.String).Value
+			value := vm.pop()
+			obj := vm.pop()
+
+			instance, ok := obj.(*objects.CompiledInstance)
+			if !ok {
+				return fmt.Errorf("only instances have fields, got %s", obj.Type())
+			}
+
+			instance.Fields[name] = value
+			if err := vm.push(value); err != nil {
+				return err
+			}
+
+		case code.OpGetSuper:
+			nameIdx := readUint16(ins, ip)
+			frame.ip += 2
+
+			name := vm.constants[nameIdx].(*objects.String).Value
+			instance := vm.pop().(*objects.CompiledInstance)
+
+			// Compiler guarantees: superclass exists (validated at compile time)
+			superClass := instance.Class.SuperClass
+
+			method, ok := superClass.LookupMethod(name)
+			if !ok {
+				return fmt.Errorf("undefined method '%s' in superclass %s",
+					name, superClass.Name)
+			}
+
+			bound := &objects.BoundMethod{Receiver: instance, Method: method}
+			if err := vm.push(bound); err != nil {
+				return err
+			}
+
 		}
 	}
 
@@ -393,8 +496,12 @@ func (vm *VM) executeCall(numArgs int) (*Frame, error) {
 		return vm.callClosure(fn, numArgs)
 	case *objects.NativeFunction:
 		return nil, vm.callNativeFunction(fn, numArgs)
+	case *objects.CompiledClass:
+		return vm.callClass(fn, numArgs)
+	case *objects.BoundMethod:
+		return vm.callBoundMethod(fn, numArgs)
 	default:
-		return nil, fmt.Errorf("calling non-function: %s", callee.Type())
+		return nil, fmt.Errorf("cannot call %s", callee.Type())
 	}
 }
 
@@ -428,6 +535,71 @@ func (vm *VM) callClosure(cl *objects.Closure, numArgs int) (*Frame, error) {
 	frame := NewFrame(cl, vm.sp-numArgs)
 	vm.pushFrame(frame)
 	vm.sp = frame.basePointer + fn.NumLocals
+
+	return frame, nil
+}
+
+func (vm *VM) callClass(class *objects.CompiledClass, numArgs int) (*Frame, error) {
+	instance := objects.NewCompiledInstance(class)
+
+	// Check for init method (including inherited)
+	if init, ok := class.LookupMethod("init"); ok {
+		expectedArgs := init.Fn.NumParameters - 1 // -1 for 'this'
+		if expectedArgs != numArgs {
+			return nil, fmt.Errorf("%s.init() expected %d arguments but got %d",
+				class.Name, expectedArgs, numArgs)
+		}
+
+		bound := objects.NewBoundMethod(instance, init)
+
+		// Replace class on stack with bound method
+		vm.stack[vm.sp-1-numArgs] = bound
+
+		// Call init - it will return nil but we'll fix that below
+		frame, err := vm.callBoundMethod(bound, numArgs)
+		if err != nil {
+			return nil, err
+		}
+
+		return frame, nil
+	}
+
+	// No init method - must have zero arguments
+	if numArgs != 0 {
+		return nil, fmt.Errorf("%s() takes no arguments (%d given)",
+			class.Name, numArgs)
+	}
+
+	// Replace class with instance on stack
+	vm.sp = vm.sp - 1 // pop class
+	if err := vm.push(instance); err != nil {
+		return nil, err
+	}
+	return nil, nil
+}
+
+// callBoundMethod calls a method with its bound receiver.
+func (vm *VM) callBoundMethod(bm *objects.BoundMethod, numArgs int) (*Frame, error) {
+	expectedArgs := bm.Method.Fn.NumParameters - 1
+	if expectedArgs != numArgs {
+		return nil, fmt.Errorf("%s() expected %d arguments but got %d",
+			bm.Method.Fn.Name, expectedArgs, numArgs)
+	}
+
+	// Shift everything (including bound_method slot) up by 1
+	for i := numArgs; i >= 0; i-- {
+		vm.stack[vm.sp-numArgs+i] = vm.stack[vm.sp-numArgs-1+i]
+	}
+	vm.sp++
+
+	// Replace bound_method with this
+	thisSlot := vm.sp - numArgs - 1
+	vm.stack[thisSlot] = bm.Receiver
+
+	// basePointer = thisSlot, so local 0 = this
+	frame := NewFrame(bm.Method, thisSlot)
+	vm.pushFrame(frame)
+	vm.sp = frame.basePointer + bm.Method.Fn.NumLocals
 
 	return frame, nil
 }

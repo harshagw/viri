@@ -2059,3 +2059,673 @@ func TestFunctionCalls(t *testing.T) {
 
 	runCompilerTests(t, tests)
 }
+
+func TestClassDeclaration(t *testing.T) {
+	tests := []compilerTestCase{
+		{
+			// class Animal {}
+			input: &ast.ClassStmt{
+				Name:    &token.Token{Type: token.IDENTIFIER, Lexeme: "Animal"},
+				Methods: []*ast.FunctionStmt{},
+			},
+			expectedConstants: []interface{}{
+				"Animal",
+			},
+			expectedInstructions: []code.Instructions{
+				code.Make(code.OpNil),          // no superclass
+				code.Make(code.OpClass, 0, 0),  // class name at constant 0, 0 methods
+				code.Make(code.OpSetGlobal, 0), // store class in global
+			},
+		},
+	}
+
+	runCompilerTests(t, tests)
+}
+
+func TestClassWithMethods(t *testing.T) {
+	tests := []compilerTestCase{
+		{
+			// class Animal {
+			//   fn speak() { return "sound"; }
+			// }
+			input: &ast.ClassStmt{
+				Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "Animal"},
+				Methods: []*ast.FunctionStmt{
+					{
+						Name:   &token.Token{Type: token.IDENTIFIER, Lexeme: "speak"},
+						Params: []*token.Token{},
+						Body: &ast.BlockStmt{
+							Statements: []ast.Stmt{
+								&ast.ReturnStmt{
+									Keyword: &token.Token{Type: token.RETURN},
+									Value:   &ast.LiteralExpr{Value: "sound"},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedConstants: []interface{}{
+				"sound",
+				// Method: speak (this is local 0, no explicit params)
+				[]code.Instructions{
+					code.Make(code.OpGetConstant, 0), // "sound"
+					code.Make(code.OpReturnValue),
+					code.Make(code.OpReturn),
+				},
+				"Animal",
+			},
+			expectedInstructions: []code.Instructions{
+				code.Make(code.OpNil),              // no superclass
+				code.Make(code.OpGetClosure, 1, 0), // speak method closure
+				code.Make(code.OpClass, 2, 1),      // class name at constant 2, 1 method
+				code.Make(code.OpSetGlobal, 0),     // store class in global
+			},
+		},
+		{
+			// class Animal {
+			//   fn speak() { return "sound"; }
+			//   fn eat() { return "eating"; }
+			// }
+			input: &ast.ClassStmt{
+				Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "Animal"},
+				Methods: []*ast.FunctionStmt{
+					{
+						Name:   &token.Token{Type: token.IDENTIFIER, Lexeme: "speak"},
+						Params: []*token.Token{},
+						Body: &ast.BlockStmt{
+							Statements: []ast.Stmt{
+								&ast.ReturnStmt{
+									Keyword: &token.Token{Type: token.RETURN},
+									Value:   &ast.LiteralExpr{Value: "sound"},
+								},
+							},
+						},
+					},
+					{
+						Name:   &token.Token{Type: token.IDENTIFIER, Lexeme: "eat"},
+						Params: []*token.Token{},
+						Body: &ast.BlockStmt{
+							Statements: []ast.Stmt{
+								&ast.ReturnStmt{
+									Keyword: &token.Token{Type: token.RETURN},
+									Value:   &ast.LiteralExpr{Value: "eating"},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedConstants: []interface{}{
+				"sound",
+				[]code.Instructions{
+					code.Make(code.OpGetConstant, 0),
+					code.Make(code.OpReturnValue),
+					code.Make(code.OpReturn),
+				},
+				"eating",
+				[]code.Instructions{
+					code.Make(code.OpGetConstant, 2),
+					code.Make(code.OpReturnValue),
+					code.Make(code.OpReturn),
+				},
+				"Animal",
+			},
+			expectedInstructions: []code.Instructions{
+				code.Make(code.OpNil),              // no superclass
+				code.Make(code.OpGetClosure, 1, 0), // speak method closure
+				code.Make(code.OpGetClosure, 3, 0), // eat method closure
+				code.Make(code.OpClass, 4, 2),      // class name at constant 4, 2 methods
+				code.Make(code.OpSetGlobal, 0),     // store class in global
+			},
+		},
+	}
+
+	runCompilerTests(t, tests)
+}
+
+func TestClassWithInit(t *testing.T) {
+	tests := []compilerTestCase{
+		{
+			// class Animal {
+			//   fn init(name) { this.name = name; }
+			// }
+			input: &ast.ClassStmt{
+				Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "Animal"},
+				Methods: []*ast.FunctionStmt{
+					{
+						Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "init"},
+						Params: []*token.Token{
+							{Type: token.IDENTIFIER, Lexeme: "name"},
+						},
+						Body: &ast.BlockStmt{
+							Statements: []ast.Stmt{
+								&ast.ExprStmt{
+									Expr: &ast.SetExpr{
+										Object: &ast.ThisExpr{
+											Keyword: &token.Token{Type: token.THIS, Lexeme: "this"},
+										},
+										Name:  &token.Token{Type: token.IDENTIFIER, Lexeme: "name"},
+										Value: &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "name"}},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedConstants: []interface{}{
+				"name", // property name for SetProperty
+				// init method: this=local0, name=local1
+				[]code.Instructions{
+					code.Make(code.OpGetLocal, 0),    // this
+					code.Make(code.OpGetLocal, 1),    // name parameter
+					code.Make(code.OpSetProperty, 0), // set this.name
+					code.Make(code.OpPop),            // discard SetExpr result
+					code.Make(code.OpGetLocal, 0),    // init returns this
+					code.Make(code.OpReturnValue),
+				},
+				"Animal",
+			},
+			expectedInstructions: []code.Instructions{
+				code.Make(code.OpNil),              // no superclass
+				code.Make(code.OpGetClosure, 1, 0), // init method closure
+				code.Make(code.OpClass, 2, 1),      // class name at constant 2, 1 method
+				code.Make(code.OpSetGlobal, 0),     // store class in global
+			},
+		},
+	}
+
+	runCompilerTests(t, tests)
+}
+
+func TestClassThisCompiler(t *testing.T) {
+	tests := []compilerTestCase{
+		{
+			// class Animal {
+			//   fn getName() { return this.name; }
+			// }
+			input: &ast.ClassStmt{
+				Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "Animal"},
+				Methods: []*ast.FunctionStmt{
+					{
+						Name:   &token.Token{Type: token.IDENTIFIER, Lexeme: "getName"},
+						Params: []*token.Token{},
+						Body: &ast.BlockStmt{
+							Statements: []ast.Stmt{
+								&ast.ReturnStmt{
+									Keyword: &token.Token{Type: token.RETURN},
+									Value: &ast.GetExpr{
+										Object: &ast.ThisExpr{
+											Keyword: &token.Token{Type: token.THIS, Lexeme: "this"},
+										},
+										Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "name"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedConstants: []interface{}{
+				"name", // property name for GetProperty
+				// getName method: this=local0
+				[]code.Instructions{
+					code.Make(code.OpGetLocal, 0),    // this
+					code.Make(code.OpGetProperty, 0), // get this.name
+					code.Make(code.OpReturnValue),
+					code.Make(code.OpReturn),
+				},
+				"Animal",
+			},
+			expectedInstructions: []code.Instructions{
+				code.Make(code.OpNil),              // no superclass
+				code.Make(code.OpGetClosure, 1, 0), // getName method closure
+				code.Make(code.OpClass, 2, 1),      // class name at constant 2, 1 method
+				code.Make(code.OpSetGlobal, 0),     // store class in global
+			},
+		},
+	}
+
+	runCompilerTests(t, tests)
+}
+
+func TestClassInheritanceCompiler(t *testing.T) {
+	tests := []compilerTestCase{
+		{
+			// class Animal {}
+			// class Dog < Animal {}
+			input: &ast.BlockStmt{
+				Statements: []ast.Stmt{
+					&ast.ClassStmt{
+						Name:    &token.Token{Type: token.IDENTIFIER, Lexeme: "Animal"},
+						Methods: []*ast.FunctionStmt{},
+					},
+					&ast.ClassStmt{
+						Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "Dog"},
+						SuperClass: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "Animal"},
+						},
+						Methods: []*ast.FunctionStmt{},
+					},
+				},
+			},
+			expectedConstants: []interface{}{
+				"Animal",
+				"Dog",
+			},
+			expectedInstructions: []code.Instructions{
+				code.Make(code.OpNil),          // Animal: no superclass
+				code.Make(code.OpClass, 0, 0),  // Animal class
+				code.Make(code.OpSetGlobal, 0), // store Animal
+				code.Make(code.OpGetGlobal, 0), // Dog: get Animal as superclass
+				code.Make(code.OpClass, 1, 0),  // Dog class
+				code.Make(code.OpSetGlobal, 1), // store Dog
+			},
+		},
+	}
+
+	runCompilerTests(t, tests)
+}
+
+func TestClassSuperCompiler(t *testing.T) {
+	tests := []compilerTestCase{
+		{
+			// class Animal {
+			//   fn speak() { return "generic"; }
+			// }
+			// class Dog < Animal {
+			//   fn speak() { return super.speak(); }
+			// }
+			input: &ast.BlockStmt{
+				Statements: []ast.Stmt{
+					&ast.ClassStmt{
+						Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "Animal"},
+						Methods: []*ast.FunctionStmt{
+							{
+								Name:   &token.Token{Type: token.IDENTIFIER, Lexeme: "speak"},
+								Params: []*token.Token{},
+								Body: &ast.BlockStmt{
+									Statements: []ast.Stmt{
+										&ast.ReturnStmt{
+											Keyword: &token.Token{Type: token.RETURN},
+											Value:   &ast.LiteralExpr{Value: "generic"},
+										},
+									},
+								},
+							},
+						},
+					},
+					&ast.ClassStmt{
+						Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "Dog"},
+						SuperClass: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "Animal"},
+						},
+						Methods: []*ast.FunctionStmt{
+							{
+								Name:   &token.Token{Type: token.IDENTIFIER, Lexeme: "speak"},
+								Params: []*token.Token{},
+								Body: &ast.BlockStmt{
+									Statements: []ast.Stmt{
+										&ast.ReturnStmt{
+											Keyword: &token.Token{Type: token.RETURN},
+											Value: &ast.CallExpr{
+												Callee: &ast.SuperExpr{
+													Keyword: &token.Token{Type: token.SUPER, Lexeme: "super"},
+													Method:  &token.Token{Type: token.IDENTIFIER, Lexeme: "speak"},
+												},
+												Arguments: []ast.Expr{},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedConstants: []interface{}{
+				"generic",
+				// Animal.speak method
+				[]code.Instructions{
+					code.Make(code.OpGetConstant, 0),
+					code.Make(code.OpReturnValue),
+					code.Make(code.OpReturn),
+				},
+				"Animal",
+				"speak", // method name for OpGetSuper
+				// Dog.speak method
+				[]code.Instructions{
+					code.Make(code.OpGetLocal, 0), // this
+					code.Make(code.OpGetSuper, 3), // super.speak (method name at constant 3)
+					code.Make(code.OpCall, 0),     // call super.speak()
+					code.Make(code.OpReturnValue),
+					code.Make(code.OpReturn),
+				},
+				"Dog",
+			},
+			expectedInstructions: []code.Instructions{
+				code.Make(code.OpNil),              // Animal: no superclass
+				code.Make(code.OpGetClosure, 1, 0), // Animal.speak method
+				code.Make(code.OpClass, 2, 1),      // Animal class
+				code.Make(code.OpSetGlobal, 0),     // store Animal
+				code.Make(code.OpGetGlobal, 0),     // Dog: get Animal as superclass
+				code.Make(code.OpGetClosure, 4, 0), // Dog.speak method
+				code.Make(code.OpClass, 5, 1),      // Dog class
+				code.Make(code.OpSetGlobal, 1),     // store Dog
+			},
+		},
+	}
+
+	runCompilerTests(t, tests)
+}
+
+func TestPropertyAccessCompiler(t *testing.T) {
+	tests := []compilerTestCase{
+		{
+			// class Animal {}
+			// var a = Animal();
+			// a.name;
+			input: &ast.BlockStmt{
+				Statements: []ast.Stmt{
+					&ast.ClassStmt{
+						Name:    &token.Token{Type: token.IDENTIFIER, Lexeme: "Animal"},
+						Methods: []*ast.FunctionStmt{},
+					},
+					&ast.VarDeclStmt{
+						Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "a"},
+						Initializer: &ast.CallExpr{
+							Callee: &ast.VariableExpr{
+								Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "Animal"},
+							},
+							Arguments: []ast.Expr{},
+						},
+					},
+					&ast.ExprStmt{
+						Expr: &ast.GetExpr{
+							Object: &ast.VariableExpr{
+								Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "a"},
+							},
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "name"},
+						},
+					},
+				},
+			},
+			expectedConstants: []interface{}{
+				"Animal",
+				"name",
+			},
+			expectedInstructions: []code.Instructions{
+				code.Make(code.OpNil),            // no superclass
+				code.Make(code.OpClass, 0, 0),    // Animal class
+				code.Make(code.OpSetGlobal, 0),   // store Animal
+				code.Make(code.OpGetGlobal, 0),   // get Animal
+				code.Make(code.OpCall, 0),        // Animal()
+				code.Make(code.OpSetGlobal, 1),   // store a
+				code.Make(code.OpGetGlobal, 1),   // get a
+				code.Make(code.OpGetProperty, 1), // a.name
+				code.Make(code.OpPop),
+			},
+		},
+	}
+
+	runCompilerTests(t, tests)
+}
+
+func TestPropertySetCompiler(t *testing.T) {
+	tests := []compilerTestCase{
+		{
+			// class Animal {}
+			// var a = Animal();
+			// a.name = "Dog";
+			input: &ast.BlockStmt{
+				Statements: []ast.Stmt{
+					&ast.ClassStmt{
+						Name:    &token.Token{Type: token.IDENTIFIER, Lexeme: "Animal"},
+						Methods: []*ast.FunctionStmt{},
+					},
+					&ast.VarDeclStmt{
+						Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "a"},
+						Initializer: &ast.CallExpr{
+							Callee: &ast.VariableExpr{
+								Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "Animal"},
+							},
+							Arguments: []ast.Expr{},
+						},
+					},
+					&ast.ExprStmt{
+						Expr: &ast.SetExpr{
+							Object: &ast.VariableExpr{
+								Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "a"},
+							},
+							Name:  &token.Token{Type: token.IDENTIFIER, Lexeme: "name"},
+							Value: &ast.LiteralExpr{Value: "Dog"},
+						},
+					},
+				},
+			},
+			expectedConstants: []interface{}{
+				"Animal",
+				"Dog",
+				"name",
+			},
+			expectedInstructions: []code.Instructions{
+				code.Make(code.OpNil),            // no superclass
+				code.Make(code.OpClass, 0, 0),    // Animal class
+				code.Make(code.OpSetGlobal, 0),   // store Animal
+				code.Make(code.OpGetGlobal, 0),   // get Animal
+				code.Make(code.OpCall, 0),        // Animal()
+				code.Make(code.OpSetGlobal, 1),   // store a
+				code.Make(code.OpGetGlobal, 1),   // get a
+				code.Make(code.OpGetConstant, 1), // "Dog"
+				code.Make(code.OpSetProperty, 2), // a.name = "Dog"
+				code.Make(code.OpPop),
+			},
+		},
+	}
+
+	runCompilerTests(t, tests)
+}
+
+func TestThisOutsideClass(t *testing.T) {
+	// 'this' outside of a class should error
+	input := &ast.ExprStmt{
+		Expr: &ast.ThisExpr{
+			Keyword: &token.Token{Type: token.THIS, Lexeme: "this"},
+		},
+	}
+
+	comp := New(nil)
+	err := comp.Compile(input)
+	if err == nil {
+		t.Fatalf("expected error for 'this' outside class, got none")
+	}
+
+	expected := "cannot use 'this' outside of a class"
+	if err.Error() != expected {
+		t.Fatalf("wrong error. want=%q, got=%q", expected, err.Error())
+	}
+}
+
+func TestSuperOutsideClass(t *testing.T) {
+	// 'super' outside of a class should error
+	input := &ast.ExprStmt{
+		Expr: &ast.SuperExpr{
+			Keyword: &token.Token{Type: token.SUPER, Lexeme: "super"},
+			Method:  &token.Token{Type: token.IDENTIFIER, Lexeme: "speak"},
+		},
+	}
+
+	comp := New(nil)
+	err := comp.Compile(input)
+	if err == nil {
+		t.Fatalf("expected error for 'super' outside class, got none")
+	}
+
+	expected := "cannot use 'super' outside of a class"
+	if err.Error() != expected {
+		t.Fatalf("wrong error. want=%q, got=%q", expected, err.Error())
+	}
+}
+
+func TestSuperWithoutSuperclass(t *testing.T) {
+	// 'super' in a class with no superclass should error
+	input := &ast.ClassStmt{
+		Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "Animal"},
+		Methods: []*ast.FunctionStmt{
+			{
+				Name:   &token.Token{Type: token.IDENTIFIER, Lexeme: "speak"},
+				Params: []*token.Token{},
+				Body: &ast.BlockStmt{
+					Statements: []ast.Stmt{
+						&ast.ReturnStmt{
+							Keyword: &token.Token{Type: token.RETURN},
+							Value: &ast.CallExpr{
+								Callee: &ast.SuperExpr{
+									Keyword: &token.Token{Type: token.SUPER, Lexeme: "super"},
+									Method:  &token.Token{Type: token.IDENTIFIER, Lexeme: "speak"},
+								},
+								Arguments: []ast.Expr{},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	comp := New(nil)
+	err := comp.Compile(input)
+	if err == nil {
+		t.Fatalf("expected error for 'super' without superclass, got none")
+	}
+
+	expected := "cannot use 'super' in a class with no superclass"
+	if err.Error() != expected {
+		t.Fatalf("wrong error. want=%q, got=%q", expected, err.Error())
+	}
+}
+
+func TestClassSelfInheritance(t *testing.T) {
+	// class Animal < Animal {} should error
+	input := &ast.ClassStmt{
+		Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "Animal"},
+		SuperClass: &ast.VariableExpr{
+			Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "Animal"},
+		},
+		Methods: []*ast.FunctionStmt{},
+	}
+
+	comp := New(nil)
+	err := comp.Compile(input)
+	if err == nil {
+		t.Fatalf("expected error for self-inheritance, got none")
+	}
+
+	expected := "a class cannot inherit from itself"
+	if err.Error() != expected {
+		t.Fatalf("wrong error. want=%q, got=%q", expected, err.Error())
+	}
+}
+
+func TestClassMethodWithParameters(t *testing.T) {
+	tests := []compilerTestCase{
+		{
+			// class Calculator {
+			//   fn add(a, b) { return a + b; }
+			// }
+			input: &ast.ClassStmt{
+				Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "Calculator"},
+				Methods: []*ast.FunctionStmt{
+					{
+						Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "add"},
+						Params: []*token.Token{
+							{Type: token.IDENTIFIER, Lexeme: "a"},
+							{Type: token.IDENTIFIER, Lexeme: "b"},
+						},
+						Body: &ast.BlockStmt{
+							Statements: []ast.Stmt{
+								&ast.ReturnStmt{
+									Keyword: &token.Token{Type: token.RETURN},
+									Value: &ast.BinaryExpr{
+										Left: &ast.VariableExpr{
+											Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "a"},
+										},
+										Right: &ast.VariableExpr{
+											Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "b"},
+										},
+										Operator: &token.Token{Type: token.PLUS},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedConstants: []interface{}{
+				// add method: this=local0, a=local1, b=local2
+				[]code.Instructions{
+					code.Make(code.OpGetLocal, 1), // a
+					code.Make(code.OpGetLocal, 2), // b
+					code.Make(code.OpAdd),
+					code.Make(code.OpReturnValue),
+					code.Make(code.OpReturn),
+				},
+				"Calculator",
+			},
+			expectedInstructions: []code.Instructions{
+				code.Make(code.OpNil),              // no superclass
+				code.Make(code.OpGetClosure, 0, 0), // add method closure
+				code.Make(code.OpClass, 1, 1),      // class name at constant 1, 1 method
+				code.Make(code.OpSetGlobal, 0),     // store class in global
+			},
+		},
+	}
+
+	runCompilerTests(t, tests)
+}
+
+func TestClassInitReturnsThis(t *testing.T) {
+	tests := []compilerTestCase{
+		{
+			// class Animal {
+			//   fn init() { return; }  // explicit return in init should still return this
+			// }
+			input: &ast.ClassStmt{
+				Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "Animal"},
+				Methods: []*ast.FunctionStmt{
+					{
+						Name:   &token.Token{Type: token.IDENTIFIER, Lexeme: "init"},
+						Params: []*token.Token{},
+						Body: &ast.BlockStmt{
+							Statements: []ast.Stmt{
+								&ast.ReturnStmt{
+									Keyword: &token.Token{Type: token.RETURN},
+									Value:   nil, // explicit return with no value
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedConstants: []interface{}{
+				// init method: this=local0
+				[]code.Instructions{
+					code.Make(code.OpGetLocal, 0), // return this (even with explicit return;)
+					code.Make(code.OpReturnValue),
+					code.Make(code.OpGetLocal, 0), // implicit this return at end
+					code.Make(code.OpReturnValue),
+				},
+				"Animal",
+			},
+			expectedInstructions: []code.Instructions{
+				code.Make(code.OpNil),              // no superclass
+				code.Make(code.OpGetClosure, 0, 0), // init method closure
+				code.Make(code.OpClass, 1, 1),      // class name at constant 1, 1 method
+				code.Make(code.OpSetGlobal, 0),     // store class in global
+			},
+		},
+	}
+
+	runCompilerTests(t, tests)
+}

@@ -1,0 +1,123 @@
+// Basic Class Definition and Instantiation
+
+class Point {
+  init(x, y) {
+    this.x = x;
+    this.y = y;
+  }
+}
+
+var p = Point(3, 4);
+print p.x;
+print p.y;
+
+// Class with Methods
+
+class Counter {
+  init() {
+    this.count = 0;
+  }
+
+  increment() {
+    this.count = this.count + 1;
+  }
+
+  decrement() {
+    this.count = this.count - 1;
+  }
+
+  getCount() {
+    return this.count;
+  }
+}
+
+var counter = Counter();
+print counter.getCount();
+counter.increment();
+counter.increment();
+counter.increment();
+print counter.getCount();
+counter.decrement();
+print counter.getCount();
+
+// Class with Method Returning Value
+
+class Calculator {
+  init(value) {
+    this.value = value;
+  }
+
+  add(n) {
+    this.value = this.value + n;
+    return this;
+  }
+
+  multiply(n) {
+    this.value = this.value * n;
+    return this;
+  }
+
+  getValue() {
+    return this.value;
+  }
+}
+
+var calc = Calculator(10);
+calc.add(5);
+calc.multiply(2);
+print calc.getValue();
+
+// Method Chaining
+
+var calc2 = Calculator(1);
+print calc2.add(2).multiply(3).add(4).getValue();
+
+// Class with Multiple Instances
+
+class Dog {
+  init(name, breed) {
+    this.name = name;
+    this.breed = breed;
+  }
+
+  bark() {
+    return this.name + " says woof!";
+  }
+}
+
+var dog1 = Dog("Rex", "German Shepherd");
+var dog2 = Dog("Buddy", "Golden Retriever");
+print dog1.bark();
+print dog2.bark();
+print dog1.name;
+print dog2.breed;
+
+// Class without init
+
+class Empty {
+  getValue() {
+    return 42;
+  }
+}
+
+var e = Empty();
+print e.getValue();
+
+// Setting properties dynamically
+
+class Box {
+  init() {
+    this.items = 0;
+  }
+
+  getLabel() {
+    return this.label;
+  }
+}
+
+var box = Box();
+box.label = "Fragile";
+print box.label;
+box.items = 5;
+print box.items;
+print box.getLabel();

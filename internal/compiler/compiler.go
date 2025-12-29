@@ -18,6 +18,16 @@ type Bytecode struct {
 	Constants    []objects.Object
 }
 
+// ClassCompiler tracks state while compiling a class.
+// This enables compile-time validation of this/super usage
+// and provides context for future static field support.
+type ClassCompiler struct {
+	name            string
+	hasSuperClass   bool
+	enclosing       *ClassCompiler // for nested classes
+	isCompilingInit bool           // true when compiling the init method
+}
+
 type Compiler struct {
 	constants   []objects.Object
 	symbolTable *SymbolTable
@@ -26,6 +36,7 @@ type Compiler struct {
 	scopes     []CompilationScope
 	scopeIndex int
 
+	classCompiler     *ClassCompiler // nil when not compiling a class
 	diagnosticHandler objects.DiagnosticHandler
 }
 
@@ -294,7 +305,11 @@ func (c *Compiler) compileStatement(stmt ast.Stmt) error {
 		return nil
 
 	case *ast.ReturnStmt:
-		if stmt.Value != nil {
+		// In init methods, always return 'this' regardless of what the user wrote
+		if c.classCompiler != nil && c.classCompiler.isCompilingInit {
+			c.emit(code.OpGetLocal, 0) // 'this' is always local 0
+			c.emit(code.OpReturnValue)
+		} else if stmt.Value != nil {
 			if err := c.compileExpression(stmt.Value); err != nil {
 				return err
 			}
@@ -303,6 +318,9 @@ func (c *Compiler) compileStatement(stmt ast.Stmt) error {
 			c.emit(code.OpReturn)
 		}
 		return nil
+
+	case *ast.ClassStmt:
+		return c.compileClassStmt(stmt)
 
 	default:
 		return fmt.Errorf("unsupported statement type: %T", stmt)
@@ -425,6 +443,11 @@ func (c *Compiler) compileExpression(node ast.Expr) error {
 		c.emitGetSymbol(symbol)
 
 	case *ast.AssignExpr:
+		// Prevent assignment to 'this'
+		if node.Name.Lexeme == "this" {
+			return c.error(node.Name, "cannot assign to 'this'")
+		}
+
 		symbol, ok := c.symbolTable.Resolve(node.Name.Lexeme)
 		if !ok {
 			return c.error(node.Name, fmt.Sprintf("undefined variable %s", node.Name.Lexeme))
@@ -528,6 +551,61 @@ func (c *Compiler) compileExpression(node ast.Expr) error {
 		if err := c.compileFunction(node.Params, node.Body, ""); err != nil {
 			return err
 		}
+
+	case *ast.GetExpr:
+		if err := c.compileExpression(node.Object); err != nil {
+			return err
+		}
+		nameIdx := c.addConstant(&objects.String{Value: node.Name.Lexeme})
+		c.emit(code.OpGetProperty, nameIdx)
+
+	case *ast.SetExpr:
+		if err := c.compileExpression(node.Object); err != nil {
+			return err
+		}
+		if err := c.compileExpression(node.Value); err != nil {
+			return err
+		}
+		nameIdx := c.addConstant(&objects.String{Value: node.Name.Lexeme})
+		c.emit(code.OpSetProperty, nameIdx)
+
+	case *ast.ThisExpr:
+		// Validate: must be inside a class
+		if c.classCompiler == nil {
+			return c.error(node.Keyword, "cannot use 'this' outside of a class")
+		}
+
+		// Validate: must be inside a method (this is defined)
+		symbol, ok := c.symbolTable.Resolve("this")
+		if !ok {
+			return c.error(node.Keyword, "cannot use 'this' outside of a method")
+		}
+
+		c.emitGetSymbol(symbol)
+
+	case *ast.SuperExpr:
+		// Validate: must be inside a class
+		if c.classCompiler == nil {
+			return c.error(node.Keyword, "cannot use 'super' outside of a class")
+		}
+
+		// Validate: class must have a superclass
+		if !c.classCompiler.hasSuperClass {
+			return c.error(node.Keyword, "cannot use 'super' in a class with no superclass")
+		}
+
+		// Validate: must be inside a method
+		symbol, ok := c.symbolTable.Resolve("this")
+		if !ok {
+			return c.error(node.Keyword, "cannot use 'super' outside of a method")
+		}
+
+		// Push 'this' instance (super method will be bound to it)
+		c.emitGetSymbol(symbol)
+
+		// Emit OpGetSuper with method name
+		nameIdx := c.addConstant(&objects.String{Value: node.Method.Lexeme})
+		c.emit(code.OpGetSuper, nameIdx)
 	}
 	return nil
 }
@@ -596,35 +674,32 @@ func (c *Compiler) compileFunction(params []*token.Token, body *ast.BlockStmt, f
 	// If the function doesn't have an explicit return, emit OpReturn
 	c.emit(code.OpReturn)
 
-	freeSymbols := c.symbolTable.FreeSymbols
-	numLocals := c.symbolTable.NumDefinitions()
-	instructions := c.leaveScope()
-
-	compiledFn := &objects.CompiledFunction{
-		Instructions:  instructions,
-		NumLocals:     numLocals,
+	fn := &objects.CompiledFunction{
+		Instructions:  c.currentInstructions(),
+		NumLocals:     c.symbolTable.NumDefinitions(),
 		NumParameters: len(params),
+		Name:          functionName,
 	}
+	freeSymbols := c.symbolTable.FreeSymbols
 
-	// Emit instructions to load free variables onto the stack
-	// Use OpMakeCell for local variables to ensure they're wrapped in Cells
-	// and the Cell is stored back in the local slot for sharing
+	c.leaveScope()
+	c.emitClosure(fn, freeSymbols)
+	return nil
+}
+
+// emitClosure emits free variable loading instructions and OpGetClosure.
+func (c *Compiler) emitClosure(fn *objects.CompiledFunction, freeSymbols []Symbol) {
 	for _, s := range freeSymbols {
 		switch s.Scope {
 		case LocalScope:
-			// Use OpMakeCell to wrap the local in a Cell and store it back
-			// This ensures multiple closures share the same Cell
 			c.emit(code.OpMakeCell, s.Index)
 		case FreeScope:
-			// Free variables are already Cells, just push them
 			c.emit(code.OpGetFree, s.Index)
 		}
 	}
 
-	constIdx := c.addConstant(compiledFn)
+	constIdx := c.addConstant(fn)
 	c.emit(code.OpGetClosure, constIdx, len(freeSymbols))
-
-	return nil
 }
 
 func (c *Compiler) patchBreakJumps(loopEnd int) {
@@ -645,4 +720,93 @@ func (c *Compiler) error(tok *token.Token, message string) error {
 		c.diagnosticHandler.Error(*tok, message)
 	}
 	return fmt.Errorf("%s", message)
+}
+
+func (c *Compiler) compileClassStmt(stmt *ast.ClassStmt) error {
+	className := stmt.Name.Lexeme
+
+	// Define class name in symbol table (allows recursive references)
+	symbol := c.symbolTable.Define(className, false)
+
+	// Enter class compilation context
+	enclosingClass := c.classCompiler
+	c.classCompiler = &ClassCompiler{
+		name:          className,
+		hasSuperClass: stmt.SuperClass != nil,
+		enclosing:     enclosingClass,
+	}
+
+	// Push superclass or nil to stack
+	if stmt.SuperClass != nil {
+		if err := c.compileExpression(stmt.SuperClass); err != nil {
+			return err
+		}
+		// Validate: can't inherit from self
+		if stmt.SuperClass.Name.Lexeme == className {
+			return c.error(stmt.SuperClass.Name, "a class cannot inherit from itself")
+		}
+	} else {
+		c.emit(code.OpNil)
+	}
+
+	// Compile each method (pushes closures to stack)
+	for _, method := range stmt.Methods {
+		if err := c.compileMethod(method); err != nil {
+			return err
+		}
+	}
+
+	nameIdx := c.addConstant(&objects.String{Value: className})
+	c.emit(code.OpClass, nameIdx, len(stmt.Methods))
+
+	c.emitSetSymbol(symbol)
+
+	// Exit class compilation context
+	c.classCompiler = enclosingClass
+
+	return nil
+}
+
+// compileMethod compiles a method with 'this' as implicit first parameter.
+func (c *Compiler) compileMethod(method *ast.FunctionStmt) error {
+	c.enterScope(method.Name.Lexeme)
+
+	isInit := method.Name.Lexeme == "init"
+	if isInit {
+		c.classCompiler.isCompilingInit = true
+	}
+
+	// Define 'this' as first local (index 0)
+	c.symbolTable.Define("this", true)
+
+	for _, param := range method.Params {
+		c.symbolTable.Define(param.Lexeme, false)
+	}
+
+	for _, stmt := range method.Body.Statements {
+		if err := c.compileStatement(stmt); err != nil {
+			return err
+		}
+	}
+
+	// For init methods, implicitly return 'this' instead of nil
+	if isInit {
+		c.emit(code.OpGetLocal, 0) // 'this' is always local 0
+		c.emit(code.OpReturnValue)
+		c.classCompiler.isCompilingInit = false
+	} else {
+		c.emit(code.OpReturn)
+	}
+
+	fn := &objects.CompiledFunction{
+		Instructions:  c.currentInstructions(),
+		NumLocals:     c.symbolTable.NumDefinitions(),
+		NumParameters: len(method.Params) + 1, // +1 for 'this'
+		Name:          method.Name.Lexeme,
+	}
+	freeSymbols := c.symbolTable.FreeSymbols
+
+	c.leaveScope()
+	c.emitClosure(fn, freeSymbols)
+	return nil
 }

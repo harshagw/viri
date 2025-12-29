@@ -330,18 +330,23 @@ func testExpectedObject(t *testing.T, expected interface{}, actual objects.Objec
 }
 
 func testStringObject(expected string, actual objects.Object) error {
-	result, ok := actual.(*objects.String)
-	if !ok {
-		return fmt.Errorf("object is not String. got=%T (%+v)",
-			actual, actual)
+	// Check for String object first
+	if result, ok := actual.(*objects.String); ok {
+		if result.Value != expected {
+			return fmt.Errorf("object has wrong value. want=%q, got=%q",
+				expected, result.Value)
+		}
+		return nil
 	}
 
-	if result.Value != expected {
-		return fmt.Errorf("object has wrong value. want=%q, got=%q",
-			expected, result.Value)
+	// For non-string objects, compare against their Inspect() output
+	// This allows testing instances, classes, etc. by their string representation
+	if actual.Inspect() == expected {
+		return nil
 	}
 
-	return nil
+	return fmt.Errorf("object is not String and Inspect() doesn't match. want=%q, got=%q (%T)",
+		expected, actual.Inspect(), actual)
 }
 
 func testIntegerObject(expected int64, actual objects.Object) error {
@@ -3513,4 +3518,1503 @@ func TestMutableClosures(t *testing.T) {
 	}
 
 	runVmTests(t, tests)
+}
+
+func TestClassInstantiation(t *testing.T) {
+	tests := []vmTestCase{
+		// class Animal {}
+		// var a = Animal();
+		// a; // should be an instance
+		{&ast.BlockStmt{
+			Statements: []ast.Stmt{
+				&ast.ClassStmt{
+					Name:    &token.Token{Type: token.IDENTIFIER, Lexeme: "Animal"},
+					Methods: []*ast.FunctionStmt{},
+				},
+				&ast.VarDeclStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "a"},
+					Initializer: &ast.CallExpr{
+						Callee: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "Animal"},
+						},
+						Arguments: []ast.Expr{},
+					},
+				},
+				&ast.ExprStmt{
+					Expr: &ast.VariableExpr{
+						Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "a"},
+					},
+				},
+			},
+		}, "<instance Animal>"},
+	}
+
+	runVmTests(t, tests)
+}
+
+func TestClassFields(t *testing.T) {
+	tests := []vmTestCase{
+		// class Animal {}
+		// var a = Animal();
+		// a.name = "Dog";
+		// a.name;
+		{&ast.BlockStmt{
+			Statements: []ast.Stmt{
+				&ast.ClassStmt{
+					Name:    &token.Token{Type: token.IDENTIFIER, Lexeme: "Animal"},
+					Methods: []*ast.FunctionStmt{},
+				},
+				&ast.VarDeclStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "a"},
+					Initializer: &ast.CallExpr{
+						Callee: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "Animal"},
+						},
+						Arguments: []ast.Expr{},
+					},
+				},
+				&ast.ExprStmt{
+					Expr: &ast.SetExpr{
+						Object: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "a"},
+						},
+						Name:  &token.Token{Type: token.IDENTIFIER, Lexeme: "name"},
+						Value: &ast.LiteralExpr{Value: "Dog"},
+					},
+				},
+				&ast.ExprStmt{
+					Expr: &ast.GetExpr{
+						Object: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "a"},
+						},
+						Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "name"},
+					},
+				},
+			},
+		}, "Dog"},
+	}
+
+	runVmTests(t, tests)
+}
+
+func TestClassMethods(t *testing.T) {
+	tests := []vmTestCase{
+		// class Animal {
+		//   fn speak() { return "sound"; }
+		// }
+		// var a = Animal();
+		// a.speak();
+		{&ast.BlockStmt{
+			Statements: []ast.Stmt{
+				&ast.ClassStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "Animal"},
+					Methods: []*ast.FunctionStmt{
+						{
+							Name:   &token.Token{Type: token.IDENTIFIER, Lexeme: "speak"},
+							Params: []*token.Token{},
+							Body: &ast.BlockStmt{
+								Statements: []ast.Stmt{
+									&ast.ReturnStmt{
+										Keyword: &token.Token{Type: token.RETURN},
+										Value:   &ast.LiteralExpr{Value: "sound"},
+									},
+								},
+							},
+						},
+					},
+				},
+				&ast.VarDeclStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "a"},
+					Initializer: &ast.CallExpr{
+						Callee: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "Animal"},
+						},
+						Arguments: []ast.Expr{},
+					},
+				},
+				&ast.ExprStmt{
+					Expr: &ast.CallExpr{
+						Callee: &ast.GetExpr{
+							Object: &ast.VariableExpr{
+								Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "a"},
+							},
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "speak"},
+						},
+						Arguments: []ast.Expr{},
+					},
+				},
+			},
+		}, "sound"},
+	}
+
+	runVmTests(t, tests)
+}
+
+func TestClassThis(t *testing.T) {
+	tests := []vmTestCase{
+		// class Animal {
+		//   fn setName(n) { this.name = n; }
+		//   fn getName() { return this.name; }
+		// }
+		// var a = Animal();
+		// a.setName("Dog");
+		// a.getName();
+		{&ast.BlockStmt{
+			Statements: []ast.Stmt{
+				&ast.ClassStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "Animal"},
+					Methods: []*ast.FunctionStmt{
+						{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "setName"},
+							Params: []*token.Token{
+								{Type: token.IDENTIFIER, Lexeme: "n"},
+							},
+							Body: &ast.BlockStmt{
+								Statements: []ast.Stmt{
+									&ast.ExprStmt{
+										Expr: &ast.SetExpr{
+											Object: &ast.ThisExpr{
+												Keyword: &token.Token{Type: token.THIS, Lexeme: "this"},
+											},
+											Name:  &token.Token{Type: token.IDENTIFIER, Lexeme: "name"},
+											Value: &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "n"}},
+										},
+									},
+								},
+							},
+						},
+						{
+							Name:   &token.Token{Type: token.IDENTIFIER, Lexeme: "getName"},
+							Params: []*token.Token{},
+							Body: &ast.BlockStmt{
+								Statements: []ast.Stmt{
+									&ast.ReturnStmt{
+										Keyword: &token.Token{Type: token.RETURN},
+										Value: &ast.GetExpr{
+											Object: &ast.ThisExpr{
+												Keyword: &token.Token{Type: token.THIS, Lexeme: "this"},
+											},
+											Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "name"},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				&ast.VarDeclStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "a"},
+					Initializer: &ast.CallExpr{
+						Callee: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "Animal"},
+						},
+						Arguments: []ast.Expr{},
+					},
+				},
+				&ast.ExprStmt{
+					Expr: &ast.CallExpr{
+						Callee: &ast.GetExpr{
+							Object: &ast.VariableExpr{
+								Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "a"},
+							},
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "setName"},
+						},
+						Arguments: []ast.Expr{
+							&ast.LiteralExpr{Value: "Dog"},
+						},
+					},
+				},
+				&ast.ExprStmt{
+					Expr: &ast.CallExpr{
+						Callee: &ast.GetExpr{
+							Object: &ast.VariableExpr{
+								Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "a"},
+							},
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "getName"},
+						},
+						Arguments: []ast.Expr{},
+					},
+				},
+			},
+		}, "Dog"},
+	}
+
+	runVmTests(t, tests)
+}
+
+func TestClassInit(t *testing.T) {
+	tests := []vmTestCase{
+		// class Animal {
+		//   fn init(name) { this.name = name; }
+		//   fn getName() { return this.name; }
+		// }
+		// var a = Animal("Cat");
+		// a.getName();
+		{&ast.BlockStmt{
+			Statements: []ast.Stmt{
+				&ast.ClassStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "Animal"},
+					Methods: []*ast.FunctionStmt{
+						{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "init"},
+							Params: []*token.Token{
+								{Type: token.IDENTIFIER, Lexeme: "name"},
+							},
+							Body: &ast.BlockStmt{
+								Statements: []ast.Stmt{
+									&ast.ExprStmt{
+										Expr: &ast.SetExpr{
+											Object: &ast.ThisExpr{
+												Keyword: &token.Token{Type: token.THIS, Lexeme: "this"},
+											},
+											Name:  &token.Token{Type: token.IDENTIFIER, Lexeme: "name"},
+											Value: &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "name"}},
+										},
+									},
+								},
+							},
+						},
+						{
+							Name:   &token.Token{Type: token.IDENTIFIER, Lexeme: "getName"},
+							Params: []*token.Token{},
+							Body: &ast.BlockStmt{
+								Statements: []ast.Stmt{
+									&ast.ReturnStmt{
+										Keyword: &token.Token{Type: token.RETURN},
+										Value: &ast.GetExpr{
+											Object: &ast.ThisExpr{
+												Keyword: &token.Token{Type: token.THIS, Lexeme: "this"},
+											},
+											Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "name"},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				&ast.VarDeclStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "a"},
+					Initializer: &ast.CallExpr{
+						Callee: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "Animal"},
+						},
+						Arguments: []ast.Expr{
+							&ast.LiteralExpr{Value: "Cat"},
+						},
+					},
+				},
+				&ast.ExprStmt{
+					Expr: &ast.CallExpr{
+						Callee: &ast.GetExpr{
+							Object: &ast.VariableExpr{
+								Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "a"},
+							},
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "getName"},
+						},
+						Arguments: []ast.Expr{},
+					},
+				},
+			},
+		}, "Cat"},
+	}
+
+	runVmTests(t, tests)
+}
+
+func TestClassInheritance(t *testing.T) {
+	tests := []vmTestCase{
+		// class Animal {
+		//   fn speak() { return "generic sound"; }
+		// }
+		// class Dog < Animal {}
+		// var d = Dog();
+		// d.speak();
+		{&ast.BlockStmt{
+			Statements: []ast.Stmt{
+				&ast.ClassStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "Animal"},
+					Methods: []*ast.FunctionStmt{
+						{
+							Name:   &token.Token{Type: token.IDENTIFIER, Lexeme: "speak"},
+							Params: []*token.Token{},
+							Body: &ast.BlockStmt{
+								Statements: []ast.Stmt{
+									&ast.ReturnStmt{
+										Keyword: &token.Token{Type: token.RETURN},
+										Value:   &ast.LiteralExpr{Value: "generic sound"},
+									},
+								},
+							},
+						},
+					},
+				},
+				&ast.ClassStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "Dog"},
+					SuperClass: &ast.VariableExpr{
+						Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "Animal"},
+					},
+					Methods: []*ast.FunctionStmt{},
+				},
+				&ast.VarDeclStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "d"},
+					Initializer: &ast.CallExpr{
+						Callee: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "Dog"},
+						},
+						Arguments: []ast.Expr{},
+					},
+				},
+				&ast.ExprStmt{
+					Expr: &ast.CallExpr{
+						Callee: &ast.GetExpr{
+							Object: &ast.VariableExpr{
+								Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "d"},
+							},
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "speak"},
+						},
+						Arguments: []ast.Expr{},
+					},
+				},
+			},
+		}, "generic sound"},
+	}
+
+	runVmTests(t, tests)
+}
+
+func TestClassMethodOverride(t *testing.T) {
+	tests := []vmTestCase{
+		// class Animal {
+		//   fn speak() { return "generic sound"; }
+		// }
+		// class Dog < Animal {
+		//   fn speak() { return "woof"; }
+		// }
+		// var d = Dog();
+		// d.speak();
+		{&ast.BlockStmt{
+			Statements: []ast.Stmt{
+				&ast.ClassStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "Animal"},
+					Methods: []*ast.FunctionStmt{
+						{
+							Name:   &token.Token{Type: token.IDENTIFIER, Lexeme: "speak"},
+							Params: []*token.Token{},
+							Body: &ast.BlockStmt{
+								Statements: []ast.Stmt{
+									&ast.ReturnStmt{
+										Keyword: &token.Token{Type: token.RETURN},
+										Value:   &ast.LiteralExpr{Value: "generic sound"},
+									},
+								},
+							},
+						},
+					},
+				},
+				&ast.ClassStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "Dog"},
+					SuperClass: &ast.VariableExpr{
+						Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "Animal"},
+					},
+					Methods: []*ast.FunctionStmt{
+						{
+							Name:   &token.Token{Type: token.IDENTIFIER, Lexeme: "speak"},
+							Params: []*token.Token{},
+							Body: &ast.BlockStmt{
+								Statements: []ast.Stmt{
+									&ast.ReturnStmt{
+										Keyword: &token.Token{Type: token.RETURN},
+										Value:   &ast.LiteralExpr{Value: "woof"},
+									},
+								},
+							},
+						},
+					},
+				},
+				&ast.VarDeclStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "d"},
+					Initializer: &ast.CallExpr{
+						Callee: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "Dog"},
+						},
+						Arguments: []ast.Expr{},
+					},
+				},
+				&ast.ExprStmt{
+					Expr: &ast.CallExpr{
+						Callee: &ast.GetExpr{
+							Object: &ast.VariableExpr{
+								Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "d"},
+							},
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "speak"},
+						},
+						Arguments: []ast.Expr{},
+					},
+				},
+			},
+		}, "woof"},
+	}
+
+	runVmTests(t, tests)
+}
+
+func TestClassSuper(t *testing.T) {
+	tests := []vmTestCase{
+		// class Animal {
+		//   fn speak() { return "generic"; }
+		// }
+		// class Dog < Animal {
+		//   fn speak() { return super.speak() + " woof"; }
+		// }
+		// var d = Dog();
+		// d.speak();
+		{&ast.BlockStmt{
+			Statements: []ast.Stmt{
+				&ast.ClassStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "Animal"},
+					Methods: []*ast.FunctionStmt{
+						{
+							Name:   &token.Token{Type: token.IDENTIFIER, Lexeme: "speak"},
+							Params: []*token.Token{},
+							Body: &ast.BlockStmt{
+								Statements: []ast.Stmt{
+									&ast.ReturnStmt{
+										Keyword: &token.Token{Type: token.RETURN},
+										Value:   &ast.LiteralExpr{Value: "generic"},
+									},
+								},
+							},
+						},
+					},
+				},
+				&ast.ClassStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "Dog"},
+					SuperClass: &ast.VariableExpr{
+						Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "Animal"},
+					},
+					Methods: []*ast.FunctionStmt{
+						{
+							Name:   &token.Token{Type: token.IDENTIFIER, Lexeme: "speak"},
+							Params: []*token.Token{},
+							Body: &ast.BlockStmt{
+								Statements: []ast.Stmt{
+									&ast.ReturnStmt{
+										Keyword: &token.Token{Type: token.RETURN},
+										Value: &ast.BinaryExpr{
+											Left: &ast.CallExpr{
+												Callee: &ast.SuperExpr{
+													Keyword: &token.Token{Type: token.SUPER, Lexeme: "super"},
+													Method:  &token.Token{Type: token.IDENTIFIER, Lexeme: "speak"},
+												},
+												Arguments: []ast.Expr{},
+											},
+											Operator: &token.Token{Type: token.PLUS},
+											Right:    &ast.LiteralExpr{Value: " woof"},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				&ast.VarDeclStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "d"},
+					Initializer: &ast.CallExpr{
+						Callee: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "Dog"},
+						},
+						Arguments: []ast.Expr{},
+					},
+				},
+				&ast.ExprStmt{
+					Expr: &ast.CallExpr{
+						Callee: &ast.GetExpr{
+							Object: &ast.VariableExpr{
+								Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "d"},
+							},
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "speak"},
+						},
+						Arguments: []ast.Expr{},
+					},
+				},
+			},
+		}, "generic woof"},
+	}
+
+	runVmTests(t, tests)
+}
+
+func TestClassMultipleInstances(t *testing.T) {
+	tests := []vmTestCase{
+		// class Animal {}
+		// var a1 = Animal();
+		// var a2 = Animal();
+		// a1.name = "Dog";
+		// a2.name = "Cat";
+		// a1.name;
+		{&ast.BlockStmt{
+			Statements: []ast.Stmt{
+				&ast.ClassStmt{
+					Name:    &token.Token{Type: token.IDENTIFIER, Lexeme: "Animal"},
+					Methods: []*ast.FunctionStmt{},
+				},
+				&ast.VarDeclStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "a1"},
+					Initializer: &ast.CallExpr{
+						Callee: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "Animal"},
+						},
+						Arguments: []ast.Expr{},
+					},
+				},
+				&ast.VarDeclStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "a2"},
+					Initializer: &ast.CallExpr{
+						Callee: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "Animal"},
+						},
+						Arguments: []ast.Expr{},
+					},
+				},
+				&ast.ExprStmt{
+					Expr: &ast.SetExpr{
+						Object: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "a1"},
+						},
+						Name:  &token.Token{Type: token.IDENTIFIER, Lexeme: "name"},
+						Value: &ast.LiteralExpr{Value: "Dog"},
+					},
+				},
+				&ast.ExprStmt{
+					Expr: &ast.SetExpr{
+						Object: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "a2"},
+						},
+						Name:  &token.Token{Type: token.IDENTIFIER, Lexeme: "name"},
+						Value: &ast.LiteralExpr{Value: "Cat"},
+					},
+				},
+				&ast.ExprStmt{
+					Expr: &ast.GetExpr{
+						Object: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "a1"},
+						},
+						Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "name"},
+					},
+				},
+			},
+		}, "Dog"},
+	}
+
+	runVmTests(t, tests)
+}
+
+func TestClassMethodWithArguments(t *testing.T) {
+	tests := []vmTestCase{
+		// class Calculator {
+		//   fn add(a, b) { return a + b; }
+		// }
+		// var c = Calculator();
+		// c.add(3, 4);
+		{&ast.BlockStmt{
+			Statements: []ast.Stmt{
+				&ast.ClassStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "Calculator"},
+					Methods: []*ast.FunctionStmt{
+						{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "add"},
+							Params: []*token.Token{
+								{Type: token.IDENTIFIER, Lexeme: "a"},
+								{Type: token.IDENTIFIER, Lexeme: "b"},
+							},
+							Body: &ast.BlockStmt{
+								Statements: []ast.Stmt{
+									&ast.ReturnStmt{
+										Keyword: &token.Token{Type: token.RETURN},
+										Value: &ast.BinaryExpr{
+											Left: &ast.VariableExpr{
+												Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "a"},
+											},
+											Right: &ast.VariableExpr{
+												Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "b"},
+											},
+											Operator: &token.Token{Type: token.PLUS},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				&ast.VarDeclStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "c"},
+					Initializer: &ast.CallExpr{
+						Callee: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "Calculator"},
+						},
+						Arguments: []ast.Expr{},
+					},
+				},
+				&ast.ExprStmt{
+					Expr: &ast.CallExpr{
+						Callee: &ast.GetExpr{
+							Object: &ast.VariableExpr{
+								Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "c"},
+							},
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "add"},
+						},
+						Arguments: []ast.Expr{
+							&ast.LiteralExpr{Value: 3},
+							&ast.LiteralExpr{Value: 4},
+						},
+					},
+				},
+			},
+		}, 7},
+	}
+
+	runVmTests(t, tests)
+}
+
+func TestClassThisInMethods(t *testing.T) {
+	tests := []vmTestCase{
+		// class Counter {
+		//   fn init() { this.count = 0; }
+		//   fn increment() { this.count = this.count + 1; return this.count; }
+		// }
+		// var c = Counter();
+		// c.increment();
+		// c.increment();
+		// c.increment();
+		{&ast.BlockStmt{
+			Statements: []ast.Stmt{
+				&ast.ClassStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "Counter"},
+					Methods: []*ast.FunctionStmt{
+						{
+							Name:   &token.Token{Type: token.IDENTIFIER, Lexeme: "init"},
+							Params: []*token.Token{},
+							Body: &ast.BlockStmt{
+								Statements: []ast.Stmt{
+									&ast.ExprStmt{
+										Expr: &ast.SetExpr{
+											Object: &ast.ThisExpr{
+												Keyword: &token.Token{Type: token.THIS, Lexeme: "this"},
+											},
+											Name:  &token.Token{Type: token.IDENTIFIER, Lexeme: "count"},
+											Value: &ast.LiteralExpr{Value: 0},
+										},
+									},
+								},
+							},
+						},
+						{
+							Name:   &token.Token{Type: token.IDENTIFIER, Lexeme: "increment"},
+							Params: []*token.Token{},
+							Body: &ast.BlockStmt{
+								Statements: []ast.Stmt{
+									&ast.ExprStmt{
+										Expr: &ast.SetExpr{
+											Object: &ast.ThisExpr{
+												Keyword: &token.Token{Type: token.THIS, Lexeme: "this"},
+											},
+											Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "count"},
+											Value: &ast.BinaryExpr{
+												Left: &ast.GetExpr{
+													Object: &ast.ThisExpr{
+														Keyword: &token.Token{Type: token.THIS, Lexeme: "this"},
+													},
+													Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "count"},
+												},
+												Right:    &ast.LiteralExpr{Value: 1},
+												Operator: &token.Token{Type: token.PLUS},
+											},
+										},
+									},
+									&ast.ReturnStmt{
+										Keyword: &token.Token{Type: token.RETURN},
+										Value: &ast.GetExpr{
+											Object: &ast.ThisExpr{
+												Keyword: &token.Token{Type: token.THIS, Lexeme: "this"},
+											},
+											Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "count"},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				&ast.VarDeclStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "c"},
+					Initializer: &ast.CallExpr{
+						Callee: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "Counter"},
+						},
+						Arguments: []ast.Expr{},
+					},
+				},
+				&ast.ExprStmt{
+					Expr: &ast.CallExpr{
+						Callee: &ast.GetExpr{
+							Object: &ast.VariableExpr{
+								Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "c"},
+							},
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "increment"},
+						},
+						Arguments: []ast.Expr{},
+					},
+				},
+				&ast.ExprStmt{
+					Expr: &ast.CallExpr{
+						Callee: &ast.GetExpr{
+							Object: &ast.VariableExpr{
+								Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "c"},
+							},
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "increment"},
+						},
+						Arguments: []ast.Expr{},
+					},
+				},
+				&ast.ExprStmt{
+					Expr: &ast.CallExpr{
+						Callee: &ast.GetExpr{
+							Object: &ast.VariableExpr{
+								Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "c"},
+							},
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "increment"},
+						},
+						Arguments: []ast.Expr{},
+					},
+				},
+			},
+		}, 3},
+	}
+
+	runVmTests(t, tests)
+}
+
+func TestClassInitWithMultipleParams(t *testing.T) {
+	tests := []vmTestCase{
+		// class Point {
+		//   fn init(x, y) { this.x = x; this.y = y; }
+		//   fn sum() { return this.x + this.y; }
+		// }
+		// var p = Point(3, 4);
+		// p.sum();
+		{&ast.BlockStmt{
+			Statements: []ast.Stmt{
+				&ast.ClassStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "Point"},
+					Methods: []*ast.FunctionStmt{
+						{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "init"},
+							Params: []*token.Token{
+								{Type: token.IDENTIFIER, Lexeme: "x"},
+								{Type: token.IDENTIFIER, Lexeme: "y"},
+							},
+							Body: &ast.BlockStmt{
+								Statements: []ast.Stmt{
+									&ast.ExprStmt{
+										Expr: &ast.SetExpr{
+											Object: &ast.ThisExpr{
+												Keyword: &token.Token{Type: token.THIS, Lexeme: "this"},
+											},
+											Name:  &token.Token{Type: token.IDENTIFIER, Lexeme: "x"},
+											Value: &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "x"}},
+										},
+									},
+									&ast.ExprStmt{
+										Expr: &ast.SetExpr{
+											Object: &ast.ThisExpr{
+												Keyword: &token.Token{Type: token.THIS, Lexeme: "this"},
+											},
+											Name:  &token.Token{Type: token.IDENTIFIER, Lexeme: "y"},
+											Value: &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "y"}},
+										},
+									},
+								},
+							},
+						},
+						{
+							Name:   &token.Token{Type: token.IDENTIFIER, Lexeme: "sum"},
+							Params: []*token.Token{},
+							Body: &ast.BlockStmt{
+								Statements: []ast.Stmt{
+									&ast.ReturnStmt{
+										Keyword: &token.Token{Type: token.RETURN},
+										Value: &ast.BinaryExpr{
+											Left: &ast.GetExpr{
+												Object: &ast.ThisExpr{
+													Keyword: &token.Token{Type: token.THIS, Lexeme: "this"},
+												},
+												Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "x"},
+											},
+											Right: &ast.GetExpr{
+												Object: &ast.ThisExpr{
+													Keyword: &token.Token{Type: token.THIS, Lexeme: "this"},
+												},
+												Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "y"},
+											},
+											Operator: &token.Token{Type: token.PLUS},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				&ast.VarDeclStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "p"},
+					Initializer: &ast.CallExpr{
+						Callee: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "Point"},
+						},
+						Arguments: []ast.Expr{
+							&ast.LiteralExpr{Value: 3},
+							&ast.LiteralExpr{Value: 4},
+						},
+					},
+				},
+				&ast.ExprStmt{
+					Expr: &ast.CallExpr{
+						Callee: &ast.GetExpr{
+							Object: &ast.VariableExpr{
+								Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "p"},
+							},
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "sum"},
+						},
+						Arguments: []ast.Expr{},
+					},
+				},
+			},
+		}, 7},
+	}
+
+	runVmTests(t, tests)
+}
+
+func TestClassInheritedInit(t *testing.T) {
+	tests := []vmTestCase{
+		// class Animal {
+		//   fn init(name) { this.name = name; }
+		//   fn getName() { return this.name; }
+		// }
+		// class Dog < Animal {}
+		// var d = Dog("Buddy");
+		// d.getName();
+		{&ast.BlockStmt{
+			Statements: []ast.Stmt{
+				&ast.ClassStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "Animal"},
+					Methods: []*ast.FunctionStmt{
+						{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "init"},
+							Params: []*token.Token{
+								{Type: token.IDENTIFIER, Lexeme: "name"},
+							},
+							Body: &ast.BlockStmt{
+								Statements: []ast.Stmt{
+									&ast.ExprStmt{
+										Expr: &ast.SetExpr{
+											Object: &ast.ThisExpr{
+												Keyword: &token.Token{Type: token.THIS, Lexeme: "this"},
+											},
+											Name:  &token.Token{Type: token.IDENTIFIER, Lexeme: "name"},
+											Value: &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "name"}},
+										},
+									},
+								},
+							},
+						},
+						{
+							Name:   &token.Token{Type: token.IDENTIFIER, Lexeme: "getName"},
+							Params: []*token.Token{},
+							Body: &ast.BlockStmt{
+								Statements: []ast.Stmt{
+									&ast.ReturnStmt{
+										Keyword: &token.Token{Type: token.RETURN},
+										Value: &ast.GetExpr{
+											Object: &ast.ThisExpr{
+												Keyword: &token.Token{Type: token.THIS, Lexeme: "this"},
+											},
+											Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "name"},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				&ast.ClassStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "Dog"},
+					SuperClass: &ast.VariableExpr{
+						Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "Animal"},
+					},
+					Methods: []*ast.FunctionStmt{},
+				},
+				&ast.VarDeclStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "d"},
+					Initializer: &ast.CallExpr{
+						Callee: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "Dog"},
+						},
+						Arguments: []ast.Expr{
+							&ast.LiteralExpr{Value: "Buddy"},
+						},
+					},
+				},
+				&ast.ExprStmt{
+					Expr: &ast.CallExpr{
+						Callee: &ast.GetExpr{
+							Object: &ast.VariableExpr{
+								Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "d"},
+							},
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "getName"},
+						},
+						Arguments: []ast.Expr{},
+					},
+				},
+			},
+		}, "Buddy"},
+	}
+
+	runVmTests(t, tests)
+}
+
+func TestClassSuperWithArgs(t *testing.T) {
+	tests := []vmTestCase{
+		// class Animal {
+		//   fn greet(greeting) { return greeting; }
+		// }
+		// class Dog < Animal {
+		//   fn greet(greeting) { return super.greet(greeting) + " woof"; }
+		// }
+		// var d = Dog();
+		// d.greet("Hello");
+		{&ast.BlockStmt{
+			Statements: []ast.Stmt{
+				&ast.ClassStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "Animal"},
+					Methods: []*ast.FunctionStmt{
+						{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "greet"},
+							Params: []*token.Token{
+								{Type: token.IDENTIFIER, Lexeme: "greeting"},
+							},
+							Body: &ast.BlockStmt{
+								Statements: []ast.Stmt{
+									&ast.ReturnStmt{
+										Keyword: &token.Token{Type: token.RETURN},
+										Value: &ast.VariableExpr{
+											Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "greeting"},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				&ast.ClassStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "Dog"},
+					SuperClass: &ast.VariableExpr{
+						Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "Animal"},
+					},
+					Methods: []*ast.FunctionStmt{
+						{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "greet"},
+							Params: []*token.Token{
+								{Type: token.IDENTIFIER, Lexeme: "greeting"},
+							},
+							Body: &ast.BlockStmt{
+								Statements: []ast.Stmt{
+									&ast.ReturnStmt{
+										Keyword: &token.Token{Type: token.RETURN},
+										Value: &ast.BinaryExpr{
+											Left: &ast.CallExpr{
+												Callee: &ast.SuperExpr{
+													Keyword: &token.Token{Type: token.SUPER, Lexeme: "super"},
+													Method:  &token.Token{Type: token.IDENTIFIER, Lexeme: "greet"},
+												},
+												Arguments: []ast.Expr{
+													&ast.VariableExpr{
+														Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "greeting"},
+													},
+												},
+											},
+											Operator: &token.Token{Type: token.PLUS},
+											Right:    &ast.LiteralExpr{Value: " woof"},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				&ast.VarDeclStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "d"},
+					Initializer: &ast.CallExpr{
+						Callee: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "Dog"},
+						},
+						Arguments: []ast.Expr{},
+					},
+				},
+				&ast.ExprStmt{
+					Expr: &ast.CallExpr{
+						Callee: &ast.GetExpr{
+							Object: &ast.VariableExpr{
+								Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "d"},
+							},
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "greet"},
+						},
+						Arguments: []ast.Expr{
+							&ast.LiteralExpr{Value: "Hello"},
+						},
+					},
+				},
+			},
+		}, "Hello woof"},
+	}
+
+	runVmTests(t, tests)
+}
+
+func TestClassDeepInheritanceWithoutSuper(t *testing.T) {
+	// Test deep inheritance without super calls (super in deep chains requires
+	// more complex implementation to track static superclass)
+	tests := []vmTestCase{
+		// class A {
+		//   fn getValue() { return 1; }
+		// }
+		// class B < A {
+		//   fn getDouble() { return this.getValue() * 2; }
+		// }
+		// class C < B {}
+		// var c = C();
+		// c.getDouble(); // 1 * 2 = 2
+		{&ast.BlockStmt{
+			Statements: []ast.Stmt{
+				&ast.ClassStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "A"},
+					Methods: []*ast.FunctionStmt{
+						{
+							Name:   &token.Token{Type: token.IDENTIFIER, Lexeme: "getValue"},
+							Params: []*token.Token{},
+							Body: &ast.BlockStmt{
+								Statements: []ast.Stmt{
+									&ast.ReturnStmt{
+										Keyword: &token.Token{Type: token.RETURN},
+										Value:   &ast.LiteralExpr{Value: 1},
+									},
+								},
+							},
+						},
+					},
+				},
+				&ast.ClassStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "B"},
+					SuperClass: &ast.VariableExpr{
+						Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "A"},
+					},
+					Methods: []*ast.FunctionStmt{
+						{
+							Name:   &token.Token{Type: token.IDENTIFIER, Lexeme: "getDouble"},
+							Params: []*token.Token{},
+							Body: &ast.BlockStmt{
+								Statements: []ast.Stmt{
+									&ast.ReturnStmt{
+										Keyword: &token.Token{Type: token.RETURN},
+										Value: &ast.BinaryExpr{
+											Left: &ast.CallExpr{
+												Callee: &ast.GetExpr{
+													Object: &ast.ThisExpr{
+														Keyword: &token.Token{Type: token.THIS, Lexeme: "this"},
+													},
+													Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "getValue"},
+												},
+												Arguments: []ast.Expr{},
+											},
+											Operator: &token.Token{Type: token.STAR},
+											Right:    &ast.LiteralExpr{Value: 2},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				&ast.ClassStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "C"},
+					SuperClass: &ast.VariableExpr{
+						Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "B"},
+					},
+					Methods: []*ast.FunctionStmt{},
+				},
+				&ast.VarDeclStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "c"},
+					Initializer: &ast.CallExpr{
+						Callee: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "C"},
+						},
+						Arguments: []ast.Expr{},
+					},
+				},
+				&ast.ExprStmt{
+					Expr: &ast.CallExpr{
+						Callee: &ast.GetExpr{
+							Object: &ast.VariableExpr{
+								Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "c"},
+							},
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "getDouble"},
+						},
+						Arguments: []ast.Expr{},
+					},
+				},
+			},
+		}, 2},
+	}
+
+	runVmTests(t, tests)
+}
+
+func TestClassMethodReturnsInstance(t *testing.T) {
+	tests := []vmTestCase{
+		// class Builder {
+		//   fn init() { this.value = 0; }
+		//   fn add(n) { this.value = this.value + n; return this; }
+		//   fn getValue() { return this.value; }
+		// }
+		// var b = Builder();
+		// b.add(1).add(2).add(3).getValue();
+		{&ast.BlockStmt{
+			Statements: []ast.Stmt{
+				&ast.ClassStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "Builder"},
+					Methods: []*ast.FunctionStmt{
+						{
+							Name:   &token.Token{Type: token.IDENTIFIER, Lexeme: "init"},
+							Params: []*token.Token{},
+							Body: &ast.BlockStmt{
+								Statements: []ast.Stmt{
+									&ast.ExprStmt{
+										Expr: &ast.SetExpr{
+											Object: &ast.ThisExpr{
+												Keyword: &token.Token{Type: token.THIS, Lexeme: "this"},
+											},
+											Name:  &token.Token{Type: token.IDENTIFIER, Lexeme: "value"},
+											Value: &ast.LiteralExpr{Value: 0},
+										},
+									},
+								},
+							},
+						},
+						{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "add"},
+							Params: []*token.Token{
+								{Type: token.IDENTIFIER, Lexeme: "n"},
+							},
+							Body: &ast.BlockStmt{
+								Statements: []ast.Stmt{
+									&ast.ExprStmt{
+										Expr: &ast.SetExpr{
+											Object: &ast.ThisExpr{
+												Keyword: &token.Token{Type: token.THIS, Lexeme: "this"},
+											},
+											Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "value"},
+											Value: &ast.BinaryExpr{
+												Left: &ast.GetExpr{
+													Object: &ast.ThisExpr{
+														Keyword: &token.Token{Type: token.THIS, Lexeme: "this"},
+													},
+													Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "value"},
+												},
+												Right: &ast.VariableExpr{
+													Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "n"},
+												},
+												Operator: &token.Token{Type: token.PLUS},
+											},
+										},
+									},
+									&ast.ReturnStmt{
+										Keyword: &token.Token{Type: token.RETURN},
+										Value: &ast.ThisExpr{
+											Keyword: &token.Token{Type: token.THIS, Lexeme: "this"},
+										},
+									},
+								},
+							},
+						},
+						{
+							Name:   &token.Token{Type: token.IDENTIFIER, Lexeme: "getValue"},
+							Params: []*token.Token{},
+							Body: &ast.BlockStmt{
+								Statements: []ast.Stmt{
+									&ast.ReturnStmt{
+										Keyword: &token.Token{Type: token.RETURN},
+										Value: &ast.GetExpr{
+											Object: &ast.ThisExpr{
+												Keyword: &token.Token{Type: token.THIS, Lexeme: "this"},
+											},
+											Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "value"},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				&ast.VarDeclStmt{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "b"},
+					Initializer: &ast.CallExpr{
+						Callee: &ast.VariableExpr{
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "Builder"},
+						},
+						Arguments: []ast.Expr{},
+					},
+				},
+				&ast.ExprStmt{
+					Expr: &ast.CallExpr{
+						Callee: &ast.GetExpr{
+							Object: &ast.CallExpr{
+								Callee: &ast.GetExpr{
+									Object: &ast.CallExpr{
+										Callee: &ast.GetExpr{
+											Object: &ast.VariableExpr{
+												Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "b"},
+											},
+											Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "add"},
+										},
+										Arguments: []ast.Expr{
+											&ast.LiteralExpr{Value: 1},
+										},
+									},
+									Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "add"},
+								},
+								Arguments: []ast.Expr{
+									&ast.LiteralExpr{Value: 2},
+								},
+							},
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "add"},
+						},
+						Arguments: []ast.Expr{
+							&ast.LiteralExpr{Value: 3},
+						},
+					},
+				},
+				&ast.ExprStmt{
+					Expr: &ast.CallExpr{
+						Callee: &ast.GetExpr{
+							Object: &ast.VariableExpr{
+								Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "b"},
+							},
+							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "getValue"},
+						},
+						Arguments: []ast.Expr{},
+					},
+				},
+			},
+		}, 6},
+	}
+
+	runVmTests(t, tests)
+}
+
+func TestClassWrongNumberOfArguments(t *testing.T) {
+	// class Animal {
+	//   fn init(name) { this.name = name; }
+	// }
+	// Animal(); // missing argument
+	input := &ast.BlockStmt{
+		Statements: []ast.Stmt{
+			&ast.ClassStmt{
+				Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "Animal"},
+				Methods: []*ast.FunctionStmt{
+					{
+						Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "init"},
+						Params: []*token.Token{
+							{Type: token.IDENTIFIER, Lexeme: "name"},
+						},
+						Body: &ast.BlockStmt{
+							Statements: []ast.Stmt{
+								&ast.ExprStmt{
+									Expr: &ast.SetExpr{
+										Object: &ast.ThisExpr{
+											Keyword: &token.Token{Type: token.THIS, Lexeme: "this"},
+										},
+										Name:  &token.Token{Type: token.IDENTIFIER, Lexeme: "name"},
+										Value: &ast.VariableExpr{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "name"}},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			&ast.ExprStmt{
+				Expr: &ast.CallExpr{
+					Callee: &ast.VariableExpr{
+						Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "Animal"},
+					},
+					Arguments: []ast.Expr{},
+				},
+			},
+		},
+	}
+
+	comp := compiler.New(nil)
+	err := comp.Compile(input)
+	if err != nil {
+		t.Fatalf("compiler error: %s", err)
+	}
+
+	vm := New(comp.Bytecode())
+	err = vm.Run()
+	if err == nil {
+		t.Fatalf("expected error for wrong number of arguments, got none")
+	}
+}
+
+func TestClassNoInitWithArguments(t *testing.T) {
+	// class Animal {}
+	// Animal("Dog"); // no init, but passing argument
+	input := &ast.BlockStmt{
+		Statements: []ast.Stmt{
+			&ast.ClassStmt{
+				Name:    &token.Token{Type: token.IDENTIFIER, Lexeme: "Animal"},
+				Methods: []*ast.FunctionStmt{},
+			},
+			&ast.ExprStmt{
+				Expr: &ast.CallExpr{
+					Callee: &ast.VariableExpr{
+						Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "Animal"},
+					},
+					Arguments: []ast.Expr{
+						&ast.LiteralExpr{Value: "Dog"},
+					},
+				},
+			},
+		},
+	}
+
+	comp := compiler.New(nil)
+	err := comp.Compile(input)
+	if err != nil {
+		t.Fatalf("compiler error: %s", err)
+	}
+
+	vm := New(comp.Bytecode())
+	err = vm.Run()
+	if err == nil {
+		t.Fatalf("expected error for arguments with no init, got none")
+	}
+}
+
+func TestClassUndefinedProperty(t *testing.T) {
+	// class Animal {}
+	// var a = Animal();
+	// a.unknown; // undefined property
+	input := &ast.BlockStmt{
+		Statements: []ast.Stmt{
+			&ast.ClassStmt{
+				Name:    &token.Token{Type: token.IDENTIFIER, Lexeme: "Animal"},
+				Methods: []*ast.FunctionStmt{},
+			},
+			&ast.VarDeclStmt{
+				Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "a"},
+				Initializer: &ast.CallExpr{
+					Callee: &ast.VariableExpr{
+						Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "Animal"},
+					},
+					Arguments: []ast.Expr{},
+				},
+			},
+			&ast.ExprStmt{
+				Expr: &ast.GetExpr{
+					Object: &ast.VariableExpr{
+						Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "a"},
+					},
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "unknown"},
+				},
+			},
+		},
+	}
+
+	comp := compiler.New(nil)
+	err := comp.Compile(input)
+	if err != nil {
+		t.Fatalf("compiler error: %s", err)
+	}
+
+	vm := New(comp.Bytecode())
+	err = vm.Run()
+	if err == nil {
+		t.Fatalf("expected error for undefined property, got none")
+	}
+}
+
+func TestClassPropertyOnNonInstance(t *testing.T) {
+	// var x = 42;
+	// x.name; // can't access property on non-instance
+	input := &ast.BlockStmt{
+		Statements: []ast.Stmt{
+			&ast.VarDeclStmt{
+				Name:        &token.Token{Type: token.IDENTIFIER, Lexeme: "x"},
+				Initializer: &ast.LiteralExpr{Value: 42},
+			},
+			&ast.ExprStmt{
+				Expr: &ast.GetExpr{
+					Object: &ast.VariableExpr{
+						Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "x"},
+					},
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "name"},
+				},
+			},
+		},
+	}
+
+	comp := compiler.New(nil)
+	err := comp.Compile(input)
+	if err != nil {
+		t.Fatalf("compiler error: %s", err)
+	}
+
+	vm := New(comp.Bytecode())
+	err = vm.Run()
+	if err == nil {
+		t.Fatalf("expected error for property on non-instance, got none")
+	}
+}
+
+func TestClassInheritFromNonClass(t *testing.T) {
+	// var x = 42;
+	// class Dog < x {} // can't inherit from non-class
+	input := &ast.BlockStmt{
+		Statements: []ast.Stmt{
+			&ast.VarDeclStmt{
+				Name:        &token.Token{Type: token.IDENTIFIER, Lexeme: "x"},
+				Initializer: &ast.LiteralExpr{Value: 42},
+			},
+			&ast.ClassStmt{
+				Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "Dog"},
+				SuperClass: &ast.VariableExpr{
+					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "x"},
+				},
+				Methods: []*ast.FunctionStmt{},
+			},
+		},
+	}
+
+	comp := compiler.New(nil)
+	err := comp.Compile(input)
+	if err != nil {
+		t.Fatalf("compiler error: %s", err)
+	}
+
+	vm := New(comp.Bytecode())
+	err = vm.Run()
+	if err == nil {
+		t.Fatalf("expected error for inheriting from non-class, got none")
+	}
 }

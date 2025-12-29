@@ -18,6 +18,9 @@ const (
 	TypeCompiledFunction Type = "COMPILED_FUNCTION"
 	TypeClosure          Type = "CLOSURE"
 	TypeCell             Type = "CELL"
+	TypeCompiledClass    Type = "COMPILED_CLASS"
+	TypeCompiledInstance Type = "COMPILED_INSTANCE"
+	TypeBoundMethod      Type = "BOUND_METHOD"
 )
 
 // Object is a runtime value.

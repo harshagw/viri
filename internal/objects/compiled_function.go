@@ -11,6 +11,7 @@ type CompiledFunction struct {
 	Instructions  code.Instructions
 	NumLocals     int
 	NumParameters int
+	Name          string
 }
 
 func (cf *CompiledFunction) Type() Type {
@@ -18,5 +19,5 @@ func (cf *CompiledFunction) Type() Type {
 }
 
 func (cf *CompiledFunction) Inspect() string {
-	return fmt.Sprintf("CompiledFunction[%p]", cf)
+	return fmt.Sprintf("<function %s>", cf.Name)
 }
