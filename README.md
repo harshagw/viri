@@ -1,6 +1,13 @@
 # Viri
 
-A tiny language built to learn how languages work. It’s currently implemented as a tree-walking interpreter in Go. Viri supports variables, expressions, control flow, and core language constructs.
+Viri is a tiny programming language built as a learning project to understand how languages actually work under the hood.
+
+The same language is implemented in multiple execution models:
+
+1. A tree-walking interpreter
+2. A compiler + bytecode VM
+
+Both implementations share the same syntax and semantics. Any valid Viri program should behave the same in the interpreter and the VM. The only thing that changes is how it runs.
 
 Check out the [Viri Website](https://harshagw.github.io/viri/) for grammar.
 
@@ -58,3 +65,4 @@ if (result > 20) {
 
 1. [Crafting Interpreters](https://craftinginterpreters.com/) by Robert Nystrom
 2. [Writing an Interpreter in Go](https://interpreterbook.com/) by Thorsten Ball
+3. [Writing an Compiler in Go](https://compilerbook.com/) by Thorsten Ball

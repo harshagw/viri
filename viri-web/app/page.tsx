@@ -91,6 +91,12 @@ export default function Page() {
                 </a>
                 <span className="opacity-75"> by Thorsten Ball</span>
               </li>
+              <li>
+                <a href="https://compilerbook.com/" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground transition-colors">
+                  Writing An Compiler In Go
+                </a>
+                <span className="opacity-75"> by Thorsten Ball</span>
+              </li>
             </ul>
           </div>
         </div>

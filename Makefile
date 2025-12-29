@@ -43,4 +43,4 @@ web:
 
 build-playground:
 	GOOS=js GOARCH=wasm go build -o viri-web/public/viri.wasm cmd/web-playground/main.go
-	cp $$(go env GOROOT)/misc/wasm/wasm_exec.js viri-web/public/
+	cp $(shell go env GOROOT)/lib/wasm/wasm_exec.js viri-web/public/
