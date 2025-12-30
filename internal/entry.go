@@ -75,9 +75,12 @@ func (v *Viri) Run(filePath string) {
 }
 
 func (v *Viri) runWithVM(filePath string) {
-	mod, err := parser.LoadModuleFile(filePath, v)
+	comp := compiler.New(v)
+	program, err := comp.CompileProgram(filePath)
 	if err != nil {
-		fmt.Println("Error parsing module:", err)
+		if !v.hasErrors {
+			color.New(color.FgRed).Fprintln(color.Error, "Compilation error:", err)
+		}
 		v.hasErrors = true
 		return
 	}
@@ -87,33 +90,20 @@ func (v *Viri) runWithVM(filePath string) {
 	}
 
 	if v.config.DebugMode {
-		printer := ast.NewPrinter()
-		tree := printer.PrintStatements(mod.GetAllStatements())
-		fmt.Println(tree)
-	}
-
-	comp := compiler.New(v)
-	for _, stmt := range mod.GetAllStatements() {
-		if err := comp.Compile(stmt); err != nil {
-			if !v.hasErrors {
-				color.New(color.FgRed).Fprintln(color.Error, "Compilation error:", err)
-			}
-			v.hasErrors = true
-			return
+		for i, compiledMod := range program.Modules {
+			fmt.Printf("Module %d:\n", i)
+			fmt.Println(compiledMod.Instructions.String())
 		}
 	}
 
-	if v.config.DebugMode {
-		fmt.Println(comp.Bytecode().Instructions.String())
-	}
-
-	machine := vm.New(comp.Bytecode())
 	startTime := time.Now()
-	if err := machine.Run(); err != nil {
+	machine := vm.New(program)
+	if err := machine.RunProgram(); err != nil {
 		color.New(color.FgRed).Fprintln(color.Error, "Runtime error:", err)
 		v.hasErrors = true
 		return
 	}
+
 	elapsed := time.Since(startTime)
 	if v.config.StatsMode {
 		fmt.Printf("Time taken: %s\n", elapsed)

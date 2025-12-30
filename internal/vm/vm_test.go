@@ -250,8 +250,8 @@ func runVmTests(t *testing.T, tests []vmTestCase) {
 			t.Fatalf("compiler error: %s", err)
 		}
 
-		vm := New(comp.Bytecode())
-		err = vm.Run()
+		vm := New(comp.Result())
+		err = vm.RunProgram()
 		if err != nil {
 			t.Fatalf("vm error: %s", err)
 		}
@@ -872,8 +872,8 @@ func TestIndexOutOfBoundsError(t *testing.T) {
 		t.Fatalf("compiler error: %s", err)
 	}
 
-	vm := New(comp.Bytecode())
-	err = vm.Run()
+	vm := New(comp.Result())
+	err = vm.RunProgram()
 	if err == nil {
 		t.Fatalf("expected error for out of bounds index, got none")
 	}
@@ -903,8 +903,8 @@ func TestHashKeyNotFoundError(t *testing.T) {
 		t.Fatalf("compiler error: %s", err)
 	}
 
-	vm := New(comp.Bytecode())
-	err = vm.Run()
+	vm := New(comp.Result())
+	err = vm.RunProgram()
 	if err == nil {
 		t.Fatalf("expected error for missing key, got none")
 	}
@@ -2607,8 +2607,8 @@ func TestClockNativeFunction(t *testing.T) {
 		t.Fatalf("compiler error: %s", err)
 	}
 
-	vm := New(comp.Bytecode())
-	err = vm.Run()
+	vm := New(comp.Result())
+	err = vm.RunProgram()
 	if err != nil {
 		t.Fatalf("vm error: %s", err)
 	}
@@ -4869,8 +4869,8 @@ func TestClassWrongNumberOfArguments(t *testing.T) {
 		t.Fatalf("compiler error: %s", err)
 	}
 
-	vm := New(comp.Bytecode())
-	err = vm.Run()
+	vm := New(comp.Result())
+	err = vm.RunProgram()
 	if err == nil {
 		t.Fatalf("expected error for wrong number of arguments, got none")
 	}
@@ -4904,8 +4904,8 @@ func TestClassNoInitWithArguments(t *testing.T) {
 		t.Fatalf("compiler error: %s", err)
 	}
 
-	vm := New(comp.Bytecode())
-	err = vm.Run()
+	vm := New(comp.Result())
+	err = vm.RunProgram()
 	if err == nil {
 		t.Fatalf("expected error for arguments with no init, got none")
 	}
@@ -4947,8 +4947,8 @@ func TestClassUndefinedProperty(t *testing.T) {
 		t.Fatalf("compiler error: %s", err)
 	}
 
-	vm := New(comp.Bytecode())
-	err = vm.Run()
+	vm := New(comp.Result())
+	err = vm.RunProgram()
 	if err == nil {
 		t.Fatalf("expected error for undefined property, got none")
 	}
@@ -4980,8 +4980,8 @@ func TestClassPropertyOnNonInstance(t *testing.T) {
 		t.Fatalf("compiler error: %s", err)
 	}
 
-	vm := New(comp.Bytecode())
-	err = vm.Run()
+	vm := New(comp.Result())
+	err = vm.RunProgram()
 	if err == nil {
 		t.Fatalf("expected error for property on non-instance, got none")
 	}
@@ -5012,8 +5012,8 @@ func TestClassInheritFromNonClass(t *testing.T) {
 		t.Fatalf("compiler error: %s", err)
 	}
 
-	vm := New(comp.Bytecode())
-	err = vm.Run()
+	vm := New(comp.Result())
+	err = vm.RunProgram()
 	if err == nil {
 		t.Fatalf("expected error for inheriting from non-class, got none")
 	}

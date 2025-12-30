@@ -1,4 +1,0 @@
-export var x = 42;
-export fun sayHi() {
-	print "hi";
-}

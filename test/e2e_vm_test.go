@@ -22,6 +22,7 @@ var vmSupportedFiles = []string{
 	"classes.viri",
 	"classes_inheritance.viri",
 	"classes_advanced.viri",
+	"imports.viri",
 }
 
 func TestE2E_VM(t *testing.T) {

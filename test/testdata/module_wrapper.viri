@@ -1,0 +1,11 @@
+// Module that imports another module and re-exports
+import "module_math.viri" as math;
+
+export fun double(x) {
+    return math.multiply(x, 2);
+}
+
+export fun addPI(x) {
+    return math.add(x, math.PI);
+}
+

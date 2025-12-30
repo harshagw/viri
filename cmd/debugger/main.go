@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"os"
 
@@ -9,8 +8,6 @@ import (
 	"github.com/harshagw/viri/cmd/debugger/tui"
 	"github.com/harshagw/viri/internal/compiler"
 	"github.com/harshagw/viri/internal/objects"
-	"github.com/harshagw/viri/internal/parser"
-	"github.com/harshagw/viri/internal/scanner"
 	"github.com/harshagw/viri/internal/token"
 )
 
@@ -30,14 +27,14 @@ func main() {
 	}
 
 	// Compile the source
-	bytecode, err := compile(string(source), filename)
+	program, err := compile(string(source), filename)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Compilation error: %v\n", err)
 		os.Exit(1)
 	}
 
 	// Create debugger
-	debugger := NewDebugger(bytecode)
+	debugger := NewDebugger(program)
 
 	// Create TUI model
 	model := tui.NewModel(debugger)
@@ -50,40 +47,21 @@ func main() {
 	}
 }
 
-func compile(source, filename string) (*compiler.Bytecode, error) {
+func compile(source, filename string) (*objects.CompiledProgram, error) {
 	handler := &errorHandler{hasErrors: false}
 
-	// Scan
-	buf := []byte(source)
-	reader := bytes.NewBuffer(buf)
-	sc := scanner.New(reader, &filename)
-	tokens, err := sc.Scan()
-	if err != nil {
-		return nil, fmt.Errorf("scan error: %w", err)
-	}
-
-	// Parse
-	p := parser.NewParser(tokens, handler)
-	p.SetFilePath(filename)
-	module, err := p.Parse()
-	if err != nil || handler.hasErrors {
-		return nil, fmt.Errorf("parse error: %w", err)
-	}
-
-	// Compile
+	// Use Compiler with full module support
 	comp := compiler.New(handler)
-	stmts := module.GetAllStatements()
-	for _, stmt := range stmts {
-		if err := comp.Compile(stmt); err != nil {
-			return nil, fmt.Errorf("compile error: %w", err)
-		}
+	program, err := comp.CompileProgram(filename)
+	if err != nil || handler.hasErrors {
+		return nil, fmt.Errorf("compilation failed: %w", err)
 	}
 
-	if handler.hasErrors {
-		return nil, fmt.Errorf("compilation failed")
+	if len(program.Modules) == 0 {
+		return nil, fmt.Errorf("no modules compiled")
 	}
 
-	return comp.Bytecode(), nil
+	return program, nil
 }
 
 type errorHandler struct {
@@ -100,4 +78,3 @@ func (h *errorHandler) Error(tok token.Token, msg string) {
 func (h *errorHandler) Warn(tok token.Token, msg string) {
 	fmt.Fprintf(os.Stderr, "Warning at line %d: %s\n", tok.Line, msg)
 }
-

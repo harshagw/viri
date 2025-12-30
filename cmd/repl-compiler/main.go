@@ -80,14 +80,20 @@ func main() {
 			return
 		}
 
+		program := comp.Result()
+
 		if debugMode {
-			fmt.Println(comp.Bytecode().Instructions.String())
-			fmt.Println(comp.Bytecode().Constants)
+			fmt.Println(program.Modules[0].Instructions.String())
+			fmt.Println(program.Constants)
 		}
 
-		machine := vm.New(comp.Bytecode())
-		machine.UpdateGlobals(globals)
-		err = machine.Run()
+		machine := vm.New(program)
+		for i, g := range globals {
+			if i < len(machine.GetModuleGlobals(0)) {
+				machine.GetModuleGlobals(0)[i] = g
+			}
+		}
+		err = machine.RunProgram()
 		if err != nil {
 			color.New(color.FgRed).Fprintf(color.Error, "Runtime error: %v\n", err)
 			return
@@ -96,6 +102,9 @@ func main() {
 		if _, isPrint := newStmts[0].(*ast.PrintStmt); !isPrint {
 			fmt.Println(machine.LastPoppedStackElem().Inspect())
 		}
+
+		// Save globals for next execution
+		globals = machine.GetModuleGlobals(0)
 	}
 
 	completer := func(d prompt.Document) []prompt.Suggest {

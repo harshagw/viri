@@ -329,14 +329,14 @@ func runCompilerTests(t *testing.T, tests []compilerTestCase) {
 			t.Fatalf("compiler error: %s", err)
 		}
 
-		bytecode := compiler.Bytecode()
+		program := compiler.Result()
 
-		err = testInstructions(tt.expectedInstructions, bytecode.Instructions)
+		err = testInstructions(tt.expectedInstructions, program.Modules[0].Instructions)
 		if err != nil {
 			t.Fatalf("testInstructions failed: %s", err)
 		}
 
-		err = testConstants(t, tt.expectedConstants, bytecode.Constants)
+		err = testConstants(t, tt.expectedConstants, program.Constants)
 		if err != nil {
 			t.Fatalf("testConstants failed: %s", err)
 		}
@@ -2601,6 +2601,71 @@ func TestSuperWithoutSuperclass(t *testing.T) {
 	}
 
 	expected := "cannot use 'super' in a class with no superclass"
+	if err.Error() != expected {
+		t.Fatalf("wrong error. want=%q, got=%q", expected, err.Error())
+	}
+}
+
+func TestModuleExportAccess(t *testing.T) {
+	// Test that accessing an import alias emits OpGetModuleExport
+	// Setup: register an import alias "math" with module index 1 and export "add" at index 0
+	comp := New(nil)
+
+	// Manually register an import to simulate module compilation
+	comp.symbolTable.DefineImport("math", 1, map[string]int{"add": 0, "PI": 1})
+
+	// Compile: math.add (should emit OpGetModuleExport)
+	input := &ast.ExprStmt{
+		Expr: &ast.GetExpr{
+			Object: &ast.VariableExpr{
+				Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "math"},
+			},
+			Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "add"},
+		},
+	}
+
+	err := comp.Compile(input)
+	if err != nil {
+		t.Fatalf("compiler error: %s", err)
+	}
+
+	program := comp.Result()
+	instructions := program.Modules[0].Instructions
+
+	// Expected: OpGetModuleExport(moduleIdx=1, exportIdx=0), OpPop
+	expected := concatInstructions([]code.Instructions{
+		code.Make(code.OpGetModuleExport, 1, 0),
+		code.Make(code.OpPop),
+	})
+
+	if err := testInstructions([]code.Instructions{expected}, instructions); err != nil {
+		t.Fatalf("wrong instructions: %s", err)
+	}
+}
+
+func TestModuleExportAccessNotFound(t *testing.T) {
+	// Test that accessing a non-exported symbol from a module gives an error
+	comp := New(nil)
+
+	// Register import with only "add" exported
+	comp.symbolTable.DefineImport("math", 1, map[string]int{"add": 0})
+
+	// Try to access math.subtract (not exported)
+	input := &ast.ExprStmt{
+		Expr: &ast.GetExpr{
+			Object: &ast.VariableExpr{
+				Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "math"},
+			},
+			Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "subtract"},
+		},
+	}
+
+	err := comp.Compile(input)
+	if err == nil {
+		t.Fatalf("expected error for non-exported symbol, got none")
+	}
+
+	expected := "'subtract' is not exported from module 'math'"
 	if err.Error() != expected {
 		t.Fatalf("wrong error. want=%q, got=%q", expected, err.Error())
 	}

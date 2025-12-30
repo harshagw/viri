@@ -3,13 +3,13 @@ package main
 import (
 	"sync"
 
-	"github.com/harshagw/viri/internal/compiler"
+	"github.com/harshagw/viri/internal/objects"
 	"github.com/harshagw/viri/internal/vm"
 )
 
 type Debugger struct {
 	vm       *vm.VM
-	bytecode *compiler.Bytecode
+	program  *objects.CompiledProgram
 	history  []*vm.VMState
 	position int
 
@@ -19,12 +19,12 @@ type Debugger struct {
 	mu       sync.Mutex
 }
 
-func NewDebugger(bytecode *compiler.Bytecode) *Debugger {
-	machine := vm.New(bytecode)
+func NewDebugger(program *objects.CompiledProgram) *Debugger {
+	machine := vm.New(program)
 
 	d := &Debugger{
 		vm:       machine,
-		bytecode: bytecode,
+		program:  program,
 		history:  make([]*vm.VMState, 0),
 		position: -1,
 		stepChan: make(chan struct{}),
@@ -48,7 +48,7 @@ func NewDebugger(bytecode *compiler.Bytecode) *Debugger {
 // Run starts VM in goroutine
 func (d *Debugger) Run() {
 	go func() {
-		d.err = d.vm.Run()
+		d.err = d.vm.RunProgram()
 		d.mu.Lock()
 		d.done = true
 		// Capture final state
@@ -102,7 +102,7 @@ func (d *Debugger) Reset() {
 	defer d.mu.Unlock()
 
 	// Create new VM
-	machine := vm.New(d.bytecode)
+	machine := vm.New(d.program)
 	d.vm = machine
 	d.history = make([]*vm.VMState, 0)
 	d.position = -1

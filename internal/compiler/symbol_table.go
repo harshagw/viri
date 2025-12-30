@@ -19,10 +19,17 @@ type Symbol struct {
 	FrameDepth int // function nesting level when defined
 }
 
+// ImportInfo tracks an imported module's exports
+type ImportInfo struct {
+	ModuleIndex int
+	Exports     map[string]int // export name -> export index
+}
+
 type SymbolTable struct {
 	Outer          *SymbolTable
 	FreeSymbols    []Symbol
 	store          map[string]Symbol
+	imports        map[string]*ImportInfo // import alias -> module info
 	numDefinitions int
 	functionName   string
 	frameDepth     int // function nesting level (0 = global)
@@ -31,6 +38,7 @@ type SymbolTable struct {
 func NewSymbolTable() *SymbolTable {
 	return &SymbolTable{
 		store:       make(map[string]Symbol),
+		imports:     make(map[string]*ImportInfo),
 		FreeSymbols: []Symbol{},
 		frameDepth:  0,
 	}
@@ -41,6 +49,7 @@ func NewSymbolTable() *SymbolTable {
 func NewFunctionScope(outer *SymbolTable, functionName string) *SymbolTable {
 	s := &SymbolTable{
 		store:          make(map[string]Symbol),
+		imports:        outer.imports, // inherit imports from outer scope
 		FreeSymbols:    []Symbol{},
 		Outer:          outer,
 		functionName:   functionName,
@@ -55,6 +64,7 @@ func NewFunctionScope(outer *SymbolTable, functionName string) *SymbolTable {
 func NewBlockScope(outer *SymbolTable) *SymbolTable {
 	return &SymbolTable{
 		store:          make(map[string]Symbol),
+		imports:        outer.imports,     // share imports with parent
 		FreeSymbols:    outer.FreeSymbols, // share free symbols with parent
 		Outer:          outer,
 		functionName:   outer.functionName,
@@ -88,8 +98,13 @@ func (s *SymbolTable) defineFree(symbol Symbol) Symbol {
 	return newSymbol
 }
 
-// Define creates a new symbol in the table
-func (s *SymbolTable) Define(name string, isConst bool) Symbol {
+// Define creates a new symbol in the table.
+func (s *SymbolTable) Define(name string, isConst bool) (Symbol, bool) {
+	// Check if name conflicts with an import alias
+	if s.IsImportAlias(name) {
+		return Symbol{}, false
+	}
+
 	symbol := Symbol{
 		Name:       name,
 		Index:      s.numDefinitions,
@@ -105,7 +120,7 @@ func (s *SymbolTable) Define(name string, isConst bool) Symbol {
 
 	s.store[name] = symbol
 	s.numDefinitions++
-	return symbol
+	return symbol, true
 }
 
 // Resolve looks up a symbol by name
@@ -140,4 +155,31 @@ func (s *SymbolTable) Resolve(name string) (Symbol, bool) {
 // NumDefinitions returns the number of definitions in this scope
 func (s *SymbolTable) NumDefinitions() int {
 	return s.numDefinitions
+}
+
+// DefineImport registers an import alias with its module index and exports
+func (s *SymbolTable) DefineImport(alias string, moduleIndex int, exports map[string]int) {
+	s.imports[alias] = &ImportInfo{
+		ModuleIndex: moduleIndex,
+		Exports:     exports,
+	}
+}
+
+// ResolveImport looks up an import alias and export name, returning (moduleIdx, exportIdx, found)
+func (s *SymbolTable) ResolveImport(alias string, exportName string) (int, int, bool) {
+	importInfo, ok := s.imports[alias]
+	if !ok {
+		return 0, 0, false
+	}
+	exportIdx, ok := importInfo.Exports[exportName]
+	if !ok {
+		return 0, 0, false
+	}
+	return importInfo.ModuleIndex, exportIdx, true
+}
+
+// IsImportAlias checks if a name is a registered import alias
+func (s *SymbolTable) IsImportAlias(name string) bool {
+	_, ok := s.imports[name]
+	return ok
 }

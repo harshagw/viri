@@ -13,11 +13,6 @@ type CompilationScope struct {
 	instructions code.Instructions
 }
 
-type Bytecode struct {
-	Instructions code.Instructions
-	Constants    []objects.Object
-}
-
 // ClassCompiler tracks state while compiling a class.
 // This enables compile-time validation of this/super usage
 // and provides context for future static field support.
@@ -38,6 +33,14 @@ type Compiler struct {
 
 	classCompiler     *ClassCompiler // nil when not compiling a class
 	diagnosticHandler objects.DiagnosticHandler
+
+	// Track highest global index used (for NumGlobals calculation)
+	maxGlobalIndex int
+
+	// Module compilation state
+	modules       map[string]*ast.Module // path -> parsed module
+	moduleOrder   []string               // topological order
+	moduleIndices map[string]int         // path -> module index
 }
 
 func New(diagnosticHandler objects.DiagnosticHandler) *Compiler {
@@ -45,35 +48,48 @@ func New(diagnosticHandler objects.DiagnosticHandler) *Compiler {
 }
 
 func NewWithState(diagnosticHandler objects.DiagnosticHandler, symbolTable *SymbolTable) *Compiler {
-	mainScope := CompilationScope{
-		instructions: code.Instructions{},
+	c := &Compiler{
+		diagnosticHandler: diagnosticHandler,
+		modules:           make(map[string]*ast.Module),
+		moduleIndices:     make(map[string]int),
 	}
+	c.reset(symbolTable)
+	return c
+}
 
+// reset resets compiler state for a fresh compilation unit.
+// This preserves: constants, modules, moduleIndices, diagnosticHandler
+func (c *Compiler) reset(symbolTable *SymbolTable) {
 	if symbolTable == nil {
 		symbolTable = NewSymbolTable()
 	}
 
-	// Ensure native functions are always defined in the symbol table
-	for i, nativeFn := range objects.NativeFunctions {
-		if _, exists := symbolTable.store[nativeFn.Name]; !exists {
-			symbolTable.DefineNative(i, nativeFn.Name)
-		}
-	}
+	c.symbolTable = symbolTable
+	c.loopStack = NewLoopStack()
+	c.scopes = []CompilationScope{{instructions: code.Instructions{}}}
+	c.scopeIndex = 0
+	c.classCompiler = nil
+	c.maxGlobalIndex = -1
 
-	return &Compiler{
-		constants:         []objects.Object{},
-		diagnosticHandler: diagnosticHandler,
-		symbolTable:       symbolTable,
-		loopStack:         NewLoopStack(),
-		scopes:            []CompilationScope{mainScope},
-		scopeIndex:        0,
+	// Register native functions
+	for i, nativeFn := range objects.NativeFunctions {
+		if _, exists := c.symbolTable.store[nativeFn.Name]; !exists {
+			c.symbolTable.DefineNative(i, nativeFn.Name)
+		}
 	}
 }
 
-func (c *Compiler) Bytecode() *Bytecode {
-	return &Bytecode{
-		Instructions: c.currentInstructions(),
-		Constants:    c.constants,
+// Result returns the compiled program (for single-file compilation, tests, REPL)
+func (c *Compiler) Result() *objects.CompiledProgram {
+	return &objects.CompiledProgram{
+		Modules: []objects.CompiledModule{
+			{
+				Instructions: c.currentInstructions(),
+				NumGlobals:   c.maxGlobalIndex + 1,
+				Exports:      []int{},
+			},
+		},
+		Constants: c.constants,
 	}
 }
 
@@ -165,7 +181,15 @@ func (c *Compiler) compileStatement(stmt ast.Stmt) error {
 		return nil
 
 	case *ast.VarDeclStmt:
-		symbol := c.symbolTable.Define(stmt.Name.Lexeme, stmt.IsConst)
+		// Validate: exports are only allowed at global scope
+		if stmt.Exported && c.symbolTable.frameDepth > 0 {
+			return c.error(stmt.Name, "cannot export from local scope")
+		}
+
+		symbol, ok := c.symbolTable.Define(stmt.Name.Lexeme, stmt.IsConst)
+		if !ok {
+			return c.error(stmt.Name, "cannot declare variable with this name again")
+		}
 
 		if stmt.Initializer != nil {
 			// Check if the initializer is a function expression for recursive support
@@ -293,8 +317,16 @@ func (c *Compiler) compileStatement(stmt ast.Stmt) error {
 		return nil
 
 	case *ast.FunctionStmt:
+		// Validate: exports are only allowed at global scope
+		if stmt.Exported && c.symbolTable.frameDepth > 0 {
+			return c.error(stmt.Name, "cannot export from local scope")
+		}
+
 		// Define the function name in the current scope
-		symbol := c.symbolTable.Define(stmt.Name.Lexeme, false)
+		symbol, ok := c.symbolTable.Define(stmt.Name.Lexeme, false)
+		if !ok {
+			return c.error(stmt.Name, "cannot declare variable with this name again")
+		}
 
 		// Compile the function body
 		if err := c.compileFunction(stmt.Params, stmt.Body, stmt.Name.Lexeme); err != nil {
@@ -553,6 +585,20 @@ func (c *Compiler) compileExpression(node ast.Expr) error {
 		}
 
 	case *ast.GetExpr:
+		// Check if this is an import access (module.export)
+		if varExpr, ok := node.Object.(*ast.VariableExpr); ok {
+			if c.symbolTable.IsImportAlias(varExpr.Name.Lexeme) {
+				// This is a module access - must resolve to an export
+				moduleIdx, exportIdx, found := c.symbolTable.ResolveImport(varExpr.Name.Lexeme, node.Name.Lexeme)
+				if !found {
+					return c.error(node.Name, fmt.Sprintf("'%s' is not exported from module '%s'", node.Name.Lexeme, varExpr.Name.Lexeme))
+				}
+				c.emit(code.OpGetModuleExport, moduleIdx, exportIdx)
+				return nil
+			}
+		}
+
+		// Regular property access (for objects/instances)
 		if err := c.compileExpression(node.Object); err != nil {
 			return err
 		}
@@ -634,6 +680,7 @@ func (c *Compiler) emitGetSymbol(s Symbol) {
 	switch s.Scope {
 	case GlobalScope:
 		c.emit(code.OpGetGlobal, s.Index)
+		c.trackGlobal(s.Index)
 	case LocalScope:
 		c.emit(code.OpGetLocal, s.Index)
 	case NativeScope:
@@ -649,10 +696,18 @@ func (c *Compiler) emitSetSymbol(s Symbol) {
 	switch s.Scope {
 	case GlobalScope:
 		c.emit(code.OpSetGlobal, s.Index)
+		c.trackGlobal(s.Index)
 	case LocalScope:
 		c.emit(code.OpSetLocal, s.Index)
 	case FreeScope:
 		c.emit(code.OpSetFree, s.Index)
+	}
+}
+
+// trackGlobal updates maxGlobalIndex if needed
+func (c *Compiler) trackGlobal(index int) {
+	if index > c.maxGlobalIndex {
+		c.maxGlobalIndex = index
 	}
 }
 
@@ -661,7 +716,9 @@ func (c *Compiler) compileFunction(params []*token.Token, body *ast.BlockStmt, f
 
 	// Define parameters as local variables
 	for _, param := range params {
-		c.symbolTable.Define(param.Lexeme, false)
+		if _, ok := c.symbolTable.Define(param.Lexeme, false); !ok {
+			return c.error(param, "cannot use import alias as parameter name")
+		}
 	}
 
 	// Compile the function body statements directly (don't create an extra block scope)
@@ -723,10 +780,18 @@ func (c *Compiler) error(tok *token.Token, message string) error {
 }
 
 func (c *Compiler) compileClassStmt(stmt *ast.ClassStmt) error {
+	// Validate: exports are only allowed at global scope
+	if stmt.Exported && c.symbolTable.frameDepth > 0 {
+		return c.error(stmt.Name, "cannot export from local scope")
+	}
+
 	className := stmt.Name.Lexeme
 
 	// Define class name in symbol table (allows recursive references)
-	symbol := c.symbolTable.Define(className, false)
+	symbol, ok := c.symbolTable.Define(className, false)
+	if !ok {
+		return c.error(stmt.Name, "cannot declare variable with this name again")
+	}
 
 	// Enter class compilation context
 	enclosingClass := c.classCompiler
@@ -777,10 +842,15 @@ func (c *Compiler) compileMethod(method *ast.FunctionStmt) error {
 	}
 
 	// Define 'this' as first local (index 0)
-	c.symbolTable.Define("this", true)
+	// 'this' should never conflict with imports, but handle it for safety
+	if _, ok := c.symbolTable.Define("this", true); !ok {
+		return c.error(method.Name, "cannot use 'this' - name conflicts with import alias")
+	}
 
 	for _, param := range method.Params {
-		c.symbolTable.Define(param.Lexeme, false)
+		if _, ok := c.symbolTable.Define(param.Lexeme, false); !ok {
+			return c.error(param, "cannot use import alias as parameter name")
+		}
 	}
 
 	for _, stmt := range method.Body.Statements {

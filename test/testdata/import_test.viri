@@ -1,3 +1,0 @@
-import "module_a.viri" as a;
-print a.x;
-a.sayHi();

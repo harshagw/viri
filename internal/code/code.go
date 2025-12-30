@@ -50,6 +50,7 @@ const (
 	OpGetProperty
 	OpSetProperty
 	OpGetSuper
+	OpGetModuleExport
 )
 
 type Definition struct {
@@ -92,11 +93,12 @@ var definitions = map[Opcode]*Definition{
 	OpGetFree:           {"OpGetFree", []int{1}},       // operand: free variable index
 	OpSetFree:           {"OpSetFree", []int{1}},       // operand: free variable index
 	OpGetCurrentClosure: {"OpGetCurrentClosure", []int{}},
-	OpMakeCell:          {"OpMakeCell", []int{1}},    // operand: local index - wraps local in Cell, stores back, and pushes Cell
-	OpClass:             {"OpClass", []int{2, 1}},    // operands: name constant index, method count - pops superclass + methods, pushes class
-	OpGetProperty:       {"OpGetProperty", []int{2}}, // operand: property name constant index - pops object, pushes property/bound method
-	OpSetProperty:       {"OpSetProperty", []int{2}}, // operand: property name constant index - pops value, pops object, sets field, pushes value
-	OpGetSuper:          {"OpGetSuper", []int{2}},    // operand: method name constant index - pops instance, pushes bound method from superclass
+	OpMakeCell:          {"OpMakeCell", []int{1}},           // operand: local index - wraps local in Cell, stores back, and pushes Cell
+	OpClass:             {"OpClass", []int{2, 1}},           // operands: name constant index, method count - pops superclass + methods, pushes class
+	OpGetProperty:       {"OpGetProperty", []int{2}},        // operand: property name constant index - pops object, pushes property/bound method
+	OpSetProperty:       {"OpSetProperty", []int{2}},        // operand: property name constant index - pops value, pops object, sets field, pushes value
+	OpGetSuper:          {"OpGetSuper", []int{2}},           // operand: method name constant index - pops instance, pushes bound method from superclass
+	OpGetModuleExport:   {"OpGetModuleExport", []int{2, 2}}, // operands: module index, export index - pushes export value from module globals
 }
 
 func Lookup(op byte) (*Definition, error) {

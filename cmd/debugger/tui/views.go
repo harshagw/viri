@@ -22,8 +22,9 @@ func RenderUI(state *vm.VMState, current, total, width, height int, done bool, e
 		panelHeight = 8
 	}
 
-	// Render title bar
+	// Render title bar with module info
 	title := titleStyle.Render("Viri VM Debugger")
+	moduleInfo := positionStyle.Render(fmt.Sprintf("Module %d/%d", state.CurrentModule+1, state.NumModules))
 	position := positionStyle.Render(fmt.Sprintf("Step %d/%d", current, total))
 
 	var statusMsg string
@@ -36,7 +37,9 @@ func RenderUI(state *vm.VMState, current, total, width, height int, done bool, e
 	titleBar := lipgloss.JoinHorizontal(
 		lipgloss.Top,
 		title,
-		strings.Repeat(" ", width-lipgloss.Width(title)-lipgloss.Width(position)-lipgloss.Width(statusMsg)-4),
+		"  ",
+		moduleInfo,
+		strings.Repeat(" ", width-lipgloss.Width(title)-lipgloss.Width(moduleInfo)-lipgloss.Width(position)-lipgloss.Width(statusMsg)-8),
 		statusMsg,
 		position,
 	)
@@ -49,16 +52,15 @@ func RenderUI(state *vm.VMState, current, total, width, height int, done bool, e
 	globalsPanel := renderGlobalsPanel(state, panelWidth, panelHeight)
 	closuresPanel := renderClosuresPanel(state, panelWidth, panelHeight)
 
-	// Split bottom row between constants and output
-	constantsWidth := (panelWidth*3 + 4) / 2
-	outputWidth := (panelWidth*3 + 4) / 2
-	constantsPanel := renderConstantsPanel(state, constantsWidth, panelHeight)
-	outputPanel := renderOutputPanel(state, outputWidth, panelHeight)
+	// Bottom row: modules, constants, output (3 columns)
+	modulesPanel := renderModulesPanel(state, panelWidth, panelHeight)
+	constantsPanel := renderConstantsPanel(state, panelWidth, panelHeight)
+	outputPanel := renderOutputPanel(state, panelWidth, panelHeight)
 
 	// Arrange panels in grid (3 columns, 3 rows)
 	topRow := lipgloss.JoinHorizontal(lipgloss.Top, bytecodePanel, stackPanel, framesPanel)
 	middleRow := lipgloss.JoinHorizontal(lipgloss.Top, localsPanel, globalsPanel, closuresPanel)
-	bottomRow := lipgloss.JoinHorizontal(lipgloss.Top, constantsPanel, outputPanel)
+	bottomRow := lipgloss.JoinHorizontal(lipgloss.Top, modulesPanel, constantsPanel, outputPanel)
 	panels := lipgloss.JoinVertical(lipgloss.Left, topRow, middleRow, bottomRow)
 
 	// Render help bar
@@ -330,7 +332,7 @@ func renderLocalsPanel(state *vm.VMState, width, height int) string {
 }
 
 func renderGlobalsPanel(state *vm.VMState, width, height int) string {
-	title := panelTitleStyle.Render("GLOBALS")
+	title := panelTitleStyle.Render(fmt.Sprintf("GLOBALS (Module %d)", state.CurrentModule))
 
 	var lines []string
 	lines = append(lines, title)
@@ -366,6 +368,58 @@ func renderGlobalsPanel(state *vm.VMState, width, height int) string {
 
 			line := fmt.Sprintf("%s %s %s", index, stackValueStyle.Render(value), objType)
 			lines = append(lines, line)
+		}
+	}
+
+	// Fill remaining space
+	for len(lines) < height-2 {
+		lines = append(lines, "")
+	}
+
+	content := strings.Join(lines, "\n")
+	return panelStyle.Width(width).Height(height).Render(content)
+}
+
+func renderModulesPanel(state *vm.VMState, width, height int) string {
+	title := panelTitleStyle.Render(fmt.Sprintf("MODULES (%d total)", state.NumModules))
+
+	var lines []string
+	lines = append(lines, title)
+	lines = append(lines, strings.Repeat("─", width-4))
+
+	if state.NumModules == 0 {
+		lines = append(lines, lipgloss.NewStyle().Foreground(mutedColor).Render("  (no modules)"))
+	} else {
+		maxLines := height - 4
+		if maxLines < 1 {
+			maxLines = 1
+		}
+
+		for i := 0; i < state.NumModules && i < maxLines; i++ {
+			// Count non-nil globals for this module
+			nonNilCount := 0
+			if i < len(state.ModuleGlobals) {
+				for _, obj := range state.ModuleGlobals[i] {
+					if obj != nil {
+						nonNilCount++
+					}
+				}
+			}
+
+			marker := "  "
+			style := inactiveFrameStyle
+			status := "done"
+			if i == state.CurrentModule {
+				marker = frameMarkerStyle.Render("▶ ")
+				style = activeFrameStyle
+				status = "running"
+			} else if i > state.CurrentModule {
+				status = "pending"
+			}
+
+			line := fmt.Sprintf("%s[%d] %s (%d globals)",
+				marker, i, status, nonNilCount)
+			lines = append(lines, style.Render(line))
 		}
 	}
 

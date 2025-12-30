@@ -1,0 +1,18 @@
+// Module with exported functions and constants
+export const PI = 3;
+
+export fun add(a, b) {
+    return a + b;
+}
+
+export fun multiply(a, b) {
+    return a * b;
+}
+
+var x = 10;
+
+// Non-exported helper function
+fun helper() {
+    return 100;
+}
+

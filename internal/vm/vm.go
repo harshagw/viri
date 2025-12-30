@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/harshagw/viri/internal/code"
-	"github.com/harshagw/viri/internal/compiler"
 	"github.com/harshagw/viri/internal/objects"
 )
 
@@ -12,13 +11,22 @@ const StackSize = 2048
 const GlobalsSize = 65536
 const MaxFrames = 1024
 
+// ModuleInstance represents a module at runtime
+type ModuleInstance struct {
+	Globals []objects.Object // module-local globals
+	Exports []int            // export index -> global slot mapping
+	MainFn  *objects.Closure // pre-created main closure for this module
+}
+
 type VM struct {
 	constants []objects.Object
 
 	stack []objects.Object
 	sp    int // Always points to the next value. Top of stack is stack[sp-1]
 
-	globals []objects.Object
+	modules       []ModuleInstance // module instances with per-module globals
+	numModules    int              // cached length for bounds checking
+	currentModule int              // index of currently executing module
 
 	frames      []*Frame
 	framesIndex int // Always points to the next frame to be used. Top of frame is frames[framesIndex-1]
@@ -27,32 +35,49 @@ type VM struct {
 	output []string // Capture print output
 }
 
-func New(bytecode *compiler.Bytecode) *VM {
-	// Wrap the main program in a compiled function
-	mainFn := &objects.CompiledFunction{Instructions: bytecode.Instructions}
-	mainFrame := NewFrame(objects.NewClosure(mainFn, nil), 0)
+func New(program *objects.CompiledProgram) *VM {
+	numModules := len(program.Modules)
 
-	frames := make([]*Frame, MaxFrames)
-	frames[0] = mainFrame
+	modules := make([]ModuleInstance, numModules)
+	for i, compiledMod := range program.Modules {
+		mainFn := &objects.CompiledFunction{Instructions: compiledMod.Instructions}
+		mainClosure := objects.NewClosure(mainFn, nil)
 
-	return &VM{
-		constants: bytecode.Constants,
-
-		stack:   make([]objects.Object, StackSize),
-		sp:      0,
-		globals: make([]objects.Object, GlobalsSize),
-
-		frames:      frames,
-		framesIndex: 1,
+		modules[i] = ModuleInstance{
+			Globals: make([]objects.Object, compiledMod.NumGlobals),
+			Exports: compiledMod.Exports,
+			MainFn:  mainClosure,
+		}
 	}
-}
 
-func (vm *VM) UpdateGlobals(globals []objects.Object) {
-	vm.globals = globals
+	vm := &VM{
+		constants:   program.Constants,
+		stack:       make([]objects.Object, StackSize),
+		sp:          0,
+		modules:     modules,
+		numModules:  numModules,
+		frames:      make([]*Frame, MaxFrames),
+		framesIndex: 0,
+	}
+
+	if numModules > 0 {
+		vm.frames[0] = NewFrame(modules[0].MainFn, 0)
+		vm.framesIndex = 1
+	}
+
+	return vm
 }
 
 func (vm *VM) SetOnStep(fn func()) {
 	vm.onStep = fn
+}
+
+// GetModuleGlobals returns the globals array for a specific module
+func (vm *VM) GetModuleGlobals(moduleIdx int) []objects.Object {
+	if moduleIdx < 0 || moduleIdx >= len(vm.modules) {
+		return nil
+	}
+	return vm.modules[moduleIdx].Globals
 }
 
 func (vm *VM) currentFrame() *Frame {
@@ -101,7 +126,23 @@ func (vm *VM) LastPoppedStackElem() objects.Object {
 	return unwrapCell(vm.stack[vm.sp])
 }
 
-func (vm *VM) Run() error {
+func (vm *VM) RunProgram() error {
+	// Execute each module in topological order
+	for moduleIdx := 0; moduleIdx < vm.numModules; moduleIdx++ {
+		vm.currentModule = moduleIdx
+
+		vm.frames[0] = NewFrame(vm.modules[moduleIdx].MainFn, 0)
+		vm.framesIndex = 1
+		vm.sp = 0
+
+		if err := vm.runModule(moduleIdx); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (vm *VM) runModule(moduleIdx int) error {
 	var ip int
 	var ins code.Instructions
 	var op code.Opcode
@@ -109,6 +150,7 @@ func (vm *VM) Run() error {
 
 	frame = vm.currentFrame()
 	ins = frame.cl.Fn.Instructions
+	moduleGlobals := vm.modules[moduleIdx].Globals
 
 	for frame.ip < len(ins)-1 {
 		frame.ip++
@@ -186,12 +228,24 @@ func (vm *VM) Run() error {
 		case code.OpSetGlobal:
 			globalIndex := readUint16(ins, ip)
 			frame.ip += 2
-			vm.globals[globalIndex] = vm.pop()
+			moduleGlobals[globalIndex] = vm.pop()
 
 		case code.OpGetGlobal:
 			globalIndex := readUint16(ins, ip)
 			frame.ip += 2
-			if err := vm.push(vm.globals[globalIndex]); err != nil {
+			if err := vm.push(moduleGlobals[globalIndex]); err != nil {
+				return err
+			}
+
+		case code.OpGetModuleExport:
+			targetModuleIdx := readUint16(ins, ip)
+			exportIdx := readUint16(ins, ip+2)
+			frame.ip += 4
+
+			// Look up the global slot for this export
+			slot := vm.modules[targetModuleIdx].Exports[exportIdx]
+			value := vm.modules[targetModuleIdx].Globals[slot]
+			if err := vm.push(value); err != nil {
 				return err
 			}
 
@@ -260,6 +314,11 @@ func (vm *VM) Run() error {
 			returnValue := vm.pop()
 
 			poppedFrame := vm.popFrame()
+			// Check if we're returning to the module's main frame
+			if vm.framesIndex == 0 {
+				// Module execution complete
+				return nil
+			}
 			frame = vm.currentFrame()
 			vm.sp = poppedFrame.basePointer - 1
 
@@ -270,6 +329,11 @@ func (vm *VM) Run() error {
 
 		case code.OpReturn:
 			poppedFrame := vm.popFrame()
+			// Check if we're returning to the module's main frame
+			if vm.framesIndex == 0 {
+				// Module execution complete
+				return nil
+			}
 			frame = vm.currentFrame()
 			vm.sp = poppedFrame.basePointer - 1
 

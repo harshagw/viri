@@ -1,0 +1,22 @@
+// Module with exported class
+export class Counter {
+    init(start) {
+        this.value = start;
+    }
+
+    increment() {
+        this.value = this.value + 1;
+    }
+
+    getValue() {
+        return this.value;
+    }
+}
+
+export class Point {
+    init(x, y) {
+        this.x = x;
+        this.y = y;
+    }
+}
+

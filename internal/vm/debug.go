@@ -22,9 +22,14 @@ type VMState struct {
 	FrameIndex int
 	Frames     []FrameInfo
 
+	// Module info
+	CurrentModule int
+	NumModules    int
+	ModuleGlobals [][]objects.Object // globals for each module
+
 	// Other
 	Constants []objects.Object
-	Globals   []objects.Object
+	Globals   []objects.Object // current module's globals (for convenience)
 	Output    []string
 }
 
@@ -88,18 +93,35 @@ func (vm *VM) GetState() *VMState {
 		}
 	}
 
+	// Collect globals from all modules
+	moduleGlobals := make([][]objects.Object, len(vm.modules))
+	for i, mod := range vm.modules {
+		globals := make([]objects.Object, len(mod.Globals))
+		copy(globals, mod.Globals)
+		moduleGlobals[i] = globals
+	}
+
+	// Current module's globals for convenience
+	var currentGlobals []objects.Object
+	if vm.currentModule < len(vm.modules) {
+		currentGlobals = moduleGlobals[vm.currentModule]
+	}
+
 	return &VMState{
-		IP:           ip,
-		OpCode:       opCode,
-		OpName:       opName,
-		Operands:     operands,
-		Instructions: ins,
-		SP:           vm.sp,
-		Stack:        stack,
-		FrameIndex:   vm.framesIndex,
-		Frames:       frames,
-		Constants:    vm.constants,
-		Globals:      vm.globals,
-		Output:       vm.output,
+		IP:            ip,
+		OpCode:        opCode,
+		OpName:        opName,
+		Operands:      operands,
+		Instructions:  ins,
+		SP:            vm.sp,
+		Stack:         stack,
+		FrameIndex:    vm.framesIndex,
+		Frames:        frames,
+		CurrentModule: vm.currentModule,
+		NumModules:    len(vm.modules),
+		ModuleGlobals: moduleGlobals,
+		Constants:     vm.constants,
+		Globals:       currentGlobals,
+		Output:        vm.output,
 	}
 }
