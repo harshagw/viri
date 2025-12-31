@@ -22,7 +22,7 @@ export default function Page() {
           <div className="container mx-auto px-6 max-w-4xl">
             <div className="max-w-xl">
               <h1 className="text-7xl font-bold font-mono text-primary mb-6">viri</h1>
-              <p className="text-xl leading-relaxed text-foreground mb-8">A tiny language built for learning how languages work</p>
+              <p className="text-xl leading-relaxed text-foreground mb-8">A simple, expressive programming language</p>
               <div className="flex gap-3 flex-wrap">
                 <Link href="/playground">
                   <Button size="lg" variant="default">

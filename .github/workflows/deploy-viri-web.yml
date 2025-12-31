@@ -70,6 +70,11 @@ jobs:
       - name: Build with Next.js
         run: ${{ steps.detect-package-manager.outputs.runner }} next build
 
+      - name: Convert OG image to PNG
+        run: |
+          sudo apt-get install -y librsvg2-bin
+          rsvg-convert -w 1200 -h 630 out/og-image.svg -o out/og-image.png
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:

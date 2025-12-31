@@ -1,6 +1,6 @@
 # Viri
 
-Viri is a tiny programming language built as a learning project to understand how languages actually work under the hood.
+Viri is a simple, expressive programming language designed to be easy to learn and use.
 
 The same language is implemented in multiple execution models:
 

@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0a1628"/>
+      <stop offset="100%" style="stop-color:#0d2847"/>
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  
+  <!-- Decorative circles -->
+  <circle cx="100" cy="100" r="200" fill="#0f91b2" opacity="0.1"/>
+  <circle cx="1100" cy="530" r="250" fill="#0f91b2" opacity="0.08"/>
+  
+  <!-- Logo circle -->
+  <circle cx="600" cy="180" r="90" fill="#0f91b2"/>
+  <text x="600" y="215" font-family="Arial, sans-serif" font-size="100" font-weight="bold" fill="#FFF" text-anchor="middle">V</text>
+  
+  <!-- Title -->
+  <text x="600" y="380" font-family="Arial, sans-serif" font-size="72" font-weight="bold" fill="#FFF" text-anchor="middle">Viri</text>
+  
+  <!-- Tagline -->
+  <text x="600" y="450" font-family="Arial, sans-serif" font-size="28" fill="#94a3b8" text-anchor="middle">A simple, expressive programming language</text>
+  
+  <!-- URL -->
+  <text x="600" y="560" font-family="Arial, sans-serif" font-size="20" fill="#64748b" text-anchor="middle">harshagw.github.io/viri</text>
+</svg>
+

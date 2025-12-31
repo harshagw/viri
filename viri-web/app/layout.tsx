@@ -17,7 +17,46 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Viri",
-  description: "Viri is a programming language that is designed to be easy to learn and use.",
+  description: "A simple, expressive programming language designed to be easy to learn and use.",
+  metadataBase: new URL("https://harshagw.github.io/viri"),
+  keywords: ["viri", "programming language", "interpreter", "compiler", "bytecode", "vm", "learning"],
+  authors: [{ name: "Harsh Agarwal", url: "https://harshagw.github.io" }],
+  creator: "Harsh Agarwal",
+  openGraph: {
+    title: "Viri",
+    description: "A simple, expressive programming language designed to be easy to learn and use.",
+    siteName: "Viri",
+    type: "website",
+    locale: "en_US",
+    url: "https://harshagw.github.io/viri",
+    images: [
+      {
+        url: "https://harshagw.github.io/viri/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Viri - A simple, expressive programming language",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    site: "@harsh_agw",
+    creator: "@harsh_agw",
+    title: "Viri",
+    description: "A simple, expressive programming language designed to be easy to learn and use.",
+    images: {
+      url: "https://harshagw.github.io/viri/og-image.png",
+      alt: "Viri - A simple, expressive programming language",
+    },
+  },
+  icons: {
+    icon: "/favicon.svg",
+    apple: "/favicon.svg",
+  },
+  other: {
+    "linkedin:title": "Viri",
+    "linkedin:description": "A simple, expressive programming language designed to be easy to learn and use.",
+  },
 };
 
 import { ThemeProvider } from "@/app/providers/theme-provider";
