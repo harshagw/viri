@@ -66,6 +66,16 @@ func (v *Viri) Warn(tok token.Token, message string) {
 	}
 }
 
+func printRuntimeError(filePath string, line int, message string) {
+	if filePath != "" && line > 0 {
+		color.New(color.FgRed).Fprintf(color.Error, "Runtime error in %s at line %d: %s\n", filePath, line, message)
+	} else if line > 0 {
+		color.New(color.FgRed).Fprintf(color.Error, "Runtime error at line %d: %s\n", line, message)
+	} else {
+		color.New(color.FgRed).Fprintln(color.Error, "Runtime error:", message)
+	}
+}
+
 func (v *Viri) Run(filePath string) {
 	if v.config.Engine == "vm" {
 		v.runWithVM(filePath)
@@ -99,7 +109,11 @@ func (v *Viri) runWithVM(filePath string) {
 	startTime := time.Now()
 	machine := vm.New(program)
 	if err := machine.RunProgram(); err != nil {
-		color.New(color.FgRed).Fprintln(color.Error, "Runtime error:", err)
+		if vmErr, ok := err.(*objects.VMRuntimeError); ok {
+			printRuntimeError(vmErr.FilePath, vmErr.Line, vmErr.Message)
+		} else {
+			printRuntimeError("", 0, err.Error())
+		}
 		v.hasErrors = true
 		return
 	}
@@ -143,17 +157,17 @@ func (v *Viri) runWithInterpreter(filePath string) {
 	startTime := time.Now()
 	if _, err := interpreter.Interpret(mod.GetAllStatements()); err != nil {
 		if runtimeErr, ok := err.(*objects.RuntimeError); ok {
+			filePath := ""
+			line := 0
 			if runtimeErr.Token != nil {
+				line = runtimeErr.Token.Line
 				if runtimeErr.Token.FilePath != nil {
-					color.New(color.FgRed).Fprintf(color.Error, "Runtime error in %s at line %d: %s\n", *runtimeErr.Token.FilePath, runtimeErr.Token.Line, runtimeErr.Message)
-				} else {
-					color.New(color.FgRed).Fprintf(color.Error, "Runtime error at line %d: %s\n", runtimeErr.Token.Line, runtimeErr.Message)
+					filePath = *runtimeErr.Token.FilePath
 				}
-			} else {
-				color.New(color.FgRed).Fprintln(color.Error, "Runtime error:", runtimeErr.Message)
 			}
+			printRuntimeError(filePath, line, runtimeErr.Message)
 		} else {
-			fmt.Println("Runtime error:", err)
+			printRuntimeError("", 0, err.Error())
 		}
 		v.hasErrors = true
 		return

@@ -19,10 +19,19 @@ type ContinueError struct{}
 
 func (e *ContinueError) Error() string { return "continue" }
 
-// RuntimeError is used for runtime errors.
+// RuntimeError is used for runtime errors (interpreter).
 type RuntimeError struct {
 	Token   *token.Token
 	Message string
 }
 
 func (e *RuntimeError) Error() string { return e.Message }
+
+// VMRuntimeError is used for runtime errors in the VM.
+type VMRuntimeError struct {
+	Message  string
+	Line     int
+	FilePath string
+}
+
+func (e *VMRuntimeError) Error() string { return e.Message }

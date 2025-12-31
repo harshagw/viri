@@ -11,22 +11,12 @@ import (
 	"testing"
 )
 
-// Files that the VM engine supports
-var vmSupportedFiles = []string{
-	"arithmetic.viri",
-	"conditionals.viri",
-	"loops.viri",
-	"functions.viri",
-	"anonymous_functions.viri",
-	"block_scope.viri",
-	"classes.viri",
-	"classes_inheritance.viri",
-	"classes_advanced.viri",
-	"imports.viri",
-}
-
 func TestE2E_VM(t *testing.T) {
 	testDataDir := "testdata"
+	files, err := os.ReadDir(testDataDir)
+	if err != nil {
+		t.Fatalf("failed to read testdata dir: %v", err)
+	}
 
 	// Ensure the binary is built and available in the root
 	viriPath, err := filepath.Abs("../viri")
@@ -34,20 +24,24 @@ func TestE2E_VM(t *testing.T) {
 		t.Fatalf("failed to get absolute path for viri: %v", err)
 	}
 
-	for _, fileName := range vmSupportedFiles {
-		t.Run(fileName, func(t *testing.T) {
-			path := filepath.Join(testDataDir, fileName)
+	for _, file := range files {
+		if !strings.HasSuffix(file.Name(), ".viri") {
+			continue
+		}
 
-			// Check if the file exists
-			if _, err := os.Stat(path); os.IsNotExist(err) {
-				t.Skipf("test file %s does not exist", fileName)
-			}
+		// Skip module files that are just for importing
+		if strings.Contains(file.Name(), "module_") {
+			continue
+		}
+
+		t.Run(file.Name(), func(t *testing.T) {
+			path := filepath.Join(testDataDir, file.Name())
 
 			// Expected output is in a .out file with same name
 			expectedPath := strings.TrimSuffix(path, ".viri") + ".out"
 			expectedOutput, err := os.ReadFile(expectedPath)
 			if err != nil {
-				t.Logf("Warning: no .out file for %s", fileName)
+				t.Logf("Warning: no .out file for %s", file.Name())
 			}
 
 			// Run the binary with VM engine

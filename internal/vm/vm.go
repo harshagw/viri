@@ -13,13 +13,15 @@ const MaxFrames = 1024
 
 // ModuleInstance represents a module at runtime
 type ModuleInstance struct {
-	Globals []objects.Object // module-local globals
-	Exports []int            // export index -> global slot mapping
-	MainFn  *objects.Closure // pre-created main closure for this module
+	Globals      []objects.Object // module-local globals
+	Exports      []int            // export index -> global slot mapping
+	MainFn       *objects.Closure // pre-created main closure for this module
+	DebugInfoIdx int              // index into DebugInfo for line table and file path
 }
 
 type VM struct {
 	constants []objects.Object
+	debugInfo *objects.DebugInfo // debug information (line tables, file paths)
 
 	stack []objects.Object
 	sp    int // Always points to the next value. Top of stack is stack[sp-1]
@@ -40,18 +42,23 @@ func New(program *objects.CompiledProgram) *VM {
 
 	modules := make([]ModuleInstance, numModules)
 	for i, compiledMod := range program.Modules {
-		mainFn := &objects.CompiledFunction{Instructions: compiledMod.Instructions}
+		mainFn := &objects.CompiledFunction{
+			Instructions: compiledMod.Instructions,
+			DebugInfoIdx: compiledMod.DebugInfoIdx,
+		}
 		mainClosure := objects.NewClosure(mainFn, nil)
 
 		modules[i] = ModuleInstance{
-			Globals: make([]objects.Object, compiledMod.NumGlobals),
-			Exports: compiledMod.Exports,
-			MainFn:  mainClosure,
+			Globals:      make([]objects.Object, compiledMod.NumGlobals),
+			Exports:      compiledMod.Exports,
+			MainFn:       mainClosure,
+			DebugInfoIdx: compiledMod.DebugInfoIdx,
 		}
 	}
 
 	vm := &VM{
 		constants:   program.Constants,
+		debugInfo:   program.DebugInfo,
 		stack:       make([]objects.Object, StackSize),
 		sp:          0,
 		modules:     modules,
@@ -103,7 +110,7 @@ func (vm *VM) StackTop() objects.Object {
 
 func (vm *VM) push(o objects.Object) error {
 	if vm.sp >= StackSize {
-		return fmt.Errorf("stack overflow")
+		return vm.runtimeError("stack overflow")
 	}
 
 	vm.stack[vm.sp] = o
@@ -124,6 +131,21 @@ func (vm *VM) pop() objects.Object {
 
 func (vm *VM) LastPoppedStackElem() objects.Object {
 	return unwrapCell(vm.stack[vm.sp])
+}
+
+func (vm *VM) runtimeError(message string) error {
+	frame := vm.currentFrame()
+	ip := frame.ip
+	debugIdx := frame.cl.Fn.DebugInfoIdx
+
+	line := vm.debugInfo.GetLine(debugIdx, ip)
+	filePath := vm.debugInfo.GetFilePath(debugIdx)
+
+	return &objects.VMRuntimeError{
+		Message:  message,
+		Line:     line,
+		FilePath: filePath,
+	}
 }
 
 func (vm *VM) RunProgram() error {
@@ -348,7 +370,7 @@ func (vm *VM) runModule(moduleIdx int) error {
 
 			nativeFn := objects.GetNativeFunctionByIndex(nativeIndex)
 			if nativeFn == nil {
-				return fmt.Errorf("native function index out of bounds: %d", nativeIndex)
+				return vm.runtimeError(fmt.Sprintf("native function index out of bounds: %d", nativeIndex))
 			}
 
 			if err := vm.push(nativeFn); err != nil {
@@ -441,7 +463,7 @@ func (vm *VM) runModule(moduleIdx int) error {
 				var ok bool
 				superClass, ok = superObj.(*objects.CompiledClass)
 				if !ok {
-					return fmt.Errorf("superclass must be a class, got %s", superObj.Type())
+					return vm.runtimeError(fmt.Sprintf("superclass must be a class, got %s", superObj.Type()))
 				}
 			}
 
@@ -475,11 +497,11 @@ func (vm *VM) runModule(moduleIdx int) error {
 						return err
 					}
 				} else {
-					return fmt.Errorf("undefined property '%s' on %s instance",
-						name, target.Class.Name)
+					return vm.runtimeError(fmt.Sprintf("undefined property '%s' on %s instance",
+						name, target.Class.Name))
 				}
 			default:
-				return fmt.Errorf("only instances have properties, got %s", obj.Type())
+				return vm.runtimeError(fmt.Sprintf("only instances have properties, got %s", obj.Type()))
 			}
 
 		case code.OpSetProperty:
@@ -492,7 +514,7 @@ func (vm *VM) runModule(moduleIdx int) error {
 
 			instance, ok := obj.(*objects.CompiledInstance)
 			if !ok {
-				return fmt.Errorf("only instances have fields, got %s", obj.Type())
+				return vm.runtimeError(fmt.Sprintf("only instances have fields, got %s", obj.Type()))
 			}
 
 			instance.Fields[name] = value
@@ -512,8 +534,8 @@ func (vm *VM) runModule(moduleIdx int) error {
 
 			method, ok := superClass.LookupMethod(name)
 			if !ok {
-				return fmt.Errorf("undefined method '%s' in superclass %s",
-					name, superClass.Name)
+				return vm.runtimeError(fmt.Sprintf("undefined method '%s' in superclass %s",
+					name, superClass.Name))
 			}
 
 			bound := &objects.BoundMethod{Receiver: instance, Method: method}
@@ -531,7 +553,7 @@ func (vm *VM) executeClosure(constIndex int, numFree int) error {
 	fnObj := vm.constants[constIndex]
 	function, ok := fnObj.(*objects.CompiledFunction)
 	if !ok {
-		return fmt.Errorf("expected compiled function, got %s", fnObj.Type())
+		return vm.runtimeError(fmt.Sprintf("expected compiled function, got %s", fnObj.Type()))
 	}
 
 	// Collect free variables from the stack
@@ -565,7 +587,7 @@ func (vm *VM) executeCall(numArgs int) (*Frame, error) {
 	case *objects.BoundMethod:
 		return vm.callBoundMethod(fn, numArgs)
 	default:
-		return nil, fmt.Errorf("cannot call %s", callee.Type())
+		return nil, vm.runtimeError(fmt.Sprintf("cannot call %s", callee.Type()))
 	}
 }
 
@@ -592,8 +614,8 @@ func (vm *VM) callNativeFunction(fn *objects.NativeFunction, numArgs int) error 
 func (vm *VM) callClosure(cl *objects.Closure, numArgs int) (*Frame, error) {
 	fn := cl.Fn
 	if numArgs != fn.NumParameters {
-		return nil, fmt.Errorf("wrong number of arguments: want=%d, got=%d",
-			fn.NumParameters, numArgs)
+		return nil, vm.runtimeError(fmt.Sprintf("wrong number of arguments: want=%d, got=%d",
+			fn.NumParameters, numArgs))
 	}
 
 	frame := NewFrame(cl, vm.sp-numArgs)
@@ -610,8 +632,8 @@ func (vm *VM) callClass(class *objects.CompiledClass, numArgs int) (*Frame, erro
 	if init, ok := class.LookupMethod("init"); ok {
 		expectedArgs := init.Fn.NumParameters - 1 // -1 for 'this'
 		if expectedArgs != numArgs {
-			return nil, fmt.Errorf("%s.init() expected %d arguments but got %d",
-				class.Name, expectedArgs, numArgs)
+			return nil, vm.runtimeError(fmt.Sprintf("%s.init() expected %d arguments but got %d",
+				class.Name, expectedArgs, numArgs))
 		}
 
 		bound := objects.NewBoundMethod(instance, init)
@@ -630,8 +652,8 @@ func (vm *VM) callClass(class *objects.CompiledClass, numArgs int) (*Frame, erro
 
 	// No init method - must have zero arguments
 	if numArgs != 0 {
-		return nil, fmt.Errorf("%s() takes no arguments (%d given)",
-			class.Name, numArgs)
+		return nil, vm.runtimeError(fmt.Sprintf("%s() takes no arguments (%d given)",
+			class.Name, numArgs))
 	}
 
 	// Replace class with instance on stack
@@ -646,8 +668,8 @@ func (vm *VM) callClass(class *objects.CompiledClass, numArgs int) (*Frame, erro
 func (vm *VM) callBoundMethod(bm *objects.BoundMethod, numArgs int) (*Frame, error) {
 	expectedArgs := bm.Method.Fn.NumParameters - 1
 	if expectedArgs != numArgs {
-		return nil, fmt.Errorf("%s() expected %d arguments but got %d",
-			bm.Method.Fn.Name, expectedArgs, numArgs)
+		return nil, vm.runtimeError(fmt.Sprintf("%s() expected %d arguments but got %d",
+			bm.Method.Fn.Name, expectedArgs, numArgs))
 	}
 
 	// Shift everything (including bound_method slot) up by 1
@@ -693,12 +715,12 @@ func (vm *VM) executeBinaryOperation(op code.Opcode) error {
 		}
 	}
 
-	return fmt.Errorf("unsupported types for binary operation: %s %s", leftType, rightType)
+	return vm.runtimeError("Operands must be numbers.")
 }
 
 func (vm *VM) executeBinaryStringOperation(op code.Opcode, left, right objects.Object) error {
 	if op != code.OpAdd {
-		return fmt.Errorf("unknown string operator: %d", op)
+		return vm.runtimeError(fmt.Sprintf("unknown string operator: %d", op))
 	}
 
 	leftVal := left.(*objects.String).Value
@@ -735,7 +757,7 @@ func (vm *VM) executeBinaryIntegerOperation(op code.Opcode, left, right objects.
 	case code.OpDiv:
 		result = leftVal / rightVal
 	default:
-		return fmt.Errorf("unknown integer operator: %d", op)
+		return vm.runtimeError(fmt.Sprintf("unknown integer operator: %d", op))
 	}
 
 	return vm.push(&objects.Number{Value: result})
@@ -755,7 +777,7 @@ func (vm *VM) executeComparison(op code.Opcode) error {
 	case code.OpNotEqual:
 		return vm.push(objects.NewBool(!objects.IsEqual(left, right)))
 	default:
-		return fmt.Errorf("unknown operator: %d (%s %s)", op, left.Type(), right.Type())
+		return vm.runtimeError(fmt.Sprintf("unknown operator: %d (%s %s)", op, left.Type(), right.Type()))
 	}
 }
 
@@ -771,7 +793,7 @@ func (vm *VM) executeIntegerComparison(op code.Opcode, left, right objects.Objec
 	case code.OpGreaterThan:
 		return vm.push(objects.NewBool(leftVal > rightVal))
 	default:
-		return fmt.Errorf("unknown operator: %d", op)
+		return vm.runtimeError(fmt.Sprintf("unknown operator: %d", op))
 	}
 }
 
@@ -784,7 +806,7 @@ func (vm *VM) executeMinusOperator() error {
 	operand := vm.pop()
 
 	if operand.Type() != objects.TypeNumber {
-		return fmt.Errorf("unsupported type for negation: %s", operand.Type())
+		return vm.runtimeError(fmt.Sprintf("unsupported type for negation: %s", operand.Type()))
 	}
 
 	value := operand.(*objects.Number).Value
@@ -828,7 +850,7 @@ func (vm *VM) hashKey(key objects.Object) (string, error) {
 	case *objects.Bool:
 		return k.Inspect(), nil
 	default:
-		return "", fmt.Errorf("unusable as hash key: %s", key.Type())
+		return "", vm.runtimeError(fmt.Sprintf("unusable as hash key: %s", key.Type()))
 	}
 }
 
@@ -839,7 +861,7 @@ func (vm *VM) executeIndexExpression(left, index objects.Object) error {
 	case left.Type() == objects.TypeHash:
 		return vm.executeHashIndex(left, index)
 	default:
-		return fmt.Errorf("index operator not supported: %s[%s]", left.Type(), index.Type())
+		return vm.runtimeError(fmt.Sprintf("index operator not supported: %s[%s]", left.Type(), index.Type()))
 	}
 }
 
@@ -848,7 +870,7 @@ func (vm *VM) executeArrayIndex(array, index objects.Object) error {
 	idx := int(index.(*objects.Number).Value)
 
 	if idx < 0 || idx >= len(arrayObj.Elements) {
-		return fmt.Errorf("index out of bounds")
+		return vm.runtimeError("index out of bounds")
 	}
 
 	return vm.push(arrayObj.Elements[idx])
@@ -864,7 +886,7 @@ func (vm *VM) executeHashIndex(hash, index objects.Object) error {
 
 	value, ok := hashObj.Get(key)
 	if !ok {
-		return fmt.Errorf("key '%s' not found in hash map", key)
+		return vm.runtimeError(fmt.Sprintf("key '%s' not found in hash map", key))
 	}
 
 	return vm.push(value)
@@ -877,7 +899,7 @@ func (vm *VM) executeSetIndexExpression(left, index, value objects.Object) error
 	case left.Type() == objects.TypeHash:
 		return vm.executeHashSetIndex(left, index, value)
 	default:
-		return fmt.Errorf("index assignment not supported: %s[%s]", left.Type(), index.Type())
+		return vm.runtimeError(fmt.Sprintf("index assignment not supported: %s[%s]", left.Type(), index.Type()))
 	}
 }
 
@@ -886,7 +908,7 @@ func (vm *VM) executeArraySetIndex(array, index, value objects.Object) error {
 	idx := int(index.(*objects.Number).Value)
 
 	if idx < 0 || idx >= len(arrayObj.Elements) {
-		return fmt.Errorf("index out of bounds: %d", idx)
+		return vm.runtimeError(fmt.Sprintf("index out of bounds: %d", idx))
 	}
 
 	arrayObj.Elements[idx] = value

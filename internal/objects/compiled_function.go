@@ -12,6 +12,7 @@ type CompiledFunction struct {
 	NumLocals     int
 	NumParameters int
 	Name          string
+	DebugInfoIdx  int
 }
 
 func (cf *CompiledFunction) Type() Type {

@@ -11,6 +11,7 @@ import (
 
 type CompilationScope struct {
 	instructions code.Instructions
+	lineTable    []int
 }
 
 // ClassCompiler tracks state while compiling a class.
@@ -41,6 +42,13 @@ type Compiler struct {
 	modules       map[string]*ast.Module // path -> parsed module
 	moduleOrder   []string               // topological order
 	moduleIndices map[string]int         // path -> module index
+
+	// Source location tracking (updated as we compile each node)
+	currentLine     int
+	currentFilePath string
+
+	// Debug info output (line tables stored per function/module for VM error reporting)
+	debugInfo *objects.DebugInfo
 }
 
 func New(diagnosticHandler objects.DiagnosticHandler) *Compiler {
@@ -52,6 +60,7 @@ func NewWithState(diagnosticHandler objects.DiagnosticHandler, symbolTable *Symb
 		diagnosticHandler: diagnosticHandler,
 		modules:           make(map[string]*ast.Module),
 		moduleIndices:     make(map[string]int),
+		debugInfo:         objects.NewDebugInfo(),
 	}
 	c.reset(symbolTable)
 	return c
@@ -66,10 +75,12 @@ func (c *Compiler) reset(symbolTable *SymbolTable) {
 
 	c.symbolTable = symbolTable
 	c.loopStack = NewLoopStack()
-	c.scopes = []CompilationScope{{instructions: code.Instructions{}}}
+	c.scopes = []CompilationScope{{instructions: code.Instructions{}, lineTable: []int{}}}
 	c.scopeIndex = 0
 	c.classCompiler = nil
 	c.maxGlobalIndex = -1
+	c.currentLine = 1
+	c.currentFilePath = ""
 
 	// Register native functions
 	for i, nativeFn := range objects.NativeFunctions {
@@ -79,18 +90,32 @@ func (c *Compiler) reset(symbolTable *SymbolTable) {
 	}
 }
 
+// SetFilePath explicitly sets the file path for module-level code.
+func (c *Compiler) SetFilePath(path string) {
+	c.currentFilePath = path
+}
+
 // Result returns the compiled program (for single-file compilation, tests, REPL)
 func (c *Compiler) Result() *objects.CompiledProgram {
+	// Add debug info for the module-level code
+	debugIdx := c.debugInfo.Add(c.currentLineTable(), c.currentFilePath)
+
 	return &objects.CompiledProgram{
 		Modules: []objects.CompiledModule{
 			{
 				Instructions: c.currentInstructions(),
 				NumGlobals:   c.maxGlobalIndex + 1,
 				Exports:      []int{},
+				DebugInfoIdx: debugIdx,
 			},
 		},
 		Constants: c.constants,
+		DebugInfo: c.debugInfo,
 	}
+}
+
+func (c *Compiler) currentLineTable() []int {
+	return c.scopes[c.scopeIndex].lineTable
 }
 
 func (c *Compiler) currentInstructions() code.Instructions {
@@ -100,20 +125,22 @@ func (c *Compiler) currentInstructions() code.Instructions {
 func (c *Compiler) enterScope(functionName string) {
 	scope := CompilationScope{
 		instructions: code.Instructions{},
+		lineTable:    []int{},
 	}
 	c.scopes = append(c.scopes, scope)
 	c.scopeIndex++
 	c.symbolTable = NewFunctionScope(c.symbolTable, functionName)
 }
 
-func (c *Compiler) leaveScope() code.Instructions {
+func (c *Compiler) leaveScope() (code.Instructions, []int) {
 	instructions := c.currentInstructions()
+	lineTable := c.currentLineTable()
 
 	c.scopes = c.scopes[:len(c.scopes)-1]
 	c.scopeIndex--
 	c.symbolTable = c.symbolTable.Outer
 
-	return instructions
+	return instructions, lineTable
 }
 
 func (c *Compiler) Compile(node interface{}) error {
@@ -128,6 +155,8 @@ func (c *Compiler) Compile(node interface{}) error {
 }
 
 func (c *Compiler) compileStatement(stmt ast.Stmt) error {
+	c.updateLineInfo(stmt)
+
 	switch stmt := stmt.(type) {
 	case *ast.ExprStmt:
 		if err := c.compileExpression(stmt.Expr); err != nil {
@@ -360,6 +389,8 @@ func (c *Compiler) compileStatement(stmt ast.Stmt) error {
 }
 
 func (c *Compiler) compileExpression(node ast.Expr) error {
+	c.updateLineInfo(node)
+
 	switch node := node.(type) {
 	case *ast.LiteralExpr:
 		switch value := node.Value.(type) {
@@ -660,7 +691,23 @@ func (c *Compiler) emit(op code.Opcode, operands ...int) int {
 	ins := code.Make(op, operands...)
 	pos := len(c.currentInstructions())
 	c.scopes[c.scopeIndex].instructions = append(c.scopes[c.scopeIndex].instructions, ins...)
+
+	for range ins {
+		c.scopes[c.scopeIndex].lineTable = append(c.scopes[c.scopeIndex].lineTable, c.currentLine)
+	}
+
 	return pos
+}
+
+func (c *Compiler) updateLineInfo(node ast.Node) {
+	tok := node.GetPrimaryToken()
+	if tok == nil {
+		return
+	}
+	c.currentLine = tok.Line
+	if c.currentFilePath == "" && tok.FilePath != nil {
+		c.currentFilePath = *tok.FilePath
+	}
 }
 
 func (c *Compiler) addConstant(obj objects.Object) int {
@@ -731,15 +778,22 @@ func (c *Compiler) compileFunction(params []*token.Token, body *ast.BlockStmt, f
 	// If the function doesn't have an explicit return, emit OpReturn
 	c.emit(code.OpReturn)
 
-	fn := &objects.CompiledFunction{
-		Instructions:  c.currentInstructions(),
-		NumLocals:     c.symbolTable.NumDefinitions(),
-		NumParameters: len(params),
-		Name:          functionName,
-	}
+	// Capture values from current scope before leaving
+	numLocals := c.symbolTable.NumDefinitions()
 	freeSymbols := c.symbolTable.FreeSymbols
 
-	c.leaveScope()
+	instructions, lineTable := c.leaveScope()
+
+	debugIdx := c.debugInfo.Add(lineTable, ast.GetNodeFilePath(body))
+
+	fn := &objects.CompiledFunction{
+		Instructions:  instructions,
+		NumLocals:     numLocals,
+		NumParameters: len(params),
+		Name:          functionName,
+		DebugInfoIdx:  debugIdx,
+	}
+
 	c.emitClosure(fn, freeSymbols)
 	return nil
 }
@@ -868,15 +922,22 @@ func (c *Compiler) compileMethod(method *ast.FunctionStmt) error {
 		c.emit(code.OpReturn)
 	}
 
-	fn := &objects.CompiledFunction{
-		Instructions:  c.currentInstructions(),
-		NumLocals:     c.symbolTable.NumDefinitions(),
-		NumParameters: len(method.Params) + 1, // +1 for 'this'
-		Name:          method.Name.Lexeme,
-	}
+	// Capture values from current scope before leaving
+	numLocals := c.symbolTable.NumDefinitions()
 	freeSymbols := c.symbolTable.FreeSymbols
 
-	c.leaveScope()
+	instructions, lineTable := c.leaveScope()
+
+	debugIdx := c.debugInfo.Add(lineTable, ast.GetNodeFilePath(method))
+
+	fn := &objects.CompiledFunction{
+		Instructions:  instructions,
+		NumLocals:     numLocals,
+		NumParameters: len(method.Params) + 1, // +1 for 'this'
+		Name:          method.Name.Lexeme,
+		DebugInfoIdx:  debugIdx,
+	}
+
 	c.emitClosure(fn, freeSymbols)
 	return nil
 }

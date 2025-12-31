@@ -43,6 +43,7 @@ func (c *Compiler) CompileProgram(entryPath string) (*objects.CompiledProgram, e
 	return &objects.CompiledProgram{
 		Modules:   compiledModules,
 		Constants: c.constants, // shared constants table
+		DebugInfo: c.debugInfo,
 	}, nil
 }
 
@@ -52,6 +53,8 @@ func (c *Compiler) compileModule(path string) (objects.CompiledModule, error) {
 
 	// Reset compiler state for this module
 	c.reset(nil)
+
+	c.SetFilePath(path)
 
 	// Register imports - we need to know what each imported module exports
 	for _, importStmt := range mod.Imports {
@@ -111,10 +114,14 @@ func (c *Compiler) compileModule(path string) (objects.CompiledModule, error) {
 		exports[i] = exportSlots[name]
 	}
 
+	// Add debug info for module-level code
+	debugIdx := c.debugInfo.Add(c.currentLineTable(), path)
+
 	return objects.CompiledModule{
 		Instructions: c.currentInstructions(),
 		NumGlobals:   c.maxGlobalIndex + 1,
 		Exports:      exports,
+		DebugInfoIdx: debugIdx,
 	}, nil
 }
 

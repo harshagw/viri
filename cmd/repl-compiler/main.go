@@ -52,7 +52,8 @@ func main() {
 		code := bytes.NewBufferString(line + "\n")
 		handler.hasErrors = false
 
-		sc := scanner.New(code, nil)
+		replPath := "<repl>"
+		sc := scanner.New(code, &replPath)
 		tokens, err := sc.Scan()
 		if err != nil {
 			fmt.Println("Error parsing tokens:", err)

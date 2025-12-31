@@ -75,7 +75,8 @@ func execute(source string, interpreter *interp.Interpreter, handler *replHandle
 
 	code := bytes.NewBufferString(source)
 
-	sc := scanner.New(code, nil)
+	playgroundPath := "<playground>"
+	sc := scanner.New(code, &playgroundPath)
 	tokens, err := sc.Scan()
 	if err != nil {
 		handler.errors = append(handler.errors, fmt.Sprintf("Scanning error: %v", err))
