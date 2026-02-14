@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/harshagw/viri/internal/ast"
+	"github.com/harshagw/viri/internal/code"
 	"github.com/harshagw/viri/internal/compiler"
 	"github.com/harshagw/viri/internal/objects"
 	"github.com/harshagw/viri/internal/token"
@@ -5016,5 +5017,93 @@ func TestClassInheritFromNonClass(t *testing.T) {
 	err = vm.RunProgram()
 	if err == nil {
 		t.Fatalf("expected error for inheriting from non-class, got none")
+	}
+}
+
+func TestOpGetStdlibExport(t *testing.T) {
+	// Test that OpGetStdlibExport correctly retrieves values from constants pool
+	// This directly tests the VM's handling of the stdlib export opcode
+
+	// Create a bytecode that loads a constant using OpGetStdlibExport
+	// OpGetStdlibExport takes a 2-byte constant index
+	piValue := objects.NewNumber(3.141592653589793)
+
+	instructions := code.Instructions{}
+	instructions = append(instructions, code.Make(code.OpGetStdlibExport, 0)...) // Get constant at index 0
+	instructions = append(instructions, code.Make(code.OpPop)...)
+
+	// Create bytecode result using objects.CompiledProgram
+	program := &objects.CompiledProgram{
+		Modules: []objects.CompiledModule{
+			{
+				Instructions: instructions,
+				NumGlobals:   0,
+				Exports:      []int{},
+			},
+		},
+		Constants: []objects.Object{piValue}, // PI at index 0
+	}
+
+	vm := New(program)
+	err := vm.RunProgram()
+	if err != nil {
+		t.Fatalf("vm error: %s", err)
+	}
+
+	result := vm.LastPoppedStackElem()
+	num, ok := result.(*objects.Number)
+	if !ok {
+		t.Fatalf("expected Number, got %T (%+v)", result, result)
+	}
+
+	if num.Value != 3.141592653589793 {
+		t.Errorf("got %v, want 3.141592653589793", num.Value)
+	}
+}
+
+func TestOpGetStdlibExportNativeFunction(t *testing.T) {
+	// Test that native functions retrieved via OpGetStdlibExport can be called
+	// Create a simple native function that doubles its input
+	doubleFn := &objects.NativeFunction{
+		Name:    "double",
+		NumArgs: 1,
+		Fn: func(args ...objects.Object) (objects.Object, error) {
+			num := args[0].(*objects.Number)
+			return objects.NewNumber(num.Value * 2), nil
+		},
+	}
+
+	// Bytecode: get native function, push arg, call, pop
+	instructions := code.Instructions{}
+	instructions = append(instructions, code.Make(code.OpGetStdlibExport, 0)...) // Get function at index 0
+	instructions = append(instructions, code.Make(code.OpGetConstant, 1)...)     // Get argument (21) at index 1
+	instructions = append(instructions, code.Make(code.OpCall, 1)...)            // Call with 1 arg
+	instructions = append(instructions, code.Make(code.OpPop)...)
+
+	program := &objects.CompiledProgram{
+		Modules: []objects.CompiledModule{
+			{
+				Instructions: instructions,
+				NumGlobals:   0,
+				Exports:      []int{},
+			},
+		},
+		Constants: []objects.Object{doubleFn, objects.NewNumber(21)},
+	}
+
+	vm := New(program)
+	err := vm.RunProgram()
+	if err != nil {
+		t.Fatalf("vm error: %s", err)
+	}
+
+	result := vm.LastPoppedStackElem()
+	num, ok := result.(*objects.Number)
+	if !ok {
+		t.Fatalf("expected Number, got %T (%+v)", result, result)
+	}
+
+	if num.Value != 42.0 {
+		t.Errorf("double(21) = %v, want 42.0", num.Value)
 	}
 }

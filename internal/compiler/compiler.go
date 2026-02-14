@@ -6,6 +6,7 @@ import (
 	"github.com/harshagw/viri/internal/ast"
 	"github.com/harshagw/viri/internal/code"
 	"github.com/harshagw/viri/internal/objects"
+	"github.com/harshagw/viri/internal/stdlib"
 	"github.com/harshagw/viri/internal/token"
 )
 
@@ -619,7 +620,21 @@ func (c *Compiler) compileExpression(node ast.Expr) error {
 		// Check if this is an import access (module.export)
 		if varExpr, ok := node.Object.(*ast.VariableExpr); ok {
 			if c.symbolTable.IsImportAlias(varExpr.Name.Lexeme) {
-				// This is a module access - must resolve to an export
+				// Check if this is a stdlib import
+				if c.symbolTable.IsStdlibImport(varExpr.Name.Lexeme) {
+					stdlibName, exportName, found := c.symbolTable.ResolveStdlibImport(varExpr.Name.Lexeme, node.Name.Lexeme)
+					if !found {
+						return c.error(node.Name, fmt.Sprintf("'%s' is not exported from stdlib module '%s'", node.Name.Lexeme, varExpr.Name.Lexeme))
+					}
+					// Get the export object from stdlib and add to constants
+					stdMod, _ := stdlib.Get(stdlibName)
+					exportObj := stdMod.Exports[exportName]
+					constIdx := c.addConstant(exportObj)
+					c.emit(code.OpGetStdlibExport, constIdx)
+					return nil
+				}
+
+				// This is a regular module access - must resolve to an export
 				moduleIdx, exportIdx, found := c.symbolTable.ResolveImport(varExpr.Name.Lexeme, node.Name.Lexeme)
 				if !found {
 					return c.error(node.Name, fmt.Sprintf("'%s' is not exported from module '%s'", node.Name.Lexeme, varExpr.Name.Lexeme))

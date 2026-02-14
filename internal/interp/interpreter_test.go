@@ -1,6 +1,7 @@
 package interp
 
 import (
+	"math"
 	"testing"
 
 	"github.com/harshagw/viri/internal/ast"
@@ -624,5 +625,69 @@ func TestInterpreter_EvalFunctionExpr(t *testing.T) {
 
 	if num.Value != 11.0 {
 		t.Errorf("got %v, want 11.0", num.Value)
+	}
+}
+
+func TestInterpreter_EvalStdlibImport(t *testing.T) {
+	globals := objects.NewEnvironment(nil)
+	i := NewInterpreter(globals)
+
+	// Simulate: import "std:math" as math;
+	pathTok := token.New(token.STRING, "\"std:math\"", "std:math", 1, nil)
+	aliasTok := token.New(token.IDENTIFIER, "math", nil, 1, nil)
+
+	importStmt := &ast.ImportStmt{
+		Path:  &pathTok,
+		Alias: &aliasTok,
+	}
+
+	_, err := i.evalStmt(importStmt)
+	if err != nil {
+		t.Fatalf("evalStmt(importStmt) error = %v", err)
+	}
+
+	// Verify the math namespace is defined
+	mathNs, err := globals.Get("math")
+	if err != nil {
+		t.Fatalf("globals.Get(math) error = %v", err)
+	}
+
+	ns, ok := mathNs.(*objects.Namespace)
+	if !ok {
+		t.Fatalf("expected Namespace, got %T", mathNs)
+	}
+
+	pi, exists := ns.Exports["PI"]
+	if !exists {
+		t.Fatal("expected PI to be exported from std:math")
+	}
+
+	piNum, ok := pi.(*objects.Number)
+	if !ok {
+		t.Fatalf("expected PI to be Number, got %T", pi)
+	}
+
+	if piNum.Value != math.Pi {
+		t.Errorf("PI = %v, want %v", piNum.Value, math.Pi)
+	}
+
+	sqrt, exists := ns.Exports["sqrt"]
+	if !exists {
+		t.Fatal("expected sqrt to be exported from std:math")
+	}
+
+	sqrtFn, ok := sqrt.(*objects.NativeFunction)
+	if !ok {
+		t.Fatalf("expected sqrt to be NativeFunction, got %T", sqrt)
+	}
+
+	result, err := sqrtFn.Fn(objects.NewNumber(16))
+	if err != nil {
+		t.Fatalf("sqrt(16) error = %v", err)
+	}
+
+	resultNum := result.(*objects.Number)
+	if resultNum.Value != 4.0 {
+		t.Errorf("sqrt(16) = %v, want 4.0", resultNum.Value)
 	}
 }

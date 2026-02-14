@@ -23,6 +23,8 @@ type Symbol struct {
 type ImportInfo struct {
 	ModuleIndex int
 	Exports     map[string]int // export name -> export index
+	IsStdlib    bool           // true if this is a stdlib import
+	StdlibName  string         // stdlib module name (e.g., "std:math")
 }
 
 type SymbolTable struct {
@@ -162,6 +164,17 @@ func (s *SymbolTable) DefineImport(alias string, moduleIndex int, exports map[st
 	s.imports[alias] = &ImportInfo{
 		ModuleIndex: moduleIndex,
 		Exports:     exports,
+		IsStdlib:    false,
+	}
+}
+
+// DefineStdlibImport registers a stdlib import alias
+func (s *SymbolTable) DefineStdlibImport(alias string, stdlibName string, exports map[string]int) {
+	s.imports[alias] = &ImportInfo{
+		ModuleIndex: -1, // not used for stdlib
+		Exports:     exports,
+		IsStdlib:    true,
+		StdlibName:  stdlibName,
 	}
 }
 
@@ -176,6 +189,24 @@ func (s *SymbolTable) ResolveImport(alias string, exportName string) (int, int, 
 		return 0, 0, false
 	}
 	return importInfo.ModuleIndex, exportIdx, true
+}
+
+// ResolveStdlibImport looks up a stdlib import, returning (stdlibName, exportName, found)
+func (s *SymbolTable) ResolveStdlibImport(alias string, exportName string) (string, string, bool) {
+	importInfo, ok := s.imports[alias]
+	if !ok || !importInfo.IsStdlib {
+		return "", "", false
+	}
+	if _, ok := importInfo.Exports[exportName]; !ok {
+		return "", "", false
+	}
+	return importInfo.StdlibName, exportName, true
+}
+
+// IsStdlibImport checks if an import alias refers to a stdlib module
+func (s *SymbolTable) IsStdlibImport(alias string) bool {
+	importInfo, ok := s.imports[alias]
+	return ok && importInfo.IsStdlib
 }
 
 // IsImportAlias checks if a name is a registered import alias

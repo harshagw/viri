@@ -1,0 +1,46 @@
+import "std:math" as math;
+
+// Test constants
+print math.PI;
+print math.E;
+
+// Test basic math functions
+print math.abs(-5);
+print math.abs(5);
+print math.sqrt(16);
+print math.sqrt(2);
+print math.pow(2, 3);
+print math.pow(3, 2);
+
+// Test rounding functions
+print math.floor(3.7);
+print math.ceil(3.2);
+print math.round(3.5);
+print math.round(3.4);
+
+// Test trigonometric functions (using known values)
+print math.sin(0);
+print math.cos(0);
+print math.tan(0);
+
+// Test exponential and logarithmic functions
+print math.exp(0);
+print math.exp(1);
+print math.log(1);
+print math.log(math.E);
+
+// Test min/max functions
+print math.min(5, 3);
+print math.max(5, 3);
+print math.min(-1, 1);
+print math.max(-1, 1);
+
+// Test using math in expressions
+var radius = 5;
+var area = math.PI * math.pow(radius, 2);
+print area;
+
+// Test chaining operations
+var x = math.sqrt(math.pow(3, 2) + math.pow(4, 2));
+print x;
+

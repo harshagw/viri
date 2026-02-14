@@ -8,6 +8,7 @@ import (
 
 	"github.com/harshagw/viri/internal/ast"
 	"github.com/harshagw/viri/internal/objects"
+	"github.com/harshagw/viri/internal/stdlib"
 	"github.com/harshagw/viri/internal/token"
 )
 
@@ -514,6 +515,14 @@ func (r *Resolver) resolveImportStmt(stmt *ast.ImportStmt) {
 	importPath, ok := stmt.Path.Literal.(string)
 	if !ok {
 		r.reportError(stmt.Path, "Import path must be a string.")
+		return
+	}
+
+	if stdlib.IsStdLib(importPath) {
+		if _, exists := stdlib.Get(importPath); !exists {
+			r.reportError(stmt.Path, fmt.Sprintf("Unknown standard library module: %s", importPath))
+		}
+		// stdlib modules don't need further resolution - they're built-in
 		return
 	}
 

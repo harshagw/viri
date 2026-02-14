@@ -611,6 +611,49 @@ func TestResolveFunctionExpr(t *testing.T) {
 	assertResolved(t, locals, varExpr, "x", 0)
 }
 
+func TestResolveStdlibImport(t *testing.T) {
+	// Represents: import "std:math" as math;
+	pathTok := token.Token{Type: token.STRING, Lexeme: "\"std:math\"", Literal: "std:math", Line: 1, FilePath: nil}
+	aliasTok := token.Token{Type: token.IDENTIFIER, Lexeme: "math", Line: 1, FilePath: nil}
+	mod := &ast.Module{
+		Imports: []*ast.ImportStmt{
+			{
+				Path:  &pathTok,
+				Alias: &aliasTok,
+			},
+		},
+		Statements: []ast.Stmt{},
+	}
+	resolver, collector := createResolverFromAST()
+	_, err := resolver.Resolve(mod)
+	if err != nil {
+		t.Fatalf("Resolve() error = %v", err)
+	}
+	if len(collector.Errors) > 0 {
+		t.Errorf("unexpected errors: %v", collector.Errors)
+	}
+}
+
+func TestResolveInvalidStdlibImport(t *testing.T) {
+	// Represents: import "std:invalid" as invalid;
+	pathTok := token.Token{Type: token.STRING, Lexeme: "\"std:invalid\"", Literal: "std:invalid", Line: 1, FilePath: nil}
+	aliasTok := token.Token{Type: token.IDENTIFIER, Lexeme: "invalid", Line: 1, FilePath: nil}
+	mod := &ast.Module{
+		Imports: []*ast.ImportStmt{
+			{
+				Path:  &pathTok,
+				Alias: &aliasTok,
+			},
+		},
+		Statements: []ast.Stmt{},
+	}
+	resolver, collector := createResolverFromAST()
+	_, _ = resolver.Resolve(mod)
+	if len(collector.Errors) == 0 {
+		t.Error("expected error for invalid stdlib module")
+	}
+}
+
 func assertResolved(t *testing.T, locals map[ast.Expr]int, expr ast.Expr, name string, expectedDepth int) {
 	t.Helper()
 	depth, found := locals[expr]

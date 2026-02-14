@@ -11,6 +11,7 @@ import (
 	"github.com/harshagw/viri/internal/ast"
 	"github.com/harshagw/viri/internal/objects"
 	"github.com/harshagw/viri/internal/parser"
+	"github.com/harshagw/viri/internal/stdlib"
 	"github.com/harshagw/viri/internal/token"
 )
 
@@ -129,6 +130,16 @@ func (i *Interpreter) visitImportStmt(stmt *ast.ImportStmt) (objects.Object, err
 	importPath, ok := stmt.Path.Literal.(string)
 	if !ok {
 		return nil, i.runtimeError(stmt.Path, "Import path must be a string.")
+	}
+
+	if stdlib.IsStdLib(importPath) {
+		stdMod, exists := stdlib.Get(importPath)
+		if !exists {
+			return nil, i.runtimeError(stmt.Path, fmt.Sprintf("Unknown standard library module: %s", importPath))
+		}
+		namespace := stdMod.ToNamespace(stmt.Alias.Lexeme)
+		i.environment.Define(stmt.Alias.Lexeme, namespace)
+		return nil, nil
 	}
 
 	baseDir := filepath.Dir(i.currentModule)

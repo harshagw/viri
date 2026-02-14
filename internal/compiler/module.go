@@ -8,6 +8,7 @@ import (
 	"github.com/harshagw/viri/internal/ast"
 	"github.com/harshagw/viri/internal/objects"
 	"github.com/harshagw/viri/internal/parser"
+	"github.com/harshagw/viri/internal/stdlib"
 )
 
 // CompileProgram compiles a program starting from the entry module
@@ -61,6 +62,16 @@ func (c *Compiler) compileModule(path string) (objects.CompiledModule, error) {
 		importPath, ok := importStmt.Path.Literal.(string)
 		if !ok {
 			return objects.CompiledModule{}, fmt.Errorf("import path must be a string")
+		}
+
+		// Handle stdlib imports (e.g., "std:math")
+		if stdlib.IsStdLib(importPath) {
+			exportMap, exists := stdlib.GetExportMap(importPath)
+			if !exists {
+				return objects.CompiledModule{}, fmt.Errorf("unknown stdlib module: %s", importPath)
+			}
+			c.symbolTable.DefineStdlibImport(importStmt.Alias.Lexeme, importPath, exportMap)
+			continue
 		}
 
 		targetPath, err := parser.ResolveModulePath(filepath.Dir(path), importPath)
@@ -180,6 +191,11 @@ func (c *Compiler) loadModule(path string, stack []string) error {
 			return fmt.Errorf("import path must be a string")
 		}
 
+		// Skip stdlib modules - they don't need to be loaded as files
+		if stdlib.IsStdLib(importPath) {
+			continue
+		}
+
 		targetPath, err := parser.ResolveModulePath(filepath.Dir(path), importPath)
 		if err != nil {
 			return err
@@ -208,6 +224,10 @@ func (c *Compiler) topologicalSort() ([]string, error) {
 		for _, importStmt := range mod.Imports {
 			importPath, ok := importStmt.Path.Literal.(string)
 			if !ok {
+				continue
+			}
+			// Skip stdlib imports - they don't participate in the dependency graph
+			if stdlib.IsStdLib(importPath) {
 				continue
 			}
 			targetPath, err := parser.ResolveModulePath(filepath.Dir(path), importPath)

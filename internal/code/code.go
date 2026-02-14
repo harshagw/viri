@@ -51,6 +51,7 @@ const (
 	OpSetProperty
 	OpGetSuper
 	OpGetModuleExport
+	OpGetStdlibExport
 )
 
 type Definition struct {
@@ -99,6 +100,7 @@ var definitions = map[Opcode]*Definition{
 	OpSetProperty:       {"OpSetProperty", []int{2}},        // operand: property name constant index - pops value, pops object, sets field, pushes value
 	OpGetSuper:          {"OpGetSuper", []int{2}},           // operand: method name constant index - pops instance, pushes bound method from superclass
 	OpGetModuleExport:   {"OpGetModuleExport", []int{2, 2}}, // operands: module index, export index - pushes export value from module globals
+	OpGetStdlibExport:   {"OpGetStdlibExport", []int{2}},    // operand: constant index containing stdlib export object
 }
 
 func Lookup(op byte) (*Definition, error) {

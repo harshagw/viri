@@ -271,6 +271,16 @@ func (vm *VM) runModule(moduleIdx int) error {
 				return err
 			}
 
+		case code.OpGetStdlibExport:
+			constIdx := readUint16(ins, ip)
+			frame.ip += 2
+
+			// The stdlib export object is stored directly in constants
+			value := vm.constants[constIdx]
+			if err := vm.push(value); err != nil {
+				return err
+			}
+
 		case code.OpSetLocal:
 			localIndex := readUint8(ins, ip)
 			frame.ip += 1

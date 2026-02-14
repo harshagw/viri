@@ -2794,3 +2794,49 @@ func TestClassInitReturnsThis(t *testing.T) {
 
 	runCompilerTests(t, tests)
 }
+
+func TestStdlibImportSymbolTable(t *testing.T) {
+	// Test that DefineStdlibImport correctly registers stdlib imports
+	st := NewSymbolTable()
+
+	exports := map[string]int{
+		"PI":   0,
+		"sqrt": 1,
+		"abs":  2,
+	}
+	st.DefineStdlibImport("math", "std:math", exports)
+
+	// Verify IsImportAlias returns true
+	if !st.IsImportAlias("math") {
+		t.Error("expected 'math' to be registered as import alias")
+	}
+
+	// Verify IsStdlibImport returns true
+	if !st.IsStdlibImport("math") {
+		t.Error("expected 'math' to be a stdlib import")
+	}
+
+	// Verify ResolveStdlibImport works correctly
+	stdlibName, exportName, found := st.ResolveStdlibImport("math", "PI")
+	if !found {
+		t.Error("expected to find 'PI' in stdlib import")
+	}
+	if stdlibName != "std:math" {
+		t.Errorf("stdlibName = %q, want %q", stdlibName, "std:math")
+	}
+	if exportName != "PI" {
+		t.Errorf("exportName = %q, want %q", exportName, "PI")
+	}
+
+	// Verify non-existent export returns false
+	_, _, found = st.ResolveStdlibImport("math", "nonexistent")
+	if found {
+		t.Error("expected 'nonexistent' to not be found")
+	}
+
+	// Verify non-stdlib import is not marked as stdlib
+	st.DefineImport("other", 0, map[string]int{"foo": 0})
+	if st.IsStdlibImport("other") {
+		t.Error("expected 'other' to NOT be a stdlib import")
+	}
+}
