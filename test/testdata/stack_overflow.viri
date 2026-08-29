@@ -1,0 +1,2 @@
+fun f(n) { return f(n + 1); }
+print f(0);

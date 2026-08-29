@@ -16,5 +16,8 @@ func (c *Cell) Type() Type {
 }
 
 func (c *Cell) Inspect() string {
+	if c.Value == nil {
+		return "cell(nil)"
+	}
 	return fmt.Sprintf("cell(%s)", c.Value.Inspect())
 }

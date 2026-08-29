@@ -58,7 +58,7 @@ func TestE2E(t *testing.T) {
 }
 
 func runViriBinary(t *testing.T, viriPath, scriptPath string) string {
-	cmd := exec.Command(viriPath, scriptPath)
+	cmd := exec.Command(viriPath, "--no-warning", scriptPath)
 	var out bytes.Buffer
 	var stderr bytes.Buffer
 	cmd.Stdout = &out

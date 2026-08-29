@@ -1,8 +1,16 @@
 package objects
 
+// LineEntry marks the bytecode offset where a new source line begins.
+type LineEntry struct {
+	Offset int // first bytecode offset attributed to Line
+	Line   int
+}
+
 // DebugInfoEntry holds debug information for a single function or module.
+// The line table is run-length encoded: one entry per line change, not one
+// per bytecode byte.
 type DebugInfoEntry struct {
-	LineTable []int  // maps bytecode offset -> source line number
+	LineTable []LineEntry
 	FilePath  string // source file path
 }
 
@@ -17,7 +25,7 @@ func NewDebugInfo() *DebugInfo {
 	}
 }
 
-func (d *DebugInfo) Add(lineTable []int, filePath string) int {
+func (d *DebugInfo) Add(lineTable []LineEntry, filePath string) int {
 	idx := len(d.Entries)
 	d.Entries = append(d.Entries, DebugInfoEntry{
 		LineTable: lineTable,
@@ -38,10 +46,23 @@ func (d *DebugInfo) Get(idx int) *DebugInfoEntry {
 // Returns 0 if not found.
 func (d *DebugInfo) GetLine(idx int, ip int) int {
 	entry := d.Get(idx)
-	if entry == nil || ip < 0 || ip >= len(entry.LineTable) {
+	if entry == nil || ip < 0 || len(entry.LineTable) == 0 {
 		return 0
 	}
-	return entry.LineTable[ip]
+	// Binary search: greatest entry with Offset <= ip
+	lo, hi := 0, len(entry.LineTable)-1
+	if ip < entry.LineTable[0].Offset {
+		return 0
+	}
+	for lo < hi {
+		mid := (lo + hi + 1) / 2
+		if entry.LineTable[mid].Offset <= ip {
+			lo = mid
+		} else {
+			hi = mid - 1
+		}
+	}
+	return entry.LineTable[lo].Line
 }
 
 // GetFilePath returns the file path for a given debug index.

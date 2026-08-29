@@ -127,7 +127,12 @@ func (v *Viri) runWithVM(filePath string) {
 func (v *Viri) runWithInterpreter(filePath string) {
 	mod, err := parser.LoadModuleFile(filePath, v)
 	if err != nil {
-		fmt.Println("Error parsing module:", err)
+		// Per-token diagnostics were already printed through the handler;
+		// only surface errors that carry extra information (e.g. scanning
+		// or file-loading failures).
+		if !v.hasErrors {
+			color.New(color.FgRed).Fprintln(color.Error, "Error parsing module:", err)
+		}
 		v.hasErrors = true
 		return
 	}

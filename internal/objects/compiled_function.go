@@ -13,6 +13,7 @@ type CompiledFunction struct {
 	NumParameters int
 	Name          string
 	DebugInfoIdx  int
+	ModuleIdx     int
 }
 
 func (cf *CompiledFunction) Type() Type {

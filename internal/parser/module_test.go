@@ -10,7 +10,7 @@ func TestResolveModulePath(t *testing.T) {
 		name       string
 		baseDir    string
 		importPath string
-		output string
+		output     string
 	}{
 		{"relative same dir", "/abs/path", "mod.viri", "abs/path/mod.viri"},
 		{"relative sub dir", "/abs/path", "sub/mod.viri", "abs/path/sub/mod.viri"},

@@ -3,8 +3,11 @@ package scanner
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"strconv"
+	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/harshagw/viri/internal/token"
 )
@@ -16,6 +19,7 @@ type Scanner struct {
 	line     int
 	tokens   []token.Token
 	filePath *string
+	errs     []string
 }
 
 func New(source *bytes.Buffer, filePath *string) *Scanner {
@@ -29,24 +33,33 @@ func New(source *bytes.Buffer, filePath *string) *Scanner {
 	}
 }
 
+// Scan tokenizes the whole source. Errors are collected with their line
+// numbers and scanning continues past them, so one bad character reports
+// every problem in the file instead of aborting at the first.
 func (s *Scanner) Scan() ([]token.Token, error) {
 	for !s.isAtEnd() {
 		s.start = s.current
-		if err := s.scanToken(); err != nil {
-			return nil, err
-		}
+		s.scanToken()
 	}
 
 	s.start = s.current
 	s.addToken(token.EOF)
+
+	if len(s.errs) > 0 {
+		return s.tokens, errors.New(strings.Join(s.errs, "; "))
+	}
 	return s.tokens, nil
+}
+
+func (s *Scanner) error(message string) {
+	s.errs = append(s.errs, fmt.Sprintf("line %d: %s", s.line, message))
 }
 
 func (s *Scanner) isAtEnd() bool {
 	return s.current >= s.source.Len()
 }
 
-func (s *Scanner) scanToken() error {
+func (s *Scanner) scanToken() {
 	c := s.advance()
 
 	switch c {
@@ -112,90 +125,147 @@ func (s *Scanner) scanToken() error {
 	case '\n':
 		s.line++
 	case '"':
-		if err := s.scanString(); err != nil {
-			return err
-		}
+		s.scanString()
 	default:
-		if unicode.IsDigit(rune(c)) {
+		if unicode.IsDigit(c) {
 			s.scanNumber()
-		} else if unicode.IsLetter(rune(c)) {
+		} else if isIdentifierStart(c) {
 			s.scanIdentifier()
 		} else {
-			return errors.New("unexpected character: " + string(c))
+			s.error("unexpected character: " + string(c))
 		}
 	}
-	return nil
 }
 
-// Returns the current character and advances the current pointer.
-func (s *Scanner) advance() byte {
-	c := s.source.Bytes()[s.current]
-	s.current++
-	return c
+func isIdentifierStart(c rune) bool {
+	return c == '_' || unicode.IsLetter(c)
 }
 
-// Matches the current character with the expected character and then advances the pointer if it matches.
-func (s *Scanner) match(expected byte) bool {
+func isIdentifierPart(c rune) bool {
+	return c == '_' || unicode.IsLetter(c) || unicode.IsDigit(c)
+}
+
+// Returns the current rune and advances past it (UTF-8 aware).
+func (s *Scanner) advance() rune {
+	r, size := utf8.DecodeRune(s.source.Bytes()[s.current:])
+	if r == utf8.RuneError && size <= 1 {
+		// Invalid byte: consume it so scanning can continue
+		s.current++
+		return utf8.RuneError
+	}
+	s.current += size
+	return r
+}
+
+// Matches the current rune with the expected rune and then advances the pointer if it matches.
+func (s *Scanner) match(expected rune) bool {
 	if s.isAtEnd() {
 		return false
 	}
-	if s.source.Bytes()[s.current] != expected {
+	if s.peek() != expected {
 		return false
 	}
-	s.current++
+	s.advance()
 	return true
 }
 
-// Returns the current character without advancing the pointer.
-func (s *Scanner) peek() byte {
+// Returns the current rune without advancing the pointer.
+func (s *Scanner) peek() rune {
 	if s.isAtEnd() {
-		return '\000'
+		return 0
 	}
-	return s.source.Bytes()[s.current]
+	r, _ := utf8.DecodeRune(s.source.Bytes()[s.current:])
+	return r
 }
 
-// Returns the character after the current one without advancing.
-func (s *Scanner) peekNext() byte {
-	if s.current+1 >= s.source.Len() {
-		return '\000'
+// Returns the rune after the current one without advancing.
+func (s *Scanner) peekNext() rune {
+	if s.isAtEnd() {
+		return 0
 	}
-	return s.source.Bytes()[s.current+1]
+	_, size := utf8.DecodeRune(s.source.Bytes()[s.current:])
+	if s.current+size >= s.source.Len() {
+		return 0
+	}
+	r, _ := utf8.DecodeRune(s.source.Bytes()[s.current+size:])
+	return r
 }
 
-func (s *Scanner) scanString() error {
+func (s *Scanner) scanString() {
 	startLine := s.line
+	var value strings.Builder
 
 	for s.peek() != '"' && !s.isAtEnd() {
-		if s.peek() == '\n' {
+		c := s.advance()
+		switch c {
+		case '\n':
 			s.line++
+			value.WriteRune(c)
+		case '\\':
+			if s.isAtEnd() {
+				break
+			}
+			escape := s.advance()
+			switch escape {
+			case 'n':
+				value.WriteByte('\n')
+			case 't':
+				value.WriteByte('\t')
+			case 'r':
+				value.WriteByte('\r')
+			case '"':
+				value.WriteByte('"')
+			case '\\':
+				value.WriteByte('\\')
+			case '0':
+				value.WriteByte(0)
+			default:
+				s.error("invalid escape sequence '\\" + string(escape) + "'")
+			}
+		default:
+			value.WriteRune(c)
 		}
-		s.advance()
 	}
 
 	if s.isAtEnd() {
-		return errors.New("unterminated string start at line: " + strconv.Itoa(startLine))
+		s.error("unterminated string starting at line " + strconv.Itoa(startLine))
+		return
 	}
 
 	// The closing quote
 	s.advance()
 
-	// Trim the surrounding quotes
-	value := string(s.source.Bytes()[s.start+1 : s.current-1])
-	s.addTokenWithLiteral(token.STRING, value)
-	return nil
+	s.addTokenWithLiteral(token.STRING, value.String())
 }
 
 func (s *Scanner) scanNumber() {
-	for unicode.IsDigit(rune(s.peek())) {
+	for unicode.IsDigit(s.peek()) {
 		s.advance()
 	}
 
 	// Look for a fractional part
-	if s.peek() == '.' && unicode.IsDigit(rune(s.peekNext())) {
+	if s.peek() == '.' && unicode.IsDigit(s.peekNext()) {
 		s.advance()
 
-		for unicode.IsDigit(rune(s.peek())) {
+		for unicode.IsDigit(s.peek()) {
 			s.advance()
+		}
+	}
+
+	// Look for an exponent: 1e3, 2.5E-4, 1e+10
+	if s.peek() == 'e' || s.peek() == 'E' {
+		next := s.peekNext()
+		if unicode.IsDigit(next) || next == '+' || next == '-' {
+			s.advance() // e / E
+			if s.peek() == '+' || s.peek() == '-' {
+				s.advance()
+			}
+			if !unicode.IsDigit(s.peek()) {
+				s.error("exponent has no digits")
+			}
+			for unicode.IsDigit(s.peek()) {
+				s.advance()
+			}
 		}
 	}
 
@@ -210,7 +280,7 @@ func (s *Scanner) scanNumber() {
 }
 
 func (s *Scanner) scanIdentifier() {
-	for unicode.IsLetter(rune(s.peek())) || unicode.IsDigit(rune(s.peek())) {
+	for isIdentifierPart(s.peek()) {
 		s.advance()
 	}
 

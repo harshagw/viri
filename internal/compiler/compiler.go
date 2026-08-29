@@ -12,7 +12,7 @@ import (
 
 type CompilationScope struct {
 	instructions code.Instructions
-	lineTable    []int
+	lineTable    []objects.LineEntry // run-length: one entry per line change
 }
 
 // ClassCompiler tracks state while compiling a class.
@@ -21,14 +21,14 @@ type CompilationScope struct {
 type ClassCompiler struct {
 	name            string
 	hasSuperClass   bool
-	enclosing       *ClassCompiler // for nested classes
-	isCompilingInit bool           // true when compiling the init method
+	isCompilingInit bool // true when compiling the init method
 }
 
 type Compiler struct {
 	constants   []objects.Object
 	symbolTable *SymbolTable
 	loopStack   *LoopStack
+	loopStacks  []*LoopStack
 
 	scopes     []CompilationScope
 	scopeIndex int
@@ -40,13 +40,17 @@ type Compiler struct {
 	maxGlobalIndex int
 
 	// Module compilation state
-	modules       map[string]*ast.Module // path -> parsed module
-	moduleOrder   []string               // topological order
-	moduleIndices map[string]int         // path -> module index
+	modules          map[string]*ast.Module // path -> parsed module
+	moduleOrder      []string               // topological order
+	moduleIndices    map[string]int         // path -> module index
+	currentModuleIdx int                    // index of the module being compiled
 
 	// Source location tracking (updated as we compile each node)
 	currentLine     int
 	currentFilePath string
+
+	// First operand-width overflow detected while emitting (program too large)
+	overflowErr error
 
 	// Debug info output (line tables stored per function/module for VM error reporting)
 	debugInfo *objects.DebugInfo
@@ -76,7 +80,8 @@ func (c *Compiler) reset(symbolTable *SymbolTable) {
 
 	c.symbolTable = symbolTable
 	c.loopStack = NewLoopStack()
-	c.scopes = []CompilationScope{{instructions: code.Instructions{}, lineTable: []int{}}}
+	c.loopStacks = nil
+	c.scopes = []CompilationScope{{instructions: code.Instructions{}, lineTable: []objects.LineEntry{}}}
 	c.scopeIndex = 0
 	c.classCompiler = nil
 	c.maxGlobalIndex = -1
@@ -96,6 +101,15 @@ func (c *Compiler) SetFilePath(path string) {
 	c.currentFilePath = path
 }
 
+// ResetForNextInput prepares the compiler for the next REPL line: fresh
+// instructions, keeping the constants pool, the symbol table, and the
+// global slots already allocated by previous lines.
+func (c *Compiler) ResetForNextInput() {
+	symbolTable := c.symbolTable
+	c.reset(symbolTable)
+	c.maxGlobalIndex = symbolTable.NumDefinitions() - 1
+}
+
 // Result returns the compiled program (for single-file compilation, tests, REPL)
 func (c *Compiler) Result() *objects.CompiledProgram {
 	// Add debug info for the module-level code
@@ -106,6 +120,7 @@ func (c *Compiler) Result() *objects.CompiledProgram {
 			{
 				Instructions: c.currentInstructions(),
 				NumGlobals:   c.maxGlobalIndex + 1,
+				NumLocals:    c.symbolTable.NumBlockLocals(),
 				Exports:      []int{},
 				DebugInfoIdx: debugIdx,
 			},
@@ -115,7 +130,7 @@ func (c *Compiler) Result() *objects.CompiledProgram {
 	}
 }
 
-func (c *Compiler) currentLineTable() []int {
+func (c *Compiler) currentLineTable() []objects.LineEntry {
 	return c.scopes[c.scopeIndex].lineTable
 }
 
@@ -126,20 +141,26 @@ func (c *Compiler) currentInstructions() code.Instructions {
 func (c *Compiler) enterScope(functionName string) {
 	scope := CompilationScope{
 		instructions: code.Instructions{},
-		lineTable:    []int{},
+		lineTable:    []objects.LineEntry{},
 	}
 	c.scopes = append(c.scopes, scope)
 	c.scopeIndex++
 	c.symbolTable = NewFunctionScope(c.symbolTable, functionName)
+	// A function body starts outside any loop: break/continue must not
+	// target a loop in the enclosing function.
+	c.loopStacks = append(c.loopStacks, c.loopStack)
+	c.loopStack = NewLoopStack()
 }
 
-func (c *Compiler) leaveScope() (code.Instructions, []int) {
+func (c *Compiler) leaveScope() (code.Instructions, []objects.LineEntry) {
 	instructions := c.currentInstructions()
 	lineTable := c.currentLineTable()
 
 	c.scopes = c.scopes[:len(c.scopes)-1]
 	c.scopeIndex--
 	c.symbolTable = c.symbolTable.Outer
+	c.loopStack = c.loopStacks[len(c.loopStacks)-1]
+	c.loopStacks = c.loopStacks[:len(c.loopStacks)-1]
 
 	return instructions, lineTable
 }
@@ -174,8 +195,10 @@ func (c *Compiler) compileStatement(stmt ast.Stmt) error {
 				return err
 			}
 		}
-		// Restore parent scope
+		// Restore parent scope, keeping the block's slot allocations reserved
+		block := c.symbolTable
 		c.symbolTable = c.symbolTable.Outer
+		c.symbolTable.AbsorbBlockCounters(block)
 		return nil
 
 	case *ast.IfStmt:
@@ -212,18 +235,16 @@ func (c *Compiler) compileStatement(stmt ast.Stmt) error {
 
 	case *ast.VarDeclStmt:
 		// Validate: exports are only allowed at global scope
-		if stmt.Exported && c.symbolTable.frameDepth > 0 {
+		if stmt.Exported && (c.symbolTable.frameDepth > 0 || c.symbolTable.isBlock) {
 			return c.error(stmt.Name, "cannot export from local scope")
 		}
 
-		symbol, ok := c.symbolTable.Define(stmt.Name.Lexeme, stmt.IsConst)
-		if !ok {
-			return c.error(stmt.Name, "cannot declare variable with this name again")
-		}
-
+		// Compile the initializer before defining the name, so the variable is
+		// not visible inside its own initializer ('var a = a;' is an error).
 		if stmt.Initializer != nil {
 			// Check if the initializer is a function expression for recursive support
 			// We don't want to body of the function to create a block scope, so we compile the function directly
+			// (self-reference works through the function-name mechanism, not the symbol).
 			if fnExpr, ok := stmt.Initializer.(*ast.FunctionExpr); ok {
 				if err := c.compileFunction(fnExpr.Params, fnExpr.Body, stmt.Name.Lexeme); err != nil {
 					return err
@@ -235,6 +256,11 @@ func (c *Compiler) compileStatement(stmt ast.Stmt) error {
 			}
 		} else {
 			c.emit(code.OpNil) // Default to nil if no initializer
+		}
+
+		symbol, ok := c.symbolTable.DefineOrActivate(stmt.Name.Lexeme, stmt.IsConst)
+		if !ok {
+			return c.error(stmt.Name, "Cannot declare variable with this name again.")
 		}
 
 		c.emitSetSymbol(symbol)
@@ -276,6 +302,16 @@ func (c *Compiler) compileStatement(stmt ast.Stmt) error {
 		return nil
 
 	case *ast.ForStmt:
+		// The initializer gets its own scope: the loop variable is not
+		// visible after the loop, and two sibling for-loops can both
+		// declare 'var i'.
+		c.symbolTable = NewBlockScope(c.symbolTable)
+		defer func() {
+			block := c.symbolTable
+			c.symbolTable = c.symbolTable.Outer
+			c.symbolTable.AbsorbBlockCounters(block)
+		}()
+
 		if stmt.Initializer != nil {
 			if err := c.compileStatement(stmt.Initializer); err != nil {
 				return err
@@ -326,7 +362,7 @@ func (c *Compiler) compileStatement(stmt ast.Stmt) error {
 
 	case *ast.BreakStmt:
 		if !c.loopStack.IsInLoop() {
-			return c.error(stmt.Keyword, "break statement outside of loop")
+			return c.error(stmt.Keyword, "break statement must be inside a loop.")
 		}
 		jumpPos := c.emit(code.OpJump, 9999)
 		c.loopStack.AddBreakJump(jumpPos)
@@ -334,7 +370,7 @@ func (c *Compiler) compileStatement(stmt ast.Stmt) error {
 
 	case *ast.ContinueStmt:
 		if !c.loopStack.IsInLoop() {
-			return c.error(stmt.Keyword, "continue statement outside of loop")
+			return c.error(stmt.Keyword, "continue statement must be inside a loop.")
 		}
 		if c.loopStack.ContinuePos() == -1 {
 			// For for-loops, continuePos isn't known yet, record jump for patching
@@ -348,14 +384,14 @@ func (c *Compiler) compileStatement(stmt ast.Stmt) error {
 
 	case *ast.FunctionStmt:
 		// Validate: exports are only allowed at global scope
-		if stmt.Exported && c.symbolTable.frameDepth > 0 {
+		if stmt.Exported && (c.symbolTable.frameDepth > 0 || c.symbolTable.isBlock) {
 			return c.error(stmt.Name, "cannot export from local scope")
 		}
 
 		// Define the function name in the current scope
-		symbol, ok := c.symbolTable.Define(stmt.Name.Lexeme, false)
+		symbol, ok := c.symbolTable.DefineOrActivate(stmt.Name.Lexeme, false)
 		if !ok {
-			return c.error(stmt.Name, "cannot declare variable with this name again")
+			return c.error(stmt.Name, "Cannot declare variable with this name again.")
 		}
 
 		// Compile the function body
@@ -367,8 +403,11 @@ func (c *Compiler) compileStatement(stmt ast.Stmt) error {
 		return nil
 
 	case *ast.ReturnStmt:
-		// In init methods, always return 'this' regardless of what the user wrote
+		// In init methods a bare 'return' returns 'this'; returning a value is an error
 		if c.classCompiler != nil && c.classCompiler.isCompilingInit {
+			if stmt.Value != nil {
+				return c.error(stmt.Keyword, "Can't return a value from an initializer.")
+			}
 			c.emit(code.OpGetLocal, 0) // 'this' is always local 0
 			c.emit(code.OpReturnValue)
 		} else if stmt.Value != nil {
@@ -435,44 +474,8 @@ func (c *Compiler) compileExpression(node ast.Expr) error {
 		return c.compileExpression(node.Expr)
 
 	case *ast.BinaryExpr:
-		// a < b  => swap operands, then b > a
-		if node.Operator.Type == token.LESS {
-			if err := c.compileExpression(node.Right); err != nil {
-				return err
-			}
-			if err := c.compileExpression(node.Left); err != nil {
-				return err
-			}
-			c.emit(code.OpGreaterThan)
-			return nil
-		}
-
-		// a <= b  => !(a > b)
-		if node.Operator.Type == token.LESS_EQUAL {
-			if err := c.compileExpression(node.Left); err != nil {
-				return err
-			}
-			if err := c.compileExpression(node.Right); err != nil {
-				return err
-			}
-			c.emit(code.OpGreaterThan)
-			c.emit(code.OpBang)
-			return nil
-		}
-
-		// a >= b  => !(a < b) => !(b > a)
-		if node.Operator.Type == token.GREATER_EQUAL {
-			if err := c.compileExpression(node.Right); err != nil {
-				return err
-			}
-			if err := c.compileExpression(node.Left); err != nil {
-				return err
-			}
-			c.emit(code.OpGreaterThan)
-			c.emit(code.OpBang)
-			return nil
-		}
-
+		// Operands always evaluate left to right; comparisons never swap
+		// them (a swap would reorder observable side effects).
 		if err := c.compileExpression(node.Left); err != nil {
 			return err
 		}
@@ -491,6 +494,16 @@ func (c *Compiler) compileExpression(node ast.Expr) error {
 			c.emit(code.OpDiv)
 		case token.GREATER:
 			c.emit(code.OpGreaterThan)
+		case token.LESS:
+			c.emit(code.OpLess)
+		case token.LESS_EQUAL:
+			// a <= b  => !(a > b)
+			c.emit(code.OpGreaterThan)
+			c.emit(code.OpBang)
+		case token.GREATER_EQUAL:
+			// a >= b  => !(a < b)
+			c.emit(code.OpLess)
+			c.emit(code.OpBang)
 		case token.EQUAL_EQUAL:
 			c.emit(code.OpEqual)
 		case token.BANG_EQUAL:
@@ -517,7 +530,7 @@ func (c *Compiler) compileExpression(node ast.Expr) error {
 			return c.error(node.Name, fmt.Sprintf("undefined variable %s", node.Name.Lexeme))
 		}
 		if symbol.IsConst {
-			return c.error(node.Name, fmt.Sprintf("cannot assign to constant %s", node.Name.Lexeme))
+			return c.error(node.Name, fmt.Sprintf("Cannot reassign const variable '%s'.", node.Name.Lexeme))
 		}
 
 		if err := c.compileExpression(node.Value); err != nil {
@@ -617,9 +630,11 @@ func (c *Compiler) compileExpression(node ast.Expr) error {
 		}
 
 	case *ast.GetExpr:
-		// Check if this is an import access (module.export)
+		// Check if this is an import access (module.export). A local
+		// binding shadows the import alias.
 		if varExpr, ok := node.Object.(*ast.VariableExpr); ok {
-			if c.symbolTable.IsImportAlias(varExpr.Name.Lexeme) {
+			_, shadowed := c.symbolTable.lookupChain(varExpr.Name.Lexeme)
+			if !shadowed && c.symbolTable.IsImportAlias(varExpr.Name.Lexeme) {
 				// Check if this is a stdlib import
 				if c.symbolTable.IsStdlibImport(varExpr.Name.Lexeme) {
 					stdlibName, exportName, found := c.symbolTable.ResolveStdlibImport(varExpr.Name.Lexeme, node.Name.Lexeme)
@@ -703,15 +718,49 @@ func (c *Compiler) compileExpression(node ast.Expr) error {
 }
 
 func (c *Compiler) emit(op code.Opcode, operands ...int) int {
+	c.checkOperandLimits(op, operands)
 	ins := code.Make(op, operands...)
 	pos := len(c.currentInstructions())
 	c.scopes[c.scopeIndex].instructions = append(c.scopes[c.scopeIndex].instructions, ins...)
 
-	for range ins {
-		c.scopes[c.scopeIndex].lineTable = append(c.scopes[c.scopeIndex].lineTable, c.currentLine)
+	// Run-length line table: record only when the line changes
+	lt := c.scopes[c.scopeIndex].lineTable
+	if len(lt) == 0 || lt[len(lt)-1].Line != c.currentLine {
+		c.scopes[c.scopeIndex].lineTable = append(lt, objects.LineEntry{Offset: pos, Line: c.currentLine})
 	}
 
 	return pos
+}
+
+// checkOperandLimits records an error when an operand does not fit its
+// encoded width, instead of letting code.Make silently truncate it
+// (wrapped constant indices, local slots, or jump targets corrupt the
+// program: a jump past 64 KiB would loop forever).
+func (c *Compiler) checkOperandLimits(op code.Opcode, operands []int) {
+	if c.overflowErr != nil {
+		return
+	}
+	def, err := code.Lookup(byte(op))
+	if err != nil {
+		return
+	}
+	for i, operand := range operands {
+		if i >= len(def.OperandWidths) {
+			return
+		}
+		var limit int
+		switch def.OperandWidths[i] {
+		case 1:
+			limit = 0xFF
+		case 2:
+			limit = 0xFFFF
+		}
+		if operand < 0 || operand > limit {
+			c.overflowErr = fmt.Errorf("%s:%d: program too large: %s operand %d exceeds limit %d",
+				c.currentFilePath, c.currentLine, def.Name, operand, limit)
+			return
+		}
+	}
 }
 
 func (c *Compiler) updateLineInfo(node ast.Node) {
@@ -732,6 +781,7 @@ func (c *Compiler) addConstant(obj objects.Object) int {
 
 func (c *Compiler) changeOperand(opPos int, operands ...int) {
 	op := code.Opcode(c.currentInstructions()[opPos])
+	c.checkOperandLimits(op, operands)
 	newInstruction := code.Make(op, operands...)
 	for i := 0; i < len(newInstruction); i++ {
 		c.scopes[c.scopeIndex].instructions[opPos+i] = newInstruction[i]
@@ -776,10 +826,17 @@ func (c *Compiler) trackGlobal(index int) {
 func (c *Compiler) compileFunction(params []*token.Token, body *ast.BlockStmt, functionName string) error {
 	c.enterScope(functionName)
 
+	// A function nested inside an init method is an ordinary function: its
+	// returns must not be rewritten to 'return this'.
+	if c.classCompiler != nil && c.classCompiler.isCompilingInit {
+		c.classCompiler.isCompilingInit = false
+		defer func() { c.classCompiler.isCompilingInit = true }()
+	}
+
 	// Define parameters as local variables
 	for _, param := range params {
 		if _, ok := c.symbolTable.Define(param.Lexeme, false); !ok {
-			return c.error(param, "cannot use import alias as parameter name")
+			return c.error(param, "Cannot declare variable with this name again.")
 		}
 	}
 
@@ -807,6 +864,7 @@ func (c *Compiler) compileFunction(params []*token.Token, body *ast.BlockStmt, f
 		NumParameters: len(params),
 		Name:          functionName,
 		DebugInfoIdx:  debugIdx,
+		ModuleIdx:     c.currentModuleIdx,
 	}
 
 	c.emitClosure(fn, freeSymbols)
@@ -850,16 +908,16 @@ func (c *Compiler) error(tok *token.Token, message string) error {
 
 func (c *Compiler) compileClassStmt(stmt *ast.ClassStmt) error {
 	// Validate: exports are only allowed at global scope
-	if stmt.Exported && c.symbolTable.frameDepth > 0 {
+	if stmt.Exported && (c.symbolTable.frameDepth > 0 || c.symbolTable.isBlock) {
 		return c.error(stmt.Name, "cannot export from local scope")
 	}
 
 	className := stmt.Name.Lexeme
 
 	// Define class name in symbol table (allows recursive references)
-	symbol, ok := c.symbolTable.Define(className, false)
+	symbol, ok := c.symbolTable.DefineOrActivate(className, false)
 	if !ok {
-		return c.error(stmt.Name, "cannot declare variable with this name again")
+		return c.error(stmt.Name, "Cannot declare variable with this name again.")
 	}
 
 	// Enter class compilation context
@@ -867,7 +925,6 @@ func (c *Compiler) compileClassStmt(stmt *ast.ClassStmt) error {
 	c.classCompiler = &ClassCompiler{
 		name:          className,
 		hasSuperClass: stmt.SuperClass != nil,
-		enclosing:     enclosingClass,
 	}
 
 	// Push superclass or nil to stack
@@ -877,7 +934,7 @@ func (c *Compiler) compileClassStmt(stmt *ast.ClassStmt) error {
 		}
 		// Validate: can't inherit from self
 		if stmt.SuperClass.Name.Lexeme == className {
-			return c.error(stmt.SuperClass.Name, "a class cannot inherit from itself")
+			return c.error(stmt.SuperClass.Name, "A class cannot inherit from itself.")
 		}
 	} else {
 		c.emit(code.OpNil)
@@ -903,7 +960,10 @@ func (c *Compiler) compileClassStmt(stmt *ast.ClassStmt) error {
 
 // compileMethod compiles a method with 'this' as implicit first parameter.
 func (c *Compiler) compileMethod(method *ast.FunctionStmt) error {
-	c.enterScope(method.Name.Lexeme)
+	// Methods are called through their receiver, never by bare name: an
+	// empty function name keeps 'greet()' inside method 'greet' resolving
+	// to the global function, not to the method itself.
+	c.enterScope("")
 
 	isInit := method.Name.Lexeme == "init"
 	if isInit {
@@ -913,12 +973,12 @@ func (c *Compiler) compileMethod(method *ast.FunctionStmt) error {
 	// Define 'this' as first local (index 0)
 	// 'this' should never conflict with imports, but handle it for safety
 	if _, ok := c.symbolTable.Define("this", true); !ok {
-		return c.error(method.Name, "cannot use 'this' - name conflicts with import alias")
+		return c.error(method.Name, "cannot define 'this' in method scope")
 	}
 
 	for _, param := range method.Params {
 		if _, ok := c.symbolTable.Define(param.Lexeme, false); !ok {
-			return c.error(param, "cannot use import alias as parameter name")
+			return c.error(param, "Cannot declare variable with this name again.")
 		}
 	}
 
@@ -951,6 +1011,7 @@ func (c *Compiler) compileMethod(method *ast.FunctionStmt) error {
 		NumParameters: len(method.Params) + 1, // +1 for 'this'
 		Name:          method.Name.Lexeme,
 		DebugInfoIdx:  debugIdx,
+		ModuleIdx:     c.currentModuleIdx,
 	}
 
 	c.emitClosure(fn, freeSymbols)

@@ -1,0 +1,9 @@
+// A closure defined inside init is an ordinary function: its return
+// values are not rewritten to 'this'
+class A {
+  init() {
+    var f = fun(v) { return v * 2; };
+    this.x = f(21);
+  }
+}
+print A().x;

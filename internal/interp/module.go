@@ -30,7 +30,14 @@ func (i *Interpreter) ExecuteModule(astMod *ast.Module, importStmt *ast.ImportSt
 
 	runtimeMod := objects.NewModule(astMod.Path, astMod.Imports, astMod.Statements)
 	runtimeMod.Exports = i.moduleExports
-	runtimeMod.Namespace = objects.NewNamespace(importStmt.Alias.Lexeme, i.moduleExports)
+	// The namespace reads the module environment live: assignments to
+	// exported variables after loading (e.g. from exported functions)
+	// stay visible to the importer.
+	exportedNames := make(map[string]bool, len(i.moduleExports))
+	for name := range i.moduleExports {
+		exportedNames[name] = true
+	}
+	runtimeMod.Namespace = objects.NewLiveNamespace(importStmt.Alias.Lexeme, moduleEnv, exportedNames)
 
 	return runtimeMod, nil
 }

@@ -13,6 +13,7 @@ type CompiledProgram struct {
 type CompiledModule struct {
 	Instructions code.Instructions
 	NumGlobals   int   // slots needed for this module's globals
+	NumLocals    int   // main-frame slots used by module-level block-scoped variables
 	Exports      []int // export index -> global slot mapping
 	DebugInfoIdx int   // index into DebugInfo.Entries for line table and file path
 }

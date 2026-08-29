@@ -17,29 +17,40 @@ func main() {
 	var engine string = "interpreter" // default to interpreter
 	showWarning := true
 
+	usage := func() {
+		fmt.Println("Usage: viri [--debug] [--stats] [--no-warning] [--engine=interpreter|vm] <file.viri>")
+		os.Exit(64) // EX_USAGE
+	}
+
 	for i := 1; i < len(os.Args); i++ {
 		arg := os.Args[i]
-		if arg == "--debug" {
+		switch {
+		case arg == "--debug":
 			debugMode = true
-		} else if arg == "--no-warning" {
+		case arg == "--no-warning":
 			showWarning = false
-		} else if arg == "--stats" {
+		case arg == "--stats":
 			statsMode = true
-		} else if val, found := strings.CutPrefix(arg, "--engine="); found {
-			engine = val
-		} else if strings.HasSuffix(arg, FILE_EXTENSION) {
+		case strings.HasPrefix(arg, "--engine="):
+			engine = strings.TrimPrefix(arg, "--engine=")
+		case strings.HasPrefix(arg, "-"):
+			fmt.Printf("Unknown flag: %s\n", arg)
+			usage()
+		case fileName == "":
 			fileName = arg
+		default:
+			fmt.Printf("Unexpected argument: %s\n", arg)
+			usage()
 		}
 	}
 
-	if fileName == "" {
-		fmt.Println("Usage: viri [--debug] [--stats] [--engine=interpreter|vm] <file>")
-		os.Exit(64) // usage error
+	if fileName == "" || !strings.HasSuffix(fileName, FILE_EXTENSION) {
+		usage()
 	}
 
 	if engine != "interpreter" && engine != "vm" {
 		fmt.Println("Invalid engine. Use --engine=interpreter or --engine=vm")
-		os.Exit(64) // usage error
+		usage()
 	}
 
 	config := &internal.ViriRuntimeConfig{
@@ -53,6 +64,6 @@ func main() {
 	viri.Run(fileName)
 
 	if viri.HasErrors() {
-		os.Exit(70) // syntax error
+		os.Exit(65) // EX_DATAERR: the program failed to compile or run
 	}
 }

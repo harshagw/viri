@@ -42,7 +42,7 @@ func GetNativeFunctionByIndex(index int) *NativeFunction {
 }
 
 func nativeClock(args ...Object) (Object, error) {
-	return NewNumber(float64(time.Now().Unix())), nil
+	return NewNumber(float64(time.Now().UnixNano()) / 1e9), nil
 }
 
 func nativeLen(args ...Object) (Object, error) {

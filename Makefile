@@ -33,6 +33,11 @@ e2e: build
 	@echo "Running E2E tests (VM Engine)"
 	@echo "========================================="
 	go test -tags=e2e -run TestE2E_VM ./test/...
+	@echo ""
+	@echo "========================================="
+	@echo "Running E2E tests (Engine Differential)"
+	@echo "========================================="
+	go test -tags=e2e -run TestE2E_Diff ./test/...
 	rm -f viri
 
 build-plugin:

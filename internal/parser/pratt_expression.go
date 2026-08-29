@@ -222,6 +222,8 @@ func (p *Parser) parseInfix(left ast.Expr, operator *token.Token) (ast.Expr, err
 		}
 		return &ast.IndexExpr{Object: left, Index: right, Bracket: closing}, nil
 	default:
+		// Defensive: parseInfix is only entered for tokens with an infix
+		// parselet, so this is unreachable in practice.
 		return left, nil
 	}
 }

@@ -910,7 +910,7 @@ func TestHashKeyNotFoundError(t *testing.T) {
 		t.Fatalf("expected error for missing key, got none")
 	}
 
-	expected := "key 'missing' not found in hash map"
+	expected := "Key 'missing' not found in hash map."
 	if err.Error() != expected {
 		t.Fatalf("wrong error. want=%q, got=%q", expected, err.Error())
 	}

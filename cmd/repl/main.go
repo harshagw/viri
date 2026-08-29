@@ -19,7 +19,7 @@ import (
 
 func main() {
 	debugMode := false
-	showWarning := false
+	showWarning := true
 
 	for _, arg := range os.Args[1:] {
 		switch arg {

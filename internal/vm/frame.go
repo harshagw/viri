@@ -1,7 +1,6 @@
 package vm
 
 import (
-	"github.com/harshagw/viri/internal/code"
 	"github.com/harshagw/viri/internal/objects"
 )
 
@@ -18,8 +17,4 @@ func NewFrame(cl *objects.Closure, basePointer int) *Frame {
 		ip:          -1,
 		basePointer: basePointer,
 	}
-}
-
-func (f *Frame) Instructions() code.Instructions {
-	return f.cl.Fn.Instructions
 }

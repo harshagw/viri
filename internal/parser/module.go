@@ -34,7 +34,7 @@ func LoadModuleFile(path string, diagnosticHandler objects.DiagnosticHandler) (*
 	if err != nil {
 		return nil, fmt.Errorf("failed to read module '%s': %w", path, err)
 	}
-	
+
 	var filePathPtr *string
 	if path != "" {
 		filePathPtr = &path
@@ -52,7 +52,7 @@ func LoadModuleFile(path string, diagnosticHandler objects.DiagnosticHandler) (*
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse module '%s': %w", path, err)
 	}
-	
+
 	return mod, nil
 }
 

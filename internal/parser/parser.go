@@ -539,7 +539,7 @@ func (p *Parser) consume(tokenType token.Type, message string) (*token.Token, er
 	if p.check(tokenType) {
 		return p.advance(), nil
 	}
-	return nil, p.error(p.peekPrevious(), message)
+	return nil, p.error(p.peekCurrent(), message)
 }
 
 func (p *Parser) error(tok *token.Token, message string) error {

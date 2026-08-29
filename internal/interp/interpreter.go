@@ -15,9 +15,12 @@ import (
 	"github.com/harshagw/viri/internal/token"
 )
 
+const MaxCallDepth = 1024
+
 type Interpreter struct {
 	environment     *objects.Environment
 	globals         *objects.Environment
+	callDepth       int
 	locals          map[ast.Expr]int
 	moduleCache     *objects.ModuleCache
 	currentModule   string
@@ -46,10 +49,6 @@ func NewInterpreter(globals *objects.Environment) *Interpreter {
 
 func (i *Interpreter) SetStdout(w io.Writer) {
 	i.stdout = w
-}
-
-func (i *Interpreter) SetModuleCache(cache *objects.ModuleCache) {
-	i.moduleCache = cache
 }
 
 func (i *Interpreter) SetCurrentModule(path string) {
@@ -240,7 +239,12 @@ func (i *Interpreter) visitReturnStmt(ret *ast.ReturnStmt) (objects.Object, erro
 
 func (i *Interpreter) visitVarDeclStmt(decl *ast.VarDeclStmt) (objects.Object, error) {
 	var val objects.Object
-	if decl.Initializer != nil {
+	if fnExpr, ok := decl.Initializer.(*ast.FunctionExpr); ok {
+		// A function assigned at declaration carries the variable's name
+		// (matches the VM, and improves its printed form)
+		val = objects.NewFunction(decl.Name.Lexeme, fnExpr.Params, fnExpr.Body, i.environment, false, objects.FunctionTypeNamed)
+		i.environment.Define(decl.Name.Lexeme, val)
+	} else if decl.Initializer != nil {
 		v, err := i.evalExpr(decl.Initializer)
 		if err != nil {
 			return nil, err
@@ -313,6 +317,12 @@ func (i *Interpreter) visitWhileStmt(whileStmt *ast.WhileStmt) (objects.Object, 
 }
 
 func (i *Interpreter) visitForStmt(forStmt *ast.ForStmt) (objects.Object, error) {
+	// Mirror the resolver: the whole for statement runs in its own scope so
+	// the loop variable has loop lifetime.
+	previous := i.environment
+	i.environment = objects.NewEnvironment(previous)
+	defer func() { i.environment = previous }()
+
 	if forStmt.Initializer != nil {
 		if _, err := i.evalStmt(forStmt.Initializer); err != nil {
 			return nil, err
@@ -395,11 +405,12 @@ func (i *Interpreter) evalExpr(expr ast.Expr) (objects.Object, error) {
 }
 
 func (i *Interpreter) visitBinaryExpr(exp *ast.BinaryExpr) (objects.Object, error) {
-	right, err := i.evalExpr(exp.Right)
+	// Operands evaluate left to right, so side effects run in source order
+	left, err := i.evalExpr(exp.Left)
 	if err != nil {
 		return nil, err
 	}
-	left, err := i.evalExpr(exp.Left)
+	right, err := i.evalExpr(exp.Right)
 	if err != nil {
 		return nil, err
 	}
@@ -411,14 +422,15 @@ func (i *Interpreter) visitBinaryExpr(exp *ast.BinaryExpr) (objects.Object, erro
 				return objects.NewNumber(l.Value + r.Value), nil
 			}
 			if r, ok := right.(*objects.String); ok {
-				return objects.NewString(fmt.Sprintf("%g%s", l.Value, r.Value)), nil
+				// Inspect keeps integral numbers free of %g exponents ("1000000")
+				return objects.NewString(l.Inspect() + r.Value), nil
 			}
 		case *objects.String:
 			if r, ok := right.(*objects.String); ok {
 				return objects.NewString(l.Value + r.Value), nil
 			}
 			if r, ok := right.(*objects.Number); ok {
-				return objects.NewString(l.Value + fmt.Sprintf("%g", r.Value)), nil
+				return objects.NewString(l.Value + r.Inspect()), nil
 			}
 		}
 		return nil, i.runtimeError(exp.Operator, fmt.Sprintf("Operands to '+' must both be numbers or both be strings or one string and other number (left: %T, right: %T).", left, right))
@@ -509,11 +521,6 @@ func (i *Interpreter) visitAssignExpr(assign *ast.AssignExpr) (objects.Object, e
 		if err := i.globals.Assign(assign.Name.Lexeme, value); err != nil {
 			return nil, i.runtimeError(assign.Name, err.Error())
 		}
-	}
-
-	// If this variable is exported, update the export map as well
-	if _, exported := i.moduleExports[assign.Name.Lexeme]; exported {
-		i.moduleExports[assign.Name.Lexeme] = value
 	}
 
 	return value, nil
@@ -670,11 +677,23 @@ func (i *Interpreter) visitCallExpr(call *ast.CallExpr) (objects.Object, error) 
 	if !ok {
 		return nil, i.runtimeError(call.ClosingParen, "Can only call functions or classes.")
 	}
-	if callable.Arity() != len(args) {
+	if callable.Arity() >= 0 && callable.Arity() != len(args) {
 		return nil, i.runtimeError(call.ClosingParen, "Expected "+strconv.Itoa(callable.Arity())+" arguments but got "+strconv.Itoa(len(args))+".")
 	}
+	if i.callDepth >= MaxCallDepth {
+		return nil, i.runtimeError(call.ClosingParen, "Stack overflow.")
+	}
+	i.callDepth++
 	result, err := callable.Call(i, args)
+	i.callDepth--
 	if err != nil {
+		// A RuntimeError already points at the statement that failed;
+		// re-wrapping it here would misreport every nested error at the
+		// outermost call site. Only errors without a location (native
+		// functions) get anchored to this call.
+		if _, ok := err.(*objects.RuntimeError); ok {
+			return nil, err
+		}
 		return nil, i.runtimeError(call.ClosingParen, err.Error())
 	}
 	return result, nil

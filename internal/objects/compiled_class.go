@@ -68,5 +68,5 @@ func (b *BoundMethod) Type() Type {
 }
 
 func (b *BoundMethod) Inspect() string {
-	return fmt.Sprintf("<bound_method %s>", b.Method.Fn.Name)
+	return fmt.Sprintf("<fun %s>", b.Method.Fn.Name)
 }

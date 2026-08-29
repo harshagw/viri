@@ -105,4 +105,3 @@ var (
 			Foreground(successColor).
 			Padding(0, 1)
 )
-

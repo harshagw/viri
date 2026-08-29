@@ -100,12 +100,16 @@ func execute(source string, interpreter *interp.Interpreter, handler *replHandle
 	}
 
 	interpreter.SetLocals(locals)
-	_, err = interpreter.Interpret(stmts)
+	results, err := interpreter.Interpret(stmts)
 	if err != nil {
 		handler.errors = append(handler.errors, fmt.Sprintf("Runtime error: %v", err))
 		return ""
 	}
 
+	// Result is the value of the final statement, when it produced one
+	if len(results) > 0 && results[len(results)-1] != nil {
+		return results[len(results)-1].Inspect()
+	}
 	return ""
 }
 

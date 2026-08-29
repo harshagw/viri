@@ -319,12 +319,27 @@ func TestBlockStatements(t *testing.T) {
 	runCompilerTests(t, tests)
 }
 
+// compileTestProgram compiles a test input. A top-level BlockStmt is treated
+// as a sequence of module-level statements (not as a lexical block), matching
+// how real programs are compiled statement by statement at module level.
+func compileTestProgram(c *Compiler, input interface{}) error {
+	if block, ok := input.(*ast.BlockStmt); ok {
+		for _, stmt := range block.Statements {
+			if err := c.Compile(stmt); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	return c.Compile(input)
+}
+
 func runCompilerTests(t *testing.T, tests []compilerTestCase) {
 	t.Helper()
 
 	for _, tt := range tests {
 		compiler := New(nil)
-		err := compiler.Compile(tt.input)
+		err := compileTestProgram(compiler, tt.input)
 		if err != nil {
 			t.Fatalf("compiler error: %s", err)
 		}
@@ -703,12 +718,12 @@ func TestConstAssignmentError(t *testing.T) {
 	}
 
 	compiler := New(nil)
-	err := compiler.Compile(input)
+	err := compileTestProgram(compiler, input)
 	if err == nil {
 		t.Fatalf("expected error for const assignment, got none")
 	}
 
-	expected := "cannot assign to constant PI"
+	expected := "Cannot reassign const variable 'PI'."
 	if err.Error() != expected {
 		t.Fatalf("wrong error. want=%q, got=%q", expected, err.Error())
 	}
@@ -1127,35 +1142,35 @@ func TestForStatements(t *testing.T) {
 			expectedInstructions: []code.Instructions{
 				// 0000: OpGetConstant 0 (0) - initializer
 				code.Make(code.OpGetConstant, 0),
-				// 0003: OpSetGlobal 0 (i)
-				code.Make(code.OpSetGlobal, 0),
-				// 0006: OpGetConstant 1 (10) - condition: i < 10 (compiled as 10 > i)
+				// 0003: OpSetLocal 0 (i, scoped to the for statement)
+				code.Make(code.OpSetLocal, 0),
+				// 0005: OpGetLocal 0 (i) - condition: i < 10
+				code.Make(code.OpGetLocal, 0),
+				// 0007: OpGetConstant 1 (10)
 				code.Make(code.OpGetConstant, 1),
-				// 0009: OpGetGlobal 0 (i)
-				code.Make(code.OpGetGlobal, 0),
-				// 0012: OpGreaterThan
-				code.Make(code.OpGreaterThan),
-				// 0013: OpJumpNotTruthy -> 37 (exit loop)
-				code.Make(code.OpJumpNotTruthy, 37),
-				// 0016: OpGetConstant 2 (5) - body
+				// 0010: OpLess (left-to-right)
+				code.Make(code.OpLess),
+				// 0011: OpJumpNotTruthy -> 32 (exit loop)
+				code.Make(code.OpJumpNotTruthy, 32),
+				// 0014: OpGetConstant 2 (5) - body
 				code.Make(code.OpGetConstant, 2),
-				// 0019: OpPop
+				// 0017: OpPop
 				code.Make(code.OpPop),
-				// 0020: OpGetGlobal 0 (i) - increment: i = i + 1
-				code.Make(code.OpGetGlobal, 0),
-				// 0023: OpGetConstant 3 (1)
+				// 0018: OpGetLocal 0 (i) - increment: i = i + 1
+				code.Make(code.OpGetLocal, 0),
+				// 0020: OpGetConstant 3 (1)
 				code.Make(code.OpGetConstant, 3),
-				// 0026: OpAdd
+				// 0023: OpAdd
 				code.Make(code.OpAdd),
-				// 0027: OpSetGlobal 0
-				code.Make(code.OpSetGlobal, 0),
-				// 0030: OpGetGlobal 0 (assignment returns value)
-				code.Make(code.OpGetGlobal, 0),
-				// 0033: OpPop (discard increment result)
+				// 0024: OpSetLocal 0
+				code.Make(code.OpSetLocal, 0),
+				// 0026: OpGetLocal 0 (assignment returns value)
+				code.Make(code.OpGetLocal, 0),
+				// 0028: OpPop (discard increment result)
 				code.Make(code.OpPop),
-				// 0034: OpJump -> 6 (back to condition)
-				code.Make(code.OpJump, 6),
-				// 0037: end
+				// 0029: OpJump -> 5 (back to condition)
+				code.Make(code.OpJump, 5),
+				// 0032: end
 			},
 		},
 		{
@@ -1193,14 +1208,13 @@ func TestForStatements(t *testing.T) {
 			},
 			expectedConstants: []interface{}{0, 10, 5, 1},
 			expectedInstructions: []code.Instructions{
-				// var i = 0
+				// var i = 0 (module global, declared before the loop)
 				code.Make(code.OpGetConstant, 0),
 				code.Make(code.OpSetGlobal, 0),
-				// for loop starts here (no initializer)
-				// 0006: condition
-				code.Make(code.OpGetConstant, 1),
+				// 0006: condition i < 10 (left-to-right, OpLess)
 				code.Make(code.OpGetGlobal, 0),
-				code.Make(code.OpGreaterThan),
+				code.Make(code.OpGetConstant, 1),
+				code.Make(code.OpLess),
 				code.Make(code.OpJumpNotTruthy, 37),
 				// body
 				code.Make(code.OpGetConstant, 2),
@@ -1238,25 +1252,25 @@ func TestForStatements(t *testing.T) {
 			},
 			expectedConstants: []interface{}{0, 3, 5},
 			expectedInstructions: []code.Instructions{
-				// 0000: initializer: var i = 0
+				// 0000: initializer: var i = 0 (for-scoped local)
 				code.Make(code.OpGetConstant, 0),
 				// 0003:
-				code.Make(code.OpSetGlobal, 0),
-				// 0006: condition: i < 3 (compiled as 3 > i)
+				code.Make(code.OpSetLocal, 0),
+				// 0005: condition: i < 3 (left-to-right, OpLess)
+				code.Make(code.OpGetLocal, 0),
+				// 0007:
 				code.Make(code.OpGetConstant, 1),
-				// 0009:
-				code.Make(code.OpGetGlobal, 0),
-				// 0012:
-				code.Make(code.OpGreaterThan),
-				// 0013: jump to 23 if false
-				code.Make(code.OpJumpNotTruthy, 23),
-				// 0016: body: 5;
+				// 0010:
+				code.Make(code.OpLess),
+				// 0011: jump to 21 if false
+				code.Make(code.OpJumpNotTruthy, 21),
+				// 0014: body: 5;
 				code.Make(code.OpGetConstant, 2),
-				// 0019:
+				// 0017:
 				code.Make(code.OpPop),
-				// 0020: no increment, just jump back to condition
-				code.Make(code.OpJump, 6),
-				// 0023: end
+				// 0018: no increment, just jump back to condition
+				code.Make(code.OpJump, 5),
+				// 0021: end
 			},
 		},
 		{
@@ -1284,22 +1298,22 @@ func TestForStatements(t *testing.T) {
 			},
 			expectedConstants: []interface{}{0, 5, 1},
 			expectedInstructions: []code.Instructions{
-				// initializer: var i = 0
+				// initializer: var i = 0 (for-scoped local)
 				code.Make(code.OpGetConstant, 0),
-				code.Make(code.OpSetGlobal, 0),
-				// no condition - body starts immediately at position 6
+				code.Make(code.OpSetLocal, 0),
+				// no condition - body starts immediately at position 5
 				// body: 5;
 				code.Make(code.OpGetConstant, 1),
 				code.Make(code.OpPop),
 				// increment: i = i + 1
-				code.Make(code.OpGetGlobal, 0),
+				code.Make(code.OpGetLocal, 0),
 				code.Make(code.OpGetConstant, 2),
 				code.Make(code.OpAdd),
-				code.Make(code.OpSetGlobal, 0),
-				code.Make(code.OpGetGlobal, 0),
+				code.Make(code.OpSetLocal, 0),
+				code.Make(code.OpGetLocal, 0),
 				code.Make(code.OpPop),
-				// jump back to body (position 6)
-				code.Make(code.OpJump, 6),
+				// jump back to body (position 5)
+				code.Make(code.OpJump, 5),
 			},
 		},
 		{
@@ -1398,12 +1412,12 @@ func TestBreakOutsideLoop(t *testing.T) {
 	input := &ast.BreakStmt{Keyword: &token.Token{Type: token.BREAK, Lexeme: "break"}}
 
 	compiler := New(nil)
-	err := compiler.Compile(input)
+	err := compileTestProgram(compiler, input)
 	if err == nil {
 		t.Fatalf("expected error for break outside loop, got none")
 	}
 
-	expected := "break statement outside of loop"
+	expected := "break statement must be inside a loop."
 	if err.Error() != expected {
 		t.Fatalf("wrong error. want=%q, got=%q", expected, err.Error())
 	}
@@ -1413,12 +1427,12 @@ func TestContinueOutsideLoop(t *testing.T) {
 	input := &ast.ContinueStmt{Keyword: &token.Token{Type: token.CONTINUE, Lexeme: "continue"}}
 
 	compiler := New(nil)
-	err := compiler.Compile(input)
+	err := compileTestProgram(compiler, input)
 	if err == nil {
 		t.Fatalf("expected error for continue outside loop, got none")
 	}
 
-	expected := "continue statement outside of loop"
+	expected := "continue statement must be inside a loop."
 	if err.Error() != expected {
 		t.Fatalf("wrong error. want=%q, got=%q", expected, err.Error())
 	}
@@ -2536,7 +2550,7 @@ func TestThisOutsideClass(t *testing.T) {
 	}
 
 	comp := New(nil)
-	err := comp.Compile(input)
+	err := compileTestProgram(comp, input)
 	if err == nil {
 		t.Fatalf("expected error for 'this' outside class, got none")
 	}
@@ -2557,7 +2571,7 @@ func TestSuperOutsideClass(t *testing.T) {
 	}
 
 	comp := New(nil)
-	err := comp.Compile(input)
+	err := compileTestProgram(comp, input)
 	if err == nil {
 		t.Fatalf("expected error for 'super' outside class, got none")
 	}
@@ -2595,7 +2609,7 @@ func TestSuperWithoutSuperclass(t *testing.T) {
 	}
 
 	comp := New(nil)
-	err := comp.Compile(input)
+	err := compileTestProgram(comp, input)
 	if err == nil {
 		t.Fatalf("expected error for 'super' without superclass, got none")
 	}
@@ -2624,7 +2638,7 @@ func TestModuleExportAccess(t *testing.T) {
 		},
 	}
 
-	err := comp.Compile(input)
+	err := compileTestProgram(comp, input)
 	if err != nil {
 		t.Fatalf("compiler error: %s", err)
 	}
@@ -2660,7 +2674,7 @@ func TestModuleExportAccessNotFound(t *testing.T) {
 		},
 	}
 
-	err := comp.Compile(input)
+	err := compileTestProgram(comp, input)
 	if err == nil {
 		t.Fatalf("expected error for non-exported symbol, got none")
 	}
@@ -2682,12 +2696,12 @@ func TestClassSelfInheritance(t *testing.T) {
 	}
 
 	comp := New(nil)
-	err := comp.Compile(input)
+	err := compileTestProgram(comp, input)
 	if err == nil {
 		t.Fatalf("expected error for self-inheritance, got none")
 	}
 
-	expected := "a class cannot inherit from itself"
+	expected := "A class cannot inherit from itself."
 	if err.Error() != expected {
 		t.Fatalf("wrong error. want=%q, got=%q", expected, err.Error())
 	}

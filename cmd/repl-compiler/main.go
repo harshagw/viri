@@ -20,7 +20,7 @@ import (
 
 func main() {
 	debugMode := false
-	showWarning := false
+	showWarning := true
 
 	for _, arg := range os.Args[1:] {
 		switch arg {
@@ -36,9 +36,11 @@ func main() {
 
 	handler := &replHandler{disableWarning: !showWarning}
 
-	// Persist symbol table and globals across REPL inputs
-	symbolTable := compiler.NewSymbolTable()
-	globals := make([]objects.Object, vm.GlobalsSize)
+	// Persist the compiler (symbol table + constants pool) and globals
+	// across REPL inputs: closures created on earlier lines hold indices
+	// into the shared constants pool, so it must never restart.
+	comp := compiler.NewWithState(handler, compiler.NewSymbolTable())
+	globals := make([]objects.Object, 0, vm.GlobalsSize)
 
 	executor := func(line string) {
 		if strings.TrimSpace(line) == "" {
@@ -73,12 +75,16 @@ func main() {
 		}
 
 		newStmts := lineModule.GetAllStatements()
-
-		comp := compiler.NewWithState(handler, symbolTable)
-		err = comp.Compile(newStmts[0])
-		if err != nil {
-			color.New(color.FgRed).Fprintf(color.Error, "Compilation error: %v\n", err)
+		if len(newStmts) == 0 {
 			return
+		}
+
+		comp.ResetForNextInput()
+		for _, stmt := range newStmts {
+			if err := comp.Compile(stmt); err != nil {
+				color.New(color.FgRed).Fprintf(color.Error, "Compilation error: %v\n", err)
+				return
+			}
 		}
 
 		program := comp.Result()
@@ -89,18 +95,15 @@ func main() {
 		}
 
 		machine := vm.New(program)
-		for i, g := range globals {
-			if i < len(machine.GetModuleGlobals(0)) {
-				machine.GetModuleGlobals(0)[i] = g
-			}
-		}
+		copy(machine.GetModuleGlobals(0), globals)
 		err = machine.RunProgram()
 		if err != nil {
 			color.New(color.FgRed).Fprintf(color.Error, "Runtime error: %v\n", err)
 			return
 		}
 
-		if _, isPrint := newStmts[0].(*ast.PrintStmt); !isPrint {
+		// Echo the value of a trailing expression statement (print handles itself)
+		if _, isExpr := newStmts[len(newStmts)-1].(*ast.ExprStmt); isExpr {
 			fmt.Println(machine.LastPoppedStackElem().Inspect())
 		}
 

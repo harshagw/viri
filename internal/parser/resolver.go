@@ -261,11 +261,10 @@ func (r *Resolver) visitFunction(function *ast.FunctionStmt) {
 		r.markVariableUsed(function.Name)
 	}
 
-	newFunctionType := FunctionTypeFunction
-	if r.currentClass != ClassTypeNone && function.Name.Lexeme == "init" {
-		newFunctionType = FunctionTypeInitializer
-	}
-	r.resolveFunction(function.Params, function.Body, newFunctionType)
+	// A statement-level function is never an initializer, even when it is
+	// named 'init' and appears inside a method body; only the class's own
+	// 'init' method (resolved in visitClass) is one.
+	r.resolveFunction(function.Params, function.Body, FunctionTypeFunction)
 }
 
 func (r *Resolver) visitFunctionExpr(expr *ast.FunctionExpr) {
@@ -310,7 +309,11 @@ func (r *Resolver) visitClass(class *ast.ClassStmt) {
 	r.define(&thisToken)
 
 	for _, method := range class.Methods {
-		r.resolveFunction(method.Params, method.Body, FunctionTypeMethod)
+		functionType := FunctionTypeMethod
+		if method.Name.Lexeme == "init" {
+			functionType = FunctionTypeInitializer
+		}
+		r.resolveFunction(method.Params, method.Body, functionType)
 	}
 
 	r.endScope()
@@ -325,6 +328,9 @@ func (r *Resolver) visitClass(class *ast.ClassStmt) {
 func (r *Resolver) resolveFunction(params []*token.Token, body *ast.BlockStmt, functionType FunctionType) {
 	previousFunctionType := r.currentFunction
 	r.currentFunction = functionType
+	previousLoopDepth := r.loopDepth
+	r.loopDepth = 0
+	defer func() { r.loopDepth = previousLoopDepth }()
 	r.beginScope()
 	for _, param := range params {
 		r.declare(param)
@@ -353,6 +359,10 @@ func (r *Resolver) visitWhileStmt(whileStmt *ast.WhileStmt) {
 }
 
 func (r *Resolver) visitForStmt(forStmt *ast.ForStmt) {
+	// The initializer gets its own scope: the loop variable is not visible
+	// after the loop, and two sibling for-loops can both declare 'var i'.
+	r.beginScope()
+	defer r.endScope()
 	if forStmt.Initializer != nil {
 		r.resolveStmt(forStmt.Initializer)
 	}
@@ -419,10 +429,16 @@ func (r *Resolver) endScope() {
 		return
 	}
 
+	// Module-level names are not "local"; keep the warning but say what
+	// the name actually is.
+	prefix := "Local variable"
+	if len(r.scopes) == 1 {
+		prefix = "Variable"
+	}
 	scope := r.scopes[len(r.scopes)-1]
 	for name, info := range scope {
 		if info.defined && !info.used && name != "this" && name != "super" && info.token != nil {
-			r.reportWarn(info.token, "Local variable '"+name+"' is declared but never used.")
+			r.reportWarn(info.token, prefix+" '"+name+"' is declared but never used.")
 		}
 	}
 

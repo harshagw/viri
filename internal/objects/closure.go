@@ -7,6 +7,10 @@ import "fmt"
 type Closure struct {
 	Fn   *CompiledFunction
 	Free []*Cell
+
+	// DefiningClass is the class this closure was declared in (set when the
+	// class is built, and inherited by closures created inside a method).
+	DefiningClass *CompiledClass
 }
 
 func NewClosure(fn *CompiledFunction, free []*Cell) *Closure {
@@ -18,5 +22,8 @@ func (c *Closure) Type() Type {
 }
 
 func (c *Closure) Inspect() string {
-	return fmt.Sprintf("closure(%s)", c.Fn.Inspect())
+	if c.Fn.Name == "" {
+		return "<fun anonymous>"
+	}
+	return fmt.Sprintf("<fun %s>", c.Fn.Name)
 }

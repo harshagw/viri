@@ -57,7 +57,7 @@ func TestE2E_VM(t *testing.T) {
 }
 
 func runViriBinaryVM(t *testing.T, viriPath, scriptPath string) string {
-	cmd := exec.Command(viriPath, "--engine=vm", scriptPath)
+	cmd := exec.Command(viriPath, "--no-warning", "--engine=vm", scriptPath)
 	var out bytes.Buffer
 	var stderr bytes.Buffer
 	cmd.Stdout = &out
