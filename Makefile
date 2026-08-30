@@ -45,5 +45,5 @@ web:
 	cd viri-web && npm run dev
 
 build-playground:
-	GOOS=js GOARCH=wasm go build -o viri-web/public/viri.wasm cmd/web-playground/main.go
+	GOOS=js GOARCH=wasm go build -o viri-web/public/viri.wasm ./cmd/web-playground/
 	cp $(shell go env GOROOT)/lib/wasm/wasm_exec.js viri-web/public/

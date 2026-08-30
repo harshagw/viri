@@ -187,3 +187,16 @@ func (c *Checker) CheckIncremental(statements []ast.Stmt) bool {
 	c.checkStatements(statements)
 	return !c.hadError
 }
+
+// DeclareImport binds an import alias to the module it names, for callers that
+// resolve imports themselves rather than going through CheckModule — the
+// playground, which supports std: imports but has no filesystem for file ones.
+func (c *Checker) DeclareImport(alias string, mod *types.Module) {
+	if mod == nil {
+		return
+	}
+	if c.imports == nil {
+		c.imports = make(map[string]*types.Module)
+	}
+	c.imports[alias] = mod
+}

@@ -1,5 +1,9 @@
 //go:build js && wasm
 
+// Command web-playground is the WASM build behind the viri-web playground.
+//
+// This file is the JavaScript boundary; the pipeline it drives lives in
+// run.go, which carries no build tag so it can be tested on any platform.
 package main
 
 import (
@@ -7,21 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"syscall/js"
-
-	"github.com/harshagw/viri/internal/interpreter/ast"
-	"github.com/harshagw/viri/internal/interpreter/interp"
-	"github.com/harshagw/viri/internal/interpreter/objects"
-	"github.com/harshagw/viri/internal/interpreter/parser"
-	"github.com/harshagw/viri/internal/interpreter/scanner"
-	"github.com/harshagw/viri/internal/interpreter/token"
 )
-
-type Response struct {
-	Result   string   `json:"result"`
-	Output   string   `json:"output"`
-	Errors   []string `json:"errors"`
-	Warnings []string `json:"warnings"`
-}
 
 func main() {
 	c := make(chan struct{}, 0)
@@ -43,89 +33,20 @@ func runViri(this js.Value, args []js.Value) (ret interface{}) {
 	if len(args) == 0 {
 		return "Error: No input provided"
 	}
-	input := args[0].String()
 
-	handler := &replHandler{errors: []string{}, warnings: []string{}}
-	interpreter := interp.NewInterpreter(nil)
-
+	handler := &playgroundHandler{errors: []string{}, warnings: []string{}}
 	var outBuf bytes.Buffer
-	interpreter.SetStdout(&outBuf)
 
-	finalResult := execute(input, interpreter, handler)
+	finalResult := execute(args[0].String(), &outBuf, handler)
 
-	resp := Response{
+	jsonBytes, err := json.Marshal(Response{
 		Result:   finalResult,
 		Output:   outBuf.String(),
 		Errors:   handler.errors,
 		Warnings: handler.warnings,
-	}
-
-	jsonBytes, err := json.Marshal(resp)
+	})
 	if err != nil {
 		return fmt.Sprintf(`{"errors": ["Internal error: %s"]}`, err.Error())
 	}
-
 	return string(jsonBytes)
-}
-
-func execute(source string, interpreter *interp.Interpreter, handler *replHandler) string {
-	if source == "" {
-		return ""
-	}
-
-	code := bytes.NewBufferString(source)
-
-	playgroundPath := "<playground>"
-	sc := scanner.New(code, &playgroundPath)
-	tokens, err := sc.Scan()
-	if err != nil {
-		handler.errors = append(handler.errors, fmt.Sprintf("Scanning error: %v", err))
-		return ""
-	}
-
-	p := parser.NewParser(tokens, handler)
-	p.SetFilePath("<playground>")
-	module, err := p.Parse()
-	if err != nil || handler.hasErrors {
-		return ""
-	}
-
-	stmts := module.GetAllStatements()
-	mod := ast.NewModule("<playground>", nil, stmts)
-
-	res := parser.NewResolver(handler)
-	locals, err := res.Resolve(mod)
-	if err != nil || handler.hasErrors {
-		return ""
-	}
-
-	interpreter.SetLocals(locals)
-	results, err := interpreter.Interpret(stmts)
-	if err != nil {
-		handler.errors = append(handler.errors, fmt.Sprintf("Runtime error: %v", err))
-		return ""
-	}
-
-	// Result is the value of the final statement, when it produced one
-	if len(results) > 0 && results[len(results)-1] != nil {
-		return results[len(results)-1].Inspect()
-	}
-	return ""
-}
-
-type replHandler struct {
-	hasErrors bool
-	errors    []string
-	warnings  []string
-}
-
-var _ objects.DiagnosticHandler = (*replHandler)(nil)
-
-func (h *replHandler) Error(tok token.Token, msg string) {
-	h.errors = append(h.errors, fmt.Sprintf("Line %d: %s", tok.Line, msg))
-	h.hasErrors = true
-}
-
-func (h *replHandler) Warn(tok token.Token, msg string) {
-	h.warnings = append(h.warnings, fmt.Sprintf("Line %d: %s", tok.Line, msg))
 }

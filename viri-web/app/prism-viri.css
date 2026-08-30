@@ -16,9 +16,13 @@
 }
 
 /* Constants */
-.token.boolean,
-.token.nil {
+.token.boolean {
   color: #0000ff;
+}
+
+/* Predeclared type names: number, string, bool */
+.token.builtin {
+  color: #267f99;
 }
 
 /* Strings */
@@ -68,9 +72,11 @@
 .dark .token.keyword.control {
   color: #c586c0;
 }
-.dark .token.boolean,
-.dark .token.nil {
+.dark .token.boolean {
   color: #569cd6;
+}
+.dark .token.builtin {
+  color: #4ec9b0;
 }
 .dark .token.string {
   color: #ce9178;

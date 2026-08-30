@@ -24,24 +24,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Detect package manager
-        id: detect-package-manager
-        run: |
-          if [ -f "yarn.lock" ]; then
-            echo "manager=yarn" >> $GITHUB_OUTPUT
-            echo "command=install" >> $GITHUB_OUTPUT
-            echo "runner=yarn" >> $GITHUB_OUTPUT
-            exit 0
-          elif [ -f "package.json" ]; then
-            echo "manager=npm" >> $GITHUB_OUTPUT
-            echo "command=ci" >> $GITHUB_OUTPUT
-            echo "runner=npx --no-install" >> $GITHUB_OUTPUT
-            exit 0
-          else
-            echo "Unable to determine package manager"
-            exit 1
-          fi
-
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
@@ -50,14 +32,14 @@ jobs:
       - name: Build wasm playground
         working-directory: ./
         run: |
-          GOOS=js GOARCH=wasm go build -o viri-web/public/viri.wasm cmd/web-playground/main.go
+          GOOS=js GOARCH=wasm go build -o viri-web/public/viri.wasm ./cmd/web-playground/
           cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" viri-web/public/
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: ${{ steps.detect-package-manager.outputs.manager }}
+          cache: npm
           cache-dependency-path: ./viri-web/package-lock.json
 
       - name: Setup Pages
@@ -71,15 +53,16 @@ jobs:
         with:
           path: |
             viri-web/.next/cache
-          key: ${{ runner.os }}-nextjs-${{ hashFiles('viri-web/package-lock.json', 'viri-web/yarn.lock') }}-${{ hashFiles('viri-web/**.[jt]s', 'viri-web/**.[jt]sx') }}
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('viri-web/package-lock.json') }}-${{ hashFiles('viri-web/**.[jt]s', 'viri-web/**.[jt]sx') }}
           restore-keys: |
-            ${{ runner.os }}-nextjs-${{ hashFiles('viri-web/package-lock.json', 'viri-web/yarn.lock') }}-
+            ${{ runner.os }}-nextjs-${{ hashFiles('viri-web/package-lock.json') }}-
 
+      # This project uses npm; viri-web/package-lock.json is the lockfile.
       - name: Install dependencies
-        run: ${{ steps.detect-package-manager.outputs.manager }} ${{ steps.detect-package-manager.outputs.command }}
+        run: npm ci
 
       - name: Build with Next.js
-        run: ${{ steps.detect-package-manager.outputs.runner }} next build
+        run: npx --no-install next build
 
       - name: Convert OG image to PNG
         run: |

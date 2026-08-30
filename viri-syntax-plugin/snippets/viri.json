@@ -6,28 +6,59 @@
   },
   "Variable": {
     "prefix": "var",
-    "body": ["var ${1:name} = ${2:value};"],
+    "body": ["var ${1:name}: ${2:number} = ${3:value};"],
     "description": "Variable declaration"
+  },
+  "Constant": {
+    "prefix": "const",
+    "body": ["const ${1:name}: ${2:number} = ${3:value};"],
+    "description": "Constant declaration"
   },
   "Function": {
     "prefix": "fun",
-    "body": ["fun ${1:name}(${2:params}) {", "  ${3:// body}", "}"],
+    "body": ["fun ${1:name}(${2:arg}: ${3:number}): ${4:number} {", "  ${5:// body}", "}"],
     "description": "Function declaration"
+  },
+  "Void function": {
+    "prefix": "funv",
+    "body": ["fun ${1:name}(${2:arg}: ${3:number}) {", "  ${4:// body}", "}"],
+    "description": "Function that returns nothing"
+  },
+  "Lambda": {
+    "prefix": "lambda",
+    "body": ["fun(${1:arg}: ${2:number}): ${3:number} { return ${4:expr}; }"],
+    "description": "Anonymous function"
   },
   "Class": {
     "prefix": "class",
     "body": [
       "class ${1:Name} {",
-      "  fun init(${2:params}) {",
-      "    ${3:// init body}",
+      "  ${2:field}: ${3:number};",
+      "",
+      "  init(${2:field}: ${3:number}) {",
+      "    this.${2:field} = ${2:field};",
       "  }",
       "",
-      "  fun ${4:method}(${5:params}) {",
+      "  ${4:method}(): ${5:number} {",
       "    ${6:// body}",
       "  }",
       "}"
     ],
-    "description": "Class declaration"
+    "description": "Class declaration; every field must be assigned by init"
+  },
+  "Subclass": {
+    "prefix": "classx",
+    "body": [
+      "class ${1:Name} < ${2:Parent} {",
+      "  ${3:field}: ${4:number};",
+      "",
+      "  init(${3:field}: ${4:number}) {",
+      "    super.init(${5:args});",
+      "    this.${3:field} = ${3:field};",
+      "  }",
+      "}"
+    ],
+    "description": "Subclass declaration; init must call super.init"
   },
   "If": {
     "prefix": "if",
@@ -46,7 +77,26 @@
   },
   "For": {
     "prefix": "for",
-    "body": ["for (${1:var i = 0}; ${2:i < count}; ${3:i = i + 1}) {", "  ${4:// body}", "}"],
+    "body": [
+      "for (var ${1:i}: number = 0; ${1:i} < ${2:count}; ${1:i} = ${1:i} + 1) {",
+      "  ${3:// body}",
+      "}"
+    ],
     "description": "For loop"
+  },
+  "Array": {
+    "prefix": "arr",
+    "body": ["var ${1:name}: []${2:number} = [${3:}];"],
+    "description": "Array declaration"
+  },
+  "Map": {
+    "prefix": "map",
+    "body": ["var ${1:name}: map[string]${2:number} = {${3:}};"],
+    "description": "Map declaration; keys are always strings"
+  },
+  "Import": {
+    "prefix": "import",
+    "body": ["import \"${1:std:math}\" as ${2:m};"],
+    "description": "Import a module"
   }
 }

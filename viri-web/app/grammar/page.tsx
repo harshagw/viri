@@ -76,8 +76,9 @@ export default function GrammarPage() {
               name="varDecl"
               definition={
                 <>
-                  [ <Token>export</Token> ] <Token>var</Token> <Lexical>IDENTIFIER</Lexical> [ <Token>=</Token>{" "}
-                  <RuleLink href="#expression">expression</RuleLink> ] <Token>;</Token>
+                  [ <Token>export</Token> ] <Token>var</Token> <Lexical>IDENTIFIER</Lexical> <Token>:</Token>{" "}
+                  <RuleLink href="#type">type</RuleLink> <Token>=</Token>{" "}
+                  <RuleLink href="#expression">expression</RuleLink> <Token>;</Token>
                 </>
               }
               referencedBy={["declaration", "forStmt"]}
@@ -88,7 +89,8 @@ export default function GrammarPage() {
               name="constDecl"
               definition={
                 <>
-                  [ <Token>export</Token> ] <Token>const</Token> <Lexical>IDENTIFIER</Lexical> <Token>=</Token>{" "}
+                  [ <Token>export</Token> ] <Token>const</Token> <Lexical>IDENTIFIER</Lexical> <Token>:</Token>{" "}
+                  <RuleLink href="#type">type</RuleLink> <Token>=</Token>{" "}
                   <RuleLink href="#expression">expression</RuleLink> <Token>;</Token>
                 </>
               }
@@ -112,7 +114,7 @@ export default function GrammarPage() {
               definition={
                 <>
                   [ <Token>export</Token> ] <Token>class</Token> <Lexical>IDENTIFIER</Lexical> [ <Token>&lt;</Token> <Lexical>IDENTIFIER</Lexical> ]{" "}
-                  <Token>{"{"}</Token> {"{"} <RuleLink href="#function">function</RuleLink> {"}"} <Token>{"}"}</Token>
+                  <Token>{"{"}</Token> {"{"} <RuleLink href="#fieldDecl">fieldDecl</RuleLink> | <RuleLink href="#function">function</RuleLink> {"}"} <Token>{"}"}</Token>
                 </>
               }
               referencedBy={["declaration"]}
@@ -124,10 +126,36 @@ export default function GrammarPage() {
               definition={
                 <>
                   <Lexical>IDENTIFIER</Lexical> <Token>(</Token> [ <RuleLink href="#parameters">parameters</RuleLink> ] <Token>)</Token>{" "}
-                  <RuleLink href="#block">block</RuleLink>
+                  [ <Token>:</Token> <RuleLink href="#type">type</RuleLink> ] <RuleLink href="#block">block</RuleLink>
                 </>
               }
               referencedBy={["funDecl", "classDecl"]}
+            />
+
+            <GrammarRule
+              id="fieldDecl"
+              name="fieldDecl"
+              definition={
+                <>
+                  <Lexical>IDENTIFIER</Lexical> <Token>:</Token> <RuleLink href="#type">type</RuleLink> <Token>;</Token>
+                </>
+              }
+              referencedBy={["classDecl"]}
+            />
+
+            <GrammarRule
+              id="type"
+              name="type"
+              definition={
+                <>
+                  <Lexical>IDENTIFIER</Lexical> [ <Token>.</Token> <Lexical>IDENTIFIER</Lexical> ] | <Token>[</Token> <Token>]</Token>{" "}
+                  <RuleLink href="#type">type</RuleLink> | <Token>map</Token> <Token>[</Token> <RuleLink href="#type">type</RuleLink>{" "}
+                  <Token>]</Token> <RuleLink href="#type">type</RuleLink> | <Token>fun</Token> <Token>(</Token>{" "}
+                  [ <RuleLink href="#type">type</RuleLink> {"{"} <Token>,</Token> <RuleLink href="#type">type</RuleLink> {"}"} ]{" "}
+                  <Token>)</Token> [ <Token>:</Token> <RuleLink href="#type">type</RuleLink> ]
+                </>
+              }
+              referencedBy={["varDecl", "constDecl", "fieldDecl", "function", "functionExpr", "parameters"]}
             />
 
             <GrammarRule
@@ -135,7 +163,8 @@ export default function GrammarPage() {
               name="parameters"
               definition={
                 <>
-                  <Lexical>IDENTIFIER</Lexical> {"{"} <Token>,</Token> <Lexical>IDENTIFIER</Lexical> {"}"}
+                  <Lexical>IDENTIFIER</Lexical> <Token>:</Token> <RuleLink href="#type">type</RuleLink> {"{"} <Token>,</Token>{" "}
+                  <Lexical>IDENTIFIER</Lexical> <Token>:</Token> <RuleLink href="#type">type</RuleLink> {"}"}
                 </>
               }
               referencedBy={["function", "functionExpr"]}
@@ -396,7 +425,7 @@ export default function GrammarPage() {
               name="primary"
               definition={
                 <>
-                  <Token>true</Token> | <Token>false</Token> | <Token>nil</Token> | <Token>this</Token> | <Lexical>NUMBER</Lexical> | <Lexical>STRING</Lexical>{" "}
+                  <Token>true</Token> | <Token>false</Token> | <Token>this</Token> | <Lexical>NUMBER</Lexical> | <Lexical>STRING</Lexical>{" "}
                   | <Lexical>IDENTIFIER</Lexical> | <Token>(</Token> <RuleLink href="#expression">expression</RuleLink> <Token>)</Token> | <Token>super</Token>{" "}
                   <Token>.</Token> <Lexical>IDENTIFIER</Lexical> | <RuleLink href="#arrayLiteral">arrayLiteral</RuleLink> |{" "}
                   <RuleLink href="#hashLiteral">hashLiteral</RuleLink> | <RuleLink href="#functionExpr">functionExpr</RuleLink>
@@ -460,7 +489,7 @@ export default function GrammarPage() {
               definition={
                 <>
                   <Token>fun</Token> <Token>(</Token> [ <RuleLink href="#parameters">parameters</RuleLink> ] <Token>)</Token>{" "}
-                  <RuleLink href="#block">block</RuleLink>
+                  [ <Token>:</Token> <RuleLink href="#type">type</RuleLink> ] <RuleLink href="#block">block</RuleLink>
                 </>
               }
               referencedBy={["primary"]}

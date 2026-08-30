@@ -3,20 +3,48 @@
   "name": "Viri",
   "scopeName": "source.viri",
   "patterns": [
-    { "include": "#comments" },
-    { "include": "#strings" },
-    { "include": "#numbers" },
-    { "include": "#keywords" },
-    { "include": "#function-declarations" },
-    { "include": "#class-declarations" },
-    { "include": "#booleans" },
-    { "include": "#nil" },
-    { "include": "#this-super" },
-    { "include": "#builtins" },
-    { "include": "#operators" },
-    { "include": "#punctuation" },
-    { "include": "#hash-keys" },
-    { "include": "#identifiers" }
+    {
+      "include": "#comments"
+    },
+    {
+      "include": "#strings"
+    },
+    {
+      "include": "#numbers"
+    },
+    {
+      "include": "#keywords"
+    },
+    {
+      "include": "#function-declarations"
+    },
+    {
+      "include": "#class-declarations"
+    },
+    {
+      "include": "#booleans"
+    },
+    {
+      "include": "#this-super"
+    },
+    {
+      "include": "#builtins"
+    },
+    {
+      "include": "#operators"
+    },
+    {
+      "include": "#punctuation"
+    },
+    {
+      "include": "#hash-keys"
+    },
+    {
+      "include": "#types"
+    },
+    {
+      "include": "#identifiers"
+    }
   ],
   "repository": {
     "comments": {
@@ -25,7 +53,9 @@
           "name": "comment.line.double-slash.viri",
           "begin": "//",
           "beginCaptures": {
-            "0": { "name": "punctuation.definition.comment.viri" }
+            "0": {
+              "name": "punctuation.definition.comment.viri"
+            }
           },
           "end": "$",
           "patterns": [
@@ -43,11 +73,15 @@
           "name": "string.quoted.double.viri",
           "begin": "\"",
           "beginCaptures": {
-            "0": { "name": "punctuation.definition.string.begin.viri" }
+            "0": {
+              "name": "punctuation.definition.string.begin.viri"
+            }
           },
           "end": "\"",
           "endCaptures": {
-            "0": { "name": "punctuation.definition.string.end.viri" }
+            "0": {
+              "name": "punctuation.definition.string.end.viri"
+            }
           },
           "patterns": [
             {
@@ -70,11 +104,15 @@
       "patterns": [
         {
           "name": "keyword.control.viri",
-          "match": "\\b(?:and|or|if|else|for|while|return|break)\\b"
+          "match": "\\b(?:and|or|if|else|for|while|return|break|continue)\\b"
+        },
+        {
+          "name": "keyword.control.import.viri",
+          "match": "\\b(?:import|export|as)\\b"
         },
         {
           "name": "storage.type.var.viri",
-          "match": "\\bvar\\b"
+          "match": "\\b(?:var|const)\\b"
         },
         {
           "name": "support.function.print.viri",
@@ -88,8 +126,12 @@
           "name": "meta.function.declaration.viri",
           "match": "\\b(fun)\\b\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
           "captures": {
-            "1": { "name": "keyword.declaration.function.viri" },
-            "2": { "name": "entity.name.function.viri" }
+            "1": {
+              "name": "keyword.declaration.function.viri"
+            },
+            "2": {
+              "name": "entity.name.function.viri"
+            }
           }
         }
       ]
@@ -100,9 +142,15 @@
           "name": "meta.class.declaration.viri",
           "match": "\\b(class)\\b\\s+([a-zA-Z_][a-zA-Z0-9_]*)(?:\\s*<\\s*([a-zA-Z_][a-zA-Z0-9_]*))?",
           "captures": {
-            "1": { "name": "keyword.declaration.class.viri" },
-            "2": { "name": "entity.name.type.class.viri" },
-            "3": { "name": "entity.other.inherited-class.viri" }
+            "1": {
+              "name": "keyword.declaration.class.viri"
+            },
+            "2": {
+              "name": "entity.name.type.class.viri"
+            },
+            "3": {
+              "name": "entity.other.inherited-class.viri"
+            }
           }
         }
       ]
@@ -112,14 +160,6 @@
         {
           "name": "constant.language.boolean.viri",
           "match": "\\b(?:true|false)\\b"
-        }
-      ]
-    },
-    "nil": {
-      "patterns": [
-        {
-          "name": "constant.language.null.viri",
-          "match": "\\bnil\\b"
         }
       ]
     },
@@ -161,8 +201,12 @@
           "name": "support.type.property-name.viri",
           "match": "(?:\"([^\"]+)\")\\s*:|\\b([a-zA-Z_][a-zA-Z0-9_]*)\\s*:",
           "captures": {
-            "1": { "name": "string.unquoted.property.viri" },
-            "2": { "name": "variable.other.property.viri" }
+            "1": {
+              "name": "string.unquoted.property.viri"
+            },
+            "2": {
+              "name": "variable.other.property.viri"
+            }
           }
         }
       ]
@@ -172,6 +216,20 @@
         {
           "name": "variable.other.viri",
           "match": "\\b[a-zA-Z_][a-zA-Z0-9_]*\\b"
+        }
+      ]
+    },
+    "types": {
+      "patterns": [
+        {
+          "comment": "Builtin type names. They are predeclared identifiers rather than keywords, but highlighting them as types is what a reader expects.",
+          "name": "support.type.primitive.viri",
+          "match": "\\b(?:number|string|bool)\\b"
+        },
+        {
+          "comment": "'map' is reserved because it is structural syntax, like 'fun'.",
+          "name": "storage.type.map.viri",
+          "match": "\\bmap\\b"
         }
       ]
     }

@@ -12,6 +12,12 @@ viri-syntax-plugin/*.vsix
 
 /node_modules
 
+# This project uses npm. Lockfiles from other package managers are accidents
+# of running the wrong install command; CI reads package-lock.json.
+pnpm-lock.yaml
+pnpm-workspace.yaml
+yarn.lock
+
 .cursor/*
 
 # Built wasm artifacts (built by CI / make build-playground)

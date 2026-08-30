@@ -17,14 +17,14 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Viri",
-  description: "A simple, expressive programming language designed to be easy to learn and use.",
+  description: "A small, statically typed programming language, built from scratch in Go to learn how languages work.",
   metadataBase: new URL("https://harshagw.github.io/viri"),
   keywords: ["viri", "programming language", "interpreter", "compiler", "bytecode", "vm", "learning"],
   authors: [{ name: "Harsh Agarwal", url: "https://harshagw.github.io" }],
   creator: "Harsh Agarwal",
   openGraph: {
     title: "Viri",
-    description: "A simple, expressive programming language designed to be easy to learn and use.",
+    description: "A small, statically typed programming language, built from scratch in Go to learn how languages work.",
     siteName: "Viri",
     type: "website",
     locale: "en_US",
@@ -43,7 +43,7 @@ export const metadata: Metadata = {
     site: "@harsh_agw",
     creator: "@harsh_agw",
     title: "Viri",
-    description: "A simple, expressive programming language designed to be easy to learn and use.",
+    description: "A small, statically typed programming language, built from scratch in Go to learn how languages work.",
     images: {
       url: "https://harshagw.github.io/viri/og-image.png",
       alt: "Viri - A simple, expressive programming language",
@@ -55,7 +55,7 @@ export const metadata: Metadata = {
   },
   other: {
     "linkedin:title": "Viri",
-    "linkedin:description": "A simple, expressive programming language designed to be easy to learn and use.",
+    "linkedin:description": "A small, statically typed programming language, built from scratch in Go to learn how languages work.",
   },
 };
 
