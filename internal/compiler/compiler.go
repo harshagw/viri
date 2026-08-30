@@ -8,6 +8,7 @@ import (
 	"github.com/harshagw/viri/internal/objects"
 	"github.com/harshagw/viri/internal/stdlib"
 	"github.com/harshagw/viri/internal/token"
+	"github.com/harshagw/viri/internal/types"
 )
 
 type CompilationScope struct {
@@ -35,6 +36,11 @@ type Compiler struct {
 
 	classCompiler     *ClassCompiler // nil when not compiling a class
 	diagnosticHandler objects.DiagnosticHandler
+
+	// exprTypes is the checker's side table: the type of every expression in
+	// the program. Codegen ignores it today; Phase 3 reads it to lay out
+	// field access and Phase 4 to pick typed arithmetic opcodes.
+	exprTypes map[ast.Expr]types.Type
 
 	// Track highest global index used (for NumGlobals calculation)
 	maxGlobalIndex int

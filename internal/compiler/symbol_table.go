@@ -20,12 +20,17 @@ type Symbol struct {
 	Pending    bool // hoisted but its declaration not yet compiled
 }
 
-// ImportInfo tracks an imported module's exports
+// ImportInfo tracks an imported module's exports.
+//
+// The two kinds resolve differently: a user module's export is reached by
+// (module index, export index), while a stdlib export is copied into the
+// constants pool by name, so only its name set is needed.
 type ImportInfo struct {
-	ModuleIndex int
-	Exports     map[string]int // export name -> export index
-	IsStdlib    bool           // true if this is a stdlib import
-	StdlibName  string         // stdlib module name (e.g., "std:math")
+	ModuleIndex  int
+	Exports      map[string]int      // user modules: export name -> export index
+	StdlibExport map[string]struct{} // stdlib: the set of exported names
+	IsStdlib     bool
+	StdlibName   string // stdlib module name (e.g., "std:math")
 }
 
 type SymbolTable struct {
@@ -270,13 +275,14 @@ func (s *SymbolTable) DefineImport(alias string, moduleIndex int, exports map[st
 	}
 }
 
-// DefineStdlibImport registers a stdlib import alias
-func (s *SymbolTable) DefineStdlibImport(alias string, stdlibName string, exports map[string]int) {
+// DefineStdlibImport registers a stdlib import alias. Stdlib exports resolve
+// by name, so only the set of names is needed.
+func (s *SymbolTable) DefineStdlibImport(alias string, stdlibName string, exports map[string]struct{}) {
 	s.imports[alias] = &ImportInfo{
-		ModuleIndex: -1, // not used for stdlib
-		Exports:     exports,
-		IsStdlib:    true,
-		StdlibName:  stdlibName,
+		ModuleIndex:  -1, // not used for stdlib
+		StdlibExport: exports,
+		IsStdlib:     true,
+		StdlibName:   stdlibName,
 	}
 }
 
@@ -299,7 +305,7 @@ func (s *SymbolTable) ResolveStdlibImport(alias string, exportName string) (stri
 	if !ok || !importInfo.IsStdlib {
 		return "", "", false
 	}
-	if _, ok := importInfo.Exports[exportName]; !ok {
+	if _, ok := importInfo.StdlibExport[exportName]; !ok {
 		return "", "", false
 	}
 	return importInfo.StdlibName, exportName, true

@@ -2813,10 +2813,12 @@ func TestStdlibImportSymbolTable(t *testing.T) {
 	// Test that DefineStdlibImport correctly registers stdlib imports
 	st := NewSymbolTable()
 
-	exports := map[string]int{
-		"PI":   0,
-		"sqrt": 1,
-		"abs":  2,
+	// Only membership matters: stdlib exports resolve by name into the
+	// constants pool, never by index.
+	exports := map[string]struct{}{
+		"PI":   {},
+		"sqrt": {},
+		"abs":  {},
 	}
 	st.DefineStdlibImport("math", "std:math", exports)
 

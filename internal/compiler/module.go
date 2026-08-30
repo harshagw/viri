@@ -26,6 +26,15 @@ func (c *Compiler) CompileProgram(entryPath string) (*objects.CompiledProgram, e
 		c.moduleIndices[path] = i
 	}
 
+	// Type-check every module before compiling any of them. Codegen is
+	// untyped and assumes a well-typed program, so nothing may be emitted
+	// until the whole program checks.
+	exprTypes, err := c.checkProgram()
+	if err != nil {
+		return nil, err
+	}
+	c.exprTypes = exprTypes
+
 	// Compile all modules using shared constants table
 	compiledModules := make([]objects.CompiledModule, len(c.moduleOrder))
 
@@ -63,11 +72,11 @@ func (c *Compiler) compileModule(path string) (objects.CompiledModule, error) {
 
 		// Handle stdlib imports (e.g., "std:math")
 		if stdlib.IsStdLib(importPath) {
-			exportMap, exists := stdlib.GetExportMap(importPath)
+			exportNames, exists := stdlib.GetExportNameSet(importPath)
 			if !exists {
 				return objects.CompiledModule{}, fmt.Errorf("unknown stdlib module: %s", importPath)
 			}
-			c.symbolTable.DefineStdlibImport(importStmt.Alias.Lexeme, importPath, exportMap)
+			c.symbolTable.DefineStdlibImport(importStmt.Alias.Lexeme, importPath, exportNames)
 			continue
 		}
 

@@ -28,21 +28,24 @@ func IsStdLib(importPath string) bool {
 	return strings.HasPrefix(importPath, StdPrefix)
 }
 
-// GetExportMap returns a map of export names to indices for a stdlib module.
-// This is used by the compiler for module import resolution.
-func GetExportMap(name string) (map[string]int, bool) {
+// GetExportNameSet returns the set of names a stdlib module exports.
+//
+// Only membership matters. Stdlib exports are resolved by name into the
+// constants pool, not by index — an earlier version handed back indices
+// assigned by ranging over a Go map, which made them nondeterministic across
+// runs. They were never read, but returning a set says so rather than
+// inviting someone to start trusting them.
+func GetExportNameSet(name string) (map[string]struct{}, bool) {
 	module, ok := Get(name)
 	if !ok {
 		return nil, false
 	}
 
-	exportMap := make(map[string]int)
-	idx := 0
+	names := make(map[string]struct{}, len(module.Exports))
 	for exportName := range module.Exports {
-		exportMap[exportName] = idx
-		idx++
+		names[exportName] = struct{}{}
 	}
-	return exportMap, true
+	return names, true
 }
 
 // init registers all standard library modules.

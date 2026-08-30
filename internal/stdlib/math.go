@@ -6,10 +6,13 @@ import (
 	"math/rand"
 
 	"github.com/harshagw/viri/internal/objects"
+	"github.com/harshagw/viri/internal/types"
 )
 
 // std:math standard library module.
-var MathModule = NewNativeModule("std:math", map[string]objects.Object{
+var MathModule = NewNativeModule("std:math", mathExports, mathSignatures)
+
+var mathExports = map[string]objects.Object{
 	"PI":     objects.NewNumber(math.Pi),
 	"E":      objects.NewNumber(math.E),
 	"abs":    &objects.NativeFunction{Name: "abs", NumArgs: 1, Fn: mathAbs},
@@ -26,7 +29,37 @@ var MathModule = NewNativeModule("std:math", map[string]objects.Object{
 	"min":    &objects.NativeFunction{Name: "min", NumArgs: 2, Fn: mathMin},
 	"max":    &objects.NativeFunction{Name: "max", NumArgs: 2, Fn: mathMax},
 	"random": &objects.NativeFunction{Name: "random", NumArgs: 0, Fn: mathRandom},
-})
+}
+
+// mathSignatures is the compile-time view of the module. Every export needs an
+// entry: the checker resolves `math.sqrt` through this, and a missing name
+// reads as "not exported".
+var mathSignatures = map[string]types.Type{
+	"PI": types.Number,
+	"E":  types.Number,
+
+	"abs":   unaryNumber,
+	"sqrt":  unaryNumber,
+	"floor": unaryNumber,
+	"ceil":  unaryNumber,
+	"round": unaryNumber,
+	"sin":   unaryNumber,
+	"cos":   unaryNumber,
+	"tan":   unaryNumber,
+	"log":   unaryNumber,
+	"exp":   unaryNumber,
+
+	"pow": binaryNumber,
+	"min": binaryNumber,
+	"max": binaryNumber,
+
+	"random": &types.Function{Params: nil, Return: types.Number},
+}
+
+var (
+	unaryNumber  = &types.Function{Params: []types.Type{types.Number}, Return: types.Number}
+	binaryNumber = &types.Function{Params: []types.Type{types.Number, types.Number}, Return: types.Number}
+)
 
 // Helper to extract a number from an argument
 func requireNumber(args []objects.Object, index int, fnName string) (float64, error) {
