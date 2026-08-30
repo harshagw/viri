@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"strings"
 	"testing"
 
 	"reflect"
@@ -64,14 +65,6 @@ func TestParseLiteralExpressions(t *testing.T) {
 			},
 			false,
 		},
-		{
-			"nil",
-			[]token.Token{
-				token.New(token.NIL, "nil", nil, 1, nil),
-				token.New(token.EOF, "", nil, 1, nil),
-			},
-			nil,
-		},
 	}
 
 	for _, tt := range tests {
@@ -82,6 +75,26 @@ func TestParseLiteralExpressions(t *testing.T) {
 			}
 			assertLiteral(t, expr, tt.expected)
 		})
+	}
+}
+
+// Viri has no nil value: every type is non-nilable, so `nil` is rejected in
+// expression position. The token is still scanned so the message can say what
+// is actually wrong rather than "undefined variable".
+func TestNilIsNotAnExpression(t *testing.T) {
+	tokens := []token.Token{
+		token.New(token.NIL, "nil", nil, 1, nil),
+		token.New(token.EOF, "", nil, 1, nil),
+	}
+	_, collector, err := parseExpressionFromTokens(tokens)
+	if err == nil {
+		t.Fatal("expected 'nil' to be rejected in expression position")
+	}
+	if len(collector.Errors) == 0 {
+		t.Fatal("expected a diagnostic for 'nil'")
+	}
+	if msg := collector.Errors[0].Message; !strings.Contains(msg, "'nil' is not a value") {
+		t.Errorf("unexpected diagnostic: %q", msg)
 	}
 }
 
@@ -627,8 +640,12 @@ func TestPrattParseFunctionExpr(t *testing.T) {
 				token.New(token.FUN, "fun", nil, 1, nil),
 				token.New(token.LEFT_PAREN, "(", nil, 1, nil),
 				token.New(token.IDENTIFIER, "a", nil, 1, nil),
+				token.New(token.COLON, ":", nil, 1, nil),
+				token.New(token.IDENTIFIER, "number", "number", 1, nil),
 				token.New(token.COMMA, ",", nil, 1, nil),
 				token.New(token.IDENTIFIER, "b", nil, 1, nil),
+				token.New(token.COLON, ":", nil, 1, nil),
+				token.New(token.IDENTIFIER, "number", "number", 1, nil),
 				token.New(token.RIGHT_PAREN, ")", nil, 1, nil),
 				token.New(token.LEFT_BRACE, "{", nil, 1, nil),
 				token.New(token.RIGHT_BRACE, "}", nil, 1, nil),
@@ -639,8 +656,8 @@ func TestPrattParseFunctionExpr(t *testing.T) {
 				if len(fn.Params) != 2 {
 					t.Errorf("expected 2 params, got %d", len(fn.Params))
 				}
-				if fn.Params[0].Lexeme != "a" || fn.Params[1].Lexeme != "b" {
-					t.Errorf("expected params [a, b], got [%s, %s]", fn.Params[0].Lexeme, fn.Params[1].Lexeme)
+				if fn.Params[0].Name.Lexeme != "a" || fn.Params[1].Name.Lexeme != "b" {
+					t.Errorf("expected params [a, b], got [%s, %s]", fn.Params[0].Name.Lexeme, fn.Params[1].Name.Lexeme)
 				}
 			},
 		},

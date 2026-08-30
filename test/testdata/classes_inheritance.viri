@@ -1,28 +1,30 @@
 // Inheritance - Basic
 
 class Animal {
-  init(name) {
+  name: string;
+  init(name: string) {
     this.name = name;
   }
 
-  speak() {
+  speak(): string {
     return this.name + " makes a sound";
   }
 }
 
 class Cat < Animal {
-  init(name, color) {
+  color: string;
+  init(name: string, color: string) {
     super.init(name);
     this.color = color;
   }
 
-  speak() {
+  speak(): string {
     return this.name + " says meow!";
   }
 }
 
-var animal = Animal("Generic");
-var cat = Cat("Whiskers", "orange");
+var animal: Animal = Animal("Generic");
+var cat: Cat = Cat("Whiskers", "orange");
 print animal.speak();
 print cat.speak();
 print cat.color;
@@ -30,70 +32,73 @@ print cat.color;
 // Inheritance - Calling parent methods via super
 
 class Vehicle {
-  init(brand) {
+  brand: string;
+  init(brand: string) {
     this.brand = brand;
   }
 
-  describe() {
+  describe(): string {
     return "Brand: " + this.brand;
   }
 }
 
 class Car < Vehicle {
-  init(brand, model) {
+  model: string;
+  init(brand: string, model: string) {
     super.init(brand);
     this.model = model;
   }
 
-  describe() {
+  describe(): string {
     return super.describe() + ", Model: " + this.model;
   }
 }
 
-var car = Car("Toyota", "Camry");
+var car: Car = Car("Toyota", "Camry");
 print car.describe();
 
 // Inherited method access
 
 class Shape {
-  init(name) {
+  name: string;
+  init(name: string) {
     this.name = name;
   }
 
-  getName() {
+  getName(): string {
     return this.name;
   }
 }
 
 class Circle < Shape {
-  init(radius) {
+  radius: number;
+  init(radius: number) {
     super.init("Circle");
     this.radius = radius;
   }
 
-  getArea() {
+  getArea(): number {
     return 3.14159 * this.radius * this.radius;
   }
 }
 
-var circle = Circle(5);
+var circle: Circle = Circle(5);
 print circle.getName();
 print circle.getArea();
 
 // Overriding and extending parent behavior
 
 class Logger {
-  log(msg) {
+  log(msg: string): string {
     return "[LOG] " + msg;
   }
 }
 
 class TimestampLogger < Logger {
-  log(msg) {
+  log(msg: string): string {
     return "[2024] " + super.log(msg);
   }
 }
 
-var logger = TimestampLogger();
+var logger: TimestampLogger = TimestampLogger();
 print logger.log("Hello");
-

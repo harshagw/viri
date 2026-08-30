@@ -36,11 +36,11 @@ print math.min(-1, 1);
 print math.max(-1, 1);
 
 // Test using math in expressions
-var radius = 5;
-var area = math.PI * math.pow(radius, 2);
+var radius: number = 5;
+var area: number = math.PI * math.pow(radius, 2);
 print area;
 
 // Test chaining operations
-var x = math.sqrt(math.pow(3, 2) + math.pow(4, 2));
+var x: number = math.sqrt(math.pow(3, 2) + math.pow(4, 2));
 print x;
 

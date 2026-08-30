@@ -1,15 +1,15 @@
 // Top-level functions can reference globals declared later in the file
-fun isEven(n) {
+fun isEven(n: number): bool {
   if (n == 0) { return true; }
   return isOdd(n - 1);
 }
-fun isOdd(n) {
+fun isOdd(n: number): bool {
   if (n == 0) { return false; }
   return isEven(n - 1);
 }
 print isEven(10);
 print isOdd(7);
 
-fun callsLater() { return declaredLater * 2; }
-var declaredLater = 21;
+fun callsLater(): number { return declaredLater * 2; }
+var declaredLater: number = 21;
 print callsLater();

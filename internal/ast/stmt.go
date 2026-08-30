@@ -24,6 +24,7 @@ func (s *PrintStmt) GetPrimaryToken() *token.Token { return s.Expr.GetPrimaryTok
 
 type VarDeclStmt struct {
 	Name        *token.Token
+	Type        TypeExpr // never nil: the grammar requires an annotation
 	Initializer Expr
 	Exported    bool
 	IsConst     bool
@@ -34,14 +35,19 @@ func (s *VarDeclStmt) GetPrimaryToken() *token.Token { return s.Name }
 
 type BlockStmt struct {
 	Statements []Stmt
+	// LeftBrace is the opening '{', used as the position when the block is
+	// empty and so has no statement to point at.
+	LeftBrace *token.Token
 }
 
 func (*BlockStmt) stmtNode() {}
 func (s *BlockStmt) GetPrimaryToken() *token.Token {
 	if len(s.Statements) > 0 {
-		return s.Statements[0].GetPrimaryToken()
+		if tok := s.Statements[0].GetPrimaryToken(); tok != nil {
+			return tok
+		}
 	}
-	return nil
+	return s.LeftBrace
 }
 
 type IfStmt struct {
@@ -66,17 +72,24 @@ type ForStmt struct {
 	Condition   Expr
 	Increment   Expr
 	Body        Stmt
+	// Keyword is the 'for' itself, used as the position when every clause
+	// is omitted (`for (;;) { ... }`).
+	Keyword *token.Token
 }
 
 func (*ForStmt) stmtNode() {}
 func (s *ForStmt) GetPrimaryToken() *token.Token {
 	if s.Initializer != nil {
-		return s.Initializer.GetPrimaryToken()
+		if tok := s.Initializer.GetPrimaryToken(); tok != nil {
+			return tok
+		}
 	}
 	if s.Condition != nil {
-		return s.Condition.GetPrimaryToken()
+		if tok := s.Condition.GetPrimaryToken(); tok != nil {
+			return tok
+		}
 	}
-	return nil
+	return s.Keyword
 }
 
 type BreakStmt struct {
@@ -94,10 +107,11 @@ func (*ContinueStmt) stmtNode()                       {}
 func (s *ContinueStmt) GetPrimaryToken() *token.Token { return s.Keyword }
 
 type FunctionStmt struct {
-	Name     *token.Token
-	Params   []*token.Token
-	Body     *BlockStmt
-	Exported bool
+	Name       *token.Token
+	Params     []Param
+	ReturnType TypeExpr // nil means the function returns nothing
+	Body       *BlockStmt
+	Exported   bool
 }
 
 func (*FunctionStmt) stmtNode()                       {}
@@ -114,6 +128,7 @@ func (s *ReturnStmt) GetPrimaryToken() *token.Token { return s.Keyword }
 type ClassStmt struct {
 	Name       *token.Token
 	SuperClass *VariableExpr
+	Fields     []*FieldDecl
 	Methods    []*FunctionStmt
 	Exported   bool
 }

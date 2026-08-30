@@ -26,10 +26,13 @@ func (e *GroupingExpr) GetPrimaryToken() *token.Token { return e.Expr.GetPrimary
 
 type LiteralExpr struct {
 	Value interface{}
+	// Token is the literal's own token. It carries no meaning beyond
+	// position.
+	Token *token.Token
 }
 
 func (*LiteralExpr) exprNode()                       {}
-func (e *LiteralExpr) GetPrimaryToken() *token.Token { return nil }
+func (e *LiteralExpr) GetPrimaryToken() *token.Token { return e.Token }
 
 type UnaryExpr struct {
 	Operator *token.Token
@@ -106,14 +109,20 @@ func (e *SuperExpr) GetPrimaryToken() *token.Token { return e.Keyword }
 
 type ArrayLiteralExpr struct {
 	Elements []Expr
+	// Bracket is the opening '[', mirroring HashLiteralExpr.Brace. It is
+	// the position used when the literal is empty and so has no element
+	// to point at.
+	Bracket *token.Token
 }
 
 func (*ArrayLiteralExpr) exprNode() {}
 func (e *ArrayLiteralExpr) GetPrimaryToken() *token.Token {
 	if len(e.Elements) > 0 {
-		return e.Elements[0].GetPrimaryToken()
+		if tok := e.Elements[0].GetPrimaryToken(); tok != nil {
+			return tok
+		}
 	}
-	return nil
+	return e.Bracket
 }
 
 type HashPair struct {
@@ -149,14 +158,19 @@ func (*SetIndexExpr) exprNode()                       {}
 func (e *SetIndexExpr) GetPrimaryToken() *token.Token { return e.Bracket }
 
 type FunctionExpr struct {
-	Params []*token.Token
-	Body   *BlockStmt
+	Params     []Param
+	ReturnType TypeExpr // nil means the function returns nothing
+	Body       *BlockStmt
+	Keyword    *token.Token // the 'fun'
 }
 
 func (*FunctionExpr) exprNode() {}
 func (e *FunctionExpr) GetPrimaryToken() *token.Token {
+	if e.Keyword != nil {
+		return e.Keyword
+	}
 	if len(e.Params) > 0 {
-		return e.Params[0]
+		return e.Params[0].Name
 	}
 	if e.Body != nil {
 		return e.Body.GetPrimaryToken()

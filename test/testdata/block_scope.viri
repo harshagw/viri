@@ -1,7 +1,7 @@
-var initial = 10;
+var initial: number = 10;
 {
-  var initial = 20;
-  fun add(a,b){
+  var initial: number = 20;
+  fun add(a: number, b: number): number {
     return initial + a + b;
   }
   print add(10, 20);
@@ -10,7 +10,7 @@ print initial;
 
 {
   initial = 30;
-  var initial = 40;
+  var initial: number = 40;
   print initial;
 }
 print initial;

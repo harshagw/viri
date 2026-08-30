@@ -1,6 +1,6 @@
 // Binary operands evaluate left to right in both engines
-fun a() { print "a"; return 1; }
-fun b() { print "b"; return 2; }
+fun a(): number { print "a"; return 1; }
+fun b(): number { print "b"; return 2; }
 print a() + b();
 print a() - b();
 print a() < b();

@@ -1,2 +1,2 @@
-fun f(n) { return f(n + 1); }
+fun f(n: number): number { return f(n + 1); }
 print f(0);

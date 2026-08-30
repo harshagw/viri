@@ -10,7 +10,7 @@ if (false) {
 	print "false";
 }
 
-var x = 10;
+var x: number = 10;
 if (x > 5) {
 	print "greater than 5";
 }

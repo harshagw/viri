@@ -1,7 +1,7 @@
 // A nested function that mentions the enclosing function's name calls
 // the enclosing function, not itself
-fun outer(n) {
-  fun inner() {
+fun outer(n: number): string {
+  fun inner(): string {
     if (n > 0) { return outer(n - 1); }
     return "done";
   }

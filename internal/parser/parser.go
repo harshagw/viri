@@ -122,6 +122,11 @@ func (p *Parser) parseVarDecl(isConst bool) (ast.Stmt, error) {
 		return nil, err
 	}
 
+	declType, err := p.parseTypeAnnotation("variable name")
+	if err != nil {
+		return nil, err
+	}
+
 	var initializer ast.Expr
 	if p.match(token.EQUAL) {
 		initializer, err = p.parseExpr()
@@ -136,6 +141,7 @@ func (p *Parser) parseVarDecl(isConst bool) (ast.Stmt, error) {
 
 	return &ast.VarDeclStmt{
 		Name:        name,
+		Type:        declType,
 		Initializer: initializer,
 		IsConst:     isConst,
 	}, nil
@@ -209,8 +215,19 @@ func (p *Parser) parseClass() (ast.Stmt, error) {
 	if _, err = p.consume(token.LEFT_BRACE, "Expect '{' before class body."); err != nil {
 		return nil, err
 	}
+	fields := make([]*ast.FieldDecl, 0)
 	methods := make([]*ast.FunctionStmt, 0)
 	for !p.isAtEnd() && !p.check(token.RIGHT_BRACE) {
+		// A member is a field if the name is followed by ':', a method if it
+		// is followed by '('. Nothing else can start a class member.
+		if p.check(token.IDENTIFIER) && p.checkNext(token.COLON) {
+			field, err := p.parseFieldDecl()
+			if err != nil {
+				return nil, err
+			}
+			fields = append(fields, field)
+			continue
+		}
 		method, err := p.parseFunction()
 		if err != nil {
 			return nil, err
@@ -222,9 +239,26 @@ func (p *Parser) parseClass() (ast.Stmt, error) {
 	}
 	return &ast.ClassStmt{
 		Name:       name,
+		Fields:     fields,
 		Methods:    methods,
 		SuperClass: superclass,
 	}, nil
+}
+
+// parseFieldDecl parses one declared class field: `name: type;`.
+func (p *Parser) parseFieldDecl() (*ast.FieldDecl, error) {
+	name, err := p.consume(token.IDENTIFIER, "Expect field name.")
+	if err != nil {
+		return nil, err
+	}
+	fieldType, err := p.parseTypeAnnotation("field name")
+	if err != nil {
+		return nil, err
+	}
+	if _, err := p.consume(token.SEMICOLON, "Expect ';' after field declaration."); err != nil {
+		return nil, err
+	}
+	return &ast.FieldDecl{Name: name, Type: fieldType}, nil
 }
 
 func (p *Parser) parseFunction() (ast.Stmt, error) {
@@ -232,49 +266,65 @@ func (p *Parser) parseFunction() (ast.Stmt, error) {
 	if err != nil {
 		return nil, err
 	}
-	params, body, err := p.parseFunctionBody(objects.FunctionTypeNamed)
+	params, returnType, body, err := p.parseFunctionBody(objects.FunctionTypeNamed)
 	if err != nil {
 		return nil, err
 	}
 	return &ast.FunctionStmt{
-		Name:   name,
-		Params: params,
-		Body:   body,
+		Name:       name,
+		Params:     params,
+		ReturnType: returnType,
+		Body:       body,
 	}, nil
 }
 
-func (p *Parser) parseFunctionBody(functionType objects.FunctionType) ([]*token.Token, *ast.BlockStmt, error) {
+func (p *Parser) parseFunctionBody(functionType objects.FunctionType) ([]ast.Param, ast.TypeExpr, *ast.BlockStmt, error) {
 	if _, err := p.consume(token.LEFT_PAREN, "Expect '(' after "+functionType.String()+"."); err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	parameters := make([]*token.Token, 0)
+	parameters := make([]ast.Param, 0)
 	if !p.check(token.RIGHT_PAREN) {
 		for {
 			if len(parameters) >= 255 {
-				return nil, nil, p.error(p.peekPrevious(), "Can't have more than 255 parameters.")
+				return nil, nil, nil, p.error(p.peekPrevious(), "Can't have more than 255 parameters.")
 			}
 
-			parameter, err := p.consume(token.IDENTIFIER, "Expect parameter name.")
+			name, err := p.consume(token.IDENTIFIER, "Expect parameter name.")
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, nil, err
 			}
-			parameters = append(parameters, parameter)
+			paramType, err := p.parseTypeAnnotation("parameter name")
+			if err != nil {
+				return nil, nil, nil, err
+			}
+			parameters = append(parameters, ast.Param{Name: name, Type: paramType})
 			if !p.match(token.COMMA) {
 				break
 			}
 		}
 	}
 	if _, err := p.consume(token.RIGHT_PAREN, "Expect ')' after parameters."); err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
+	}
+	// The return type is optional; omitting it means the function returns
+	// nothing. This is unambiguous because a body always starts with '{' and
+	// no type does.
+	var returnType ast.TypeExpr
+	if p.match(token.COLON) {
+		var err error
+		returnType, err = p.parseType()
+		if err != nil {
+			return nil, nil, nil, err
+		}
 	}
 	if _, err := p.consume(token.LEFT_BRACE, "Expect '{' before block."); err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	body, err := p.parseBlockStmt()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	return parameters, body, nil
+	return parameters, returnType, body, nil
 }
 
 func (p *Parser) parseWhileStmt() (ast.Stmt, error) {
@@ -299,6 +349,8 @@ func (p *Parser) parseWhileStmt() (ast.Stmt, error) {
 }
 
 func (p *Parser) parseForStmt() (ast.Stmt, error) {
+	// The caller has already consumed 'for'.
+	keyword := p.peekPrevious()
 	if _, err := p.consume(token.LEFT_PAREN, "Expect '(' after for."); err != nil {
 		return nil, err
 	}
@@ -359,6 +411,7 @@ func (p *Parser) parseForStmt() (ast.Stmt, error) {
 		Condition:   condition,
 		Increment:   increment,
 		Body:        body,
+		Keyword:     keyword,
 	}, nil
 }
 
@@ -395,6 +448,8 @@ func (p *Parser) parseIfStmt() (ast.Stmt, error) {
 }
 
 func (p *Parser) parseBlockStmt() (*ast.BlockStmt, error) {
+	// The caller has already consumed '{'.
+	leftBrace := p.peekPrevious()
 	statements := []ast.Stmt{}
 	for !p.isAtEnd() && !p.check(token.RIGHT_BRACE) {
 		stmt := p.parseDeclaration()
@@ -407,6 +462,7 @@ func (p *Parser) parseBlockStmt() (*ast.BlockStmt, error) {
 	}
 	return &ast.BlockStmt{
 		Statements: statements,
+		LeftBrace:  leftBrace,
 	}, nil
 }
 

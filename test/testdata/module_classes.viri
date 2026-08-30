@@ -1,6 +1,7 @@
 // Module with exported class
 export class Counter {
-    init(start) {
+    value: number;
+    init(start: number) {
         this.value = start;
     }
 
@@ -8,15 +9,16 @@ export class Counter {
         this.value = this.value + 1;
     }
 
-    getValue() {
+    getValue(): number {
         return this.value;
     }
 }
 
 export class Point {
-    init(x, y) {
+    x: number;
+    y: number;
+    init(x: number, y: number) {
         this.x = x;
         this.y = y;
     }
 }
-

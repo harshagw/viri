@@ -1875,7 +1875,7 @@ func TestCallingFunctionsWithoutArguments(t *testing.T) {
 			Statements: []ast.Stmt{
 				&ast.FunctionStmt{
 					Name:   &token.Token{Type: token.IDENTIFIER, Lexeme: "fivePlusTen"},
-					Params: []*token.Token{},
+					Params: []ast.Param{},
 					Body: &ast.BlockStmt{
 						Statements: []ast.Stmt{
 							&ast.ReturnStmt{
@@ -1904,7 +1904,7 @@ func TestCallingFunctionsWithoutArguments(t *testing.T) {
 			Statements: []ast.Stmt{
 				&ast.FunctionStmt{
 					Name:   &token.Token{Type: token.IDENTIFIER, Lexeme: "one"},
-					Params: []*token.Token{},
+					Params: []ast.Param{},
 					Body: &ast.BlockStmt{
 						Statements: []ast.Stmt{
 							&ast.ReturnStmt{
@@ -1916,7 +1916,7 @@ func TestCallingFunctionsWithoutArguments(t *testing.T) {
 				},
 				&ast.FunctionStmt{
 					Name:   &token.Token{Type: token.IDENTIFIER, Lexeme: "two"},
-					Params: []*token.Token{},
+					Params: []ast.Param{},
 					Body: &ast.BlockStmt{
 						Statements: []ast.Stmt{
 							&ast.ReturnStmt{
@@ -1957,7 +1957,7 @@ func TestFunctionsWithReturnStatement(t *testing.T) {
 			Statements: []ast.Stmt{
 				&ast.FunctionStmt{
 					Name:   &token.Token{Type: token.IDENTIFIER, Lexeme: "earlyExit"},
-					Params: []*token.Token{},
+					Params: []ast.Param{},
 					Body: &ast.BlockStmt{
 						Statements: []ast.Stmt{
 							&ast.ReturnStmt{
@@ -1990,7 +1990,7 @@ func TestFunctionsWithoutReturnValue(t *testing.T) {
 			Statements: []ast.Stmt{
 				&ast.FunctionStmt{
 					Name:   &token.Token{Type: token.IDENTIFIER, Lexeme: "noReturn"},
-					Params: []*token.Token{},
+					Params: []ast.Param{},
 					Body: &ast.BlockStmt{
 						Statements: []ast.Stmt{},
 					},
@@ -2010,7 +2010,7 @@ func TestFunctionsWithoutReturnValue(t *testing.T) {
 			Statements: []ast.Stmt{
 				&ast.FunctionStmt{
 					Name:   &token.Token{Type: token.IDENTIFIER, Lexeme: "noReturn"},
-					Params: []*token.Token{},
+					Params: []ast.Param{},
 					Body: &ast.BlockStmt{
 						Statements: []ast.Stmt{
 							&ast.ReturnStmt{
@@ -2042,7 +2042,7 @@ func TestCallingFunctionsWithBindings(t *testing.T) {
 			Statements: []ast.Stmt{
 				&ast.FunctionStmt{
 					Name:   &token.Token{Type: token.IDENTIFIER, Lexeme: "one"},
-					Params: []*token.Token{},
+					Params: []ast.Param{},
 					Body: &ast.BlockStmt{
 						Statements: []ast.Stmt{
 							&ast.VarDeclStmt{
@@ -2074,7 +2074,7 @@ func TestCallingFunctionsWithBindings(t *testing.T) {
 			Statements: []ast.Stmt{
 				&ast.FunctionStmt{
 					Name:   &token.Token{Type: token.IDENTIFIER, Lexeme: "oneAndTwo"},
-					Params: []*token.Token{},
+					Params: []ast.Param{},
 					Body: &ast.BlockStmt{
 						Statements: []ast.Stmt{
 							&ast.VarDeclStmt{
@@ -2124,8 +2124,8 @@ func TestCallingFunctionsWithArguments(t *testing.T) {
 			Statements: []ast.Stmt{
 				&ast.FunctionStmt{
 					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "identity"},
-					Params: []*token.Token{
-						{Type: token.IDENTIFIER, Lexeme: "a"},
+					Params: []ast.Param{
+						{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "a"}},
 					},
 					Body: &ast.BlockStmt{
 						Statements: []ast.Stmt{
@@ -2155,9 +2155,9 @@ func TestCallingFunctionsWithArguments(t *testing.T) {
 			Statements: []ast.Stmt{
 				&ast.FunctionStmt{
 					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "sum"},
-					Params: []*token.Token{
-						{Type: token.IDENTIFIER, Lexeme: "a"},
-						{Type: token.IDENTIFIER, Lexeme: "b"},
+					Params: []ast.Param{
+						{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "a"}},
+						{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "b"}},
 					},
 					Body: &ast.BlockStmt{
 						Statements: []ast.Stmt{
@@ -2194,9 +2194,9 @@ func TestCallingFunctionsWithArguments(t *testing.T) {
 			Statements: []ast.Stmt{
 				&ast.FunctionStmt{
 					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "sum"},
-					Params: []*token.Token{
-						{Type: token.IDENTIFIER, Lexeme: "a"},
-						{Type: token.IDENTIFIER, Lexeme: "b"},
+					Params: []ast.Param{
+						{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "a"}},
+						{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "b"}},
 					},
 					Body: &ast.BlockStmt{
 						Statements: []ast.Stmt{
@@ -2252,9 +2252,9 @@ func TestCallingFunctionsWithArgumentsAndBindings(t *testing.T) {
 				},
 				&ast.FunctionStmt{
 					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "sumPlusGlobal"},
-					Params: []*token.Token{
-						{Type: token.IDENTIFIER, Lexeme: "a"},
-						{Type: token.IDENTIFIER, Lexeme: "b"},
+					Params: []ast.Param{
+						{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "a"}},
+						{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "b"}},
 					},
 					Body: &ast.BlockStmt{
 						Statements: []ast.Stmt{
@@ -2312,7 +2312,7 @@ func TestFirstClassFunctions(t *testing.T) {
 				&ast.VarDeclStmt{
 					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "returnsOne"},
 					Initializer: &ast.FunctionExpr{
-						Params: []*token.Token{},
+						Params: []ast.Param{},
 						Body: &ast.BlockStmt{
 							Statements: []ast.Stmt{
 								&ast.ReturnStmt{
@@ -2340,13 +2340,13 @@ func TestFirstClassFunctions(t *testing.T) {
 				&ast.VarDeclStmt{
 					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "returnsOneReturner"},
 					Initializer: &ast.FunctionExpr{
-						Params: []*token.Token{},
+						Params: []ast.Param{},
 						Body: &ast.BlockStmt{
 							Statements: []ast.Stmt{
 								&ast.VarDeclStmt{
 									Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "returnsOne"},
 									Initializer: &ast.FunctionExpr{
-										Params: []*token.Token{},
+										Params: []ast.Param{},
 										Body: &ast.BlockStmt{
 											Statements: []ast.Stmt{
 												&ast.ReturnStmt{
@@ -2394,8 +2394,8 @@ func TestRecursiveFunctions(t *testing.T) {
 			Statements: []ast.Stmt{
 				&ast.FunctionStmt{
 					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "countDown"},
-					Params: []*token.Token{
-						{Type: token.IDENTIFIER, Lexeme: "x"},
+					Params: []ast.Param{
+						{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "x"}},
 					},
 					Body: &ast.BlockStmt{
 						Statements: []ast.Stmt{
@@ -2453,8 +2453,8 @@ func TestRecursiveFunctions(t *testing.T) {
 			Statements: []ast.Stmt{
 				&ast.FunctionStmt{
 					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "fib"},
-					Params: []*token.Token{
-						{Type: token.IDENTIFIER, Lexeme: "n"},
+					Params: []ast.Param{
+						{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "n"}},
 					},
 					Body: &ast.BlockStmt{
 						Statements: []ast.Stmt{
@@ -2636,15 +2636,15 @@ func TestClosures(t *testing.T) {
 				&ast.VarDeclStmt{
 					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "newClosure"},
 					Initializer: &ast.FunctionExpr{
-						Params: []*token.Token{
-							{Type: token.IDENTIFIER, Lexeme: "a"},
+						Params: []ast.Param{
+							{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "a"}},
 						},
 						Body: &ast.BlockStmt{
 							Statements: []ast.Stmt{
 								&ast.ReturnStmt{
 									Keyword: &token.Token{Type: token.RETURN},
 									Value: &ast.FunctionExpr{
-										Params: []*token.Token{},
+										Params: []ast.Param{},
 										Body: &ast.BlockStmt{
 											Statements: []ast.Stmt{
 												&ast.ReturnStmt{
@@ -2688,7 +2688,7 @@ func TestClosures(t *testing.T) {
 			Expr: &ast.CallExpr{
 				Callee: &ast.CallExpr{
 					Callee: &ast.FunctionExpr{
-						Params: []*token.Token{},
+						Params: []ast.Param{},
 						Body: &ast.BlockStmt{
 							Statements: []ast.Stmt{
 								&ast.VarDeclStmt{
@@ -2699,7 +2699,7 @@ func TestClosures(t *testing.T) {
 								&ast.ReturnStmt{
 									Keyword: &token.Token{Type: token.RETURN},
 									Value: &ast.FunctionExpr{
-										Params: []*token.Token{},
+										Params: []ast.Param{},
 										Body: &ast.BlockStmt{
 											Statements: []ast.Stmt{
 												&ast.ReturnStmt{
@@ -2729,16 +2729,16 @@ func TestClosures(t *testing.T) {
 				&ast.VarDeclStmt{
 					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "newAdder"},
 					Initializer: &ast.FunctionExpr{
-						Params: []*token.Token{
-							{Type: token.IDENTIFIER, Lexeme: "a"},
+						Params: []ast.Param{
+							{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "a"}},
 						},
 						Body: &ast.BlockStmt{
 							Statements: []ast.Stmt{
 								&ast.ReturnStmt{
 									Keyword: &token.Token{Type: token.RETURN},
 									Value: &ast.FunctionExpr{
-										Params: []*token.Token{
-											{Type: token.IDENTIFIER, Lexeme: "b"},
+										Params: []ast.Param{
+											{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "b"}},
 										},
 										Body: &ast.BlockStmt{
 											Statements: []ast.Stmt{
@@ -2795,16 +2795,16 @@ func TestClosures(t *testing.T) {
 				&ast.VarDeclStmt{
 					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "newAdder"},
 					Initializer: &ast.FunctionExpr{
-						Params: []*token.Token{
-							{Type: token.IDENTIFIER, Lexeme: "a"},
+						Params: []ast.Param{
+							{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "a"}},
 						},
 						Body: &ast.BlockStmt{
 							Statements: []ast.Stmt{
 								&ast.ReturnStmt{
 									Keyword: &token.Token{Type: token.RETURN},
 									Value: &ast.FunctionExpr{
-										Params: []*token.Token{
-											{Type: token.IDENTIFIER, Lexeme: "b"},
+										Params: []ast.Param{
+											{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "b"}},
 										},
 										Body: &ast.BlockStmt{
 											Statements: []ast.Stmt{
@@ -2887,24 +2887,24 @@ func TestClosures(t *testing.T) {
 				&ast.VarDeclStmt{
 					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "newAdderOuter"},
 					Initializer: &ast.FunctionExpr{
-						Params: []*token.Token{
-							{Type: token.IDENTIFIER, Lexeme: "a"},
+						Params: []ast.Param{
+							{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "a"}},
 						},
 						Body: &ast.BlockStmt{
 							Statements: []ast.Stmt{
 								&ast.ReturnStmt{
 									Keyword: &token.Token{Type: token.RETURN},
 									Value: &ast.FunctionExpr{
-										Params: []*token.Token{
-											{Type: token.IDENTIFIER, Lexeme: "b"},
+										Params: []ast.Param{
+											{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "b"}},
 										},
 										Body: &ast.BlockStmt{
 											Statements: []ast.Stmt{
 												&ast.ReturnStmt{
 													Keyword: &token.Token{Type: token.RETURN},
 													Value: &ast.FunctionExpr{
-														Params: []*token.Token{
-															{Type: token.IDENTIFIER, Lexeme: "c"},
+														Params: []ast.Param{
+															{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "c"}},
 														},
 														Body: &ast.BlockStmt{
 															Statements: []ast.Stmt{
@@ -2986,15 +2986,15 @@ func TestClosures(t *testing.T) {
 				&ast.VarDeclStmt{
 					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "closure"},
 					Initializer: &ast.FunctionExpr{
-						Params: []*token.Token{
-							{Type: token.IDENTIFIER, Lexeme: "a"},
+						Params: []ast.Param{
+							{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "a"}},
 						},
 						Body: &ast.BlockStmt{
 							Statements: []ast.Stmt{
 								&ast.ReturnStmt{
 									Keyword: &token.Token{Type: token.RETURN},
 									Value: &ast.FunctionExpr{
-										Params: []*token.Token{},
+										Params: []ast.Param{},
 										Body: &ast.BlockStmt{
 											Statements: []ast.Stmt{
 												&ast.ReturnStmt{
@@ -3044,15 +3044,15 @@ func TestClosures(t *testing.T) {
 				&ast.VarDeclStmt{
 					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "makeCounter"},
 					Initializer: &ast.FunctionExpr{
-						Params: []*token.Token{
-							{Type: token.IDENTIFIER, Lexeme: "start"},
+						Params: []ast.Param{
+							{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "start"}},
 						},
 						Body: &ast.BlockStmt{
 							Statements: []ast.Stmt{
 								&ast.ReturnStmt{
 									Keyword: &token.Token{Type: token.RETURN},
 									Value: &ast.FunctionExpr{
-										Params: []*token.Token{},
+										Params: []ast.Param{},
 										Body: &ast.BlockStmt{
 											Statements: []ast.Stmt{
 												&ast.ReturnStmt{
@@ -3118,16 +3118,16 @@ func TestClosures(t *testing.T) {
 				&ast.VarDeclStmt{
 					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "makePair"},
 					Initializer: &ast.FunctionExpr{
-						Params: []*token.Token{
-							{Type: token.IDENTIFIER, Lexeme: "a"},
-							{Type: token.IDENTIFIER, Lexeme: "b"},
+						Params: []ast.Param{
+							{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "a"}},
+							{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "b"}},
 						},
 						Body: &ast.BlockStmt{
 							Statements: []ast.Stmt{
 								&ast.ReturnStmt{
 									Keyword: &token.Token{Type: token.RETURN},
 									Value: &ast.FunctionExpr{
-										Params: []*token.Token{},
+										Params: []ast.Param{},
 										Body: &ast.BlockStmt{
 											Statements: []ast.Stmt{
 												&ast.ReturnStmt{
@@ -3188,7 +3188,7 @@ func TestMutableClosures(t *testing.T) {
 				&ast.VarDeclStmt{
 					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "makeCounter"},
 					Initializer: &ast.FunctionExpr{
-						Params: []*token.Token{},
+						Params: []ast.Param{},
 						Body: &ast.BlockStmt{
 							Statements: []ast.Stmt{
 								&ast.VarDeclStmt{
@@ -3199,7 +3199,7 @@ func TestMutableClosures(t *testing.T) {
 								&ast.ReturnStmt{
 									Keyword: &token.Token{Type: token.RETURN},
 									Value: &ast.FunctionExpr{
-										Params: []*token.Token{},
+										Params: []ast.Param{},
 										Body: &ast.BlockStmt{
 											Statements: []ast.Stmt{
 												&ast.ExprStmt{
@@ -3277,7 +3277,7 @@ func TestMutableClosures(t *testing.T) {
 				&ast.VarDeclStmt{
 					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "makeCounter"},
 					Initializer: &ast.FunctionExpr{
-						Params: []*token.Token{},
+						Params: []ast.Param{},
 						Body: &ast.BlockStmt{
 							Statements: []ast.Stmt{
 								&ast.VarDeclStmt{
@@ -3288,7 +3288,7 @@ func TestMutableClosures(t *testing.T) {
 								&ast.ReturnStmt{
 									Keyword: &token.Token{Type: token.RETURN},
 									Value: &ast.FunctionExpr{
-										Params: []*token.Token{},
+										Params: []ast.Param{},
 										Body: &ast.BlockStmt{
 											Statements: []ast.Stmt{
 												&ast.ExprStmt{
@@ -3398,8 +3398,8 @@ func TestMutableClosures(t *testing.T) {
 				&ast.VarDeclStmt{
 					Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "makeBox"},
 					Initializer: &ast.FunctionExpr{
-						Params: []*token.Token{
-							{Type: token.IDENTIFIER, Lexeme: "initial"},
+						Params: []ast.Param{
+							{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "initial"}},
 						},
 						Body: &ast.BlockStmt{
 							Statements: []ast.Stmt{
@@ -3413,7 +3413,7 @@ func TestMutableClosures(t *testing.T) {
 								&ast.VarDeclStmt{
 									Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "get"},
 									Initializer: &ast.FunctionExpr{
-										Params: []*token.Token{},
+										Params: []ast.Param{},
 										Body: &ast.BlockStmt{
 											Statements: []ast.Stmt{
 												&ast.ReturnStmt{
@@ -3430,8 +3430,8 @@ func TestMutableClosures(t *testing.T) {
 								&ast.VarDeclStmt{
 									Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "set"},
 									Initializer: &ast.FunctionExpr{
-										Params: []*token.Token{
-											{Type: token.IDENTIFIER, Lexeme: "v"},
+										Params: []ast.Param{
+											{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "v"}},
 										},
 										Body: &ast.BlockStmt{
 											Statements: []ast.Stmt{
@@ -3612,7 +3612,7 @@ func TestClassMethods(t *testing.T) {
 					Methods: []*ast.FunctionStmt{
 						{
 							Name:   &token.Token{Type: token.IDENTIFIER, Lexeme: "speak"},
-							Params: []*token.Token{},
+							Params: []ast.Param{},
 							Body: &ast.BlockStmt{
 								Statements: []ast.Stmt{
 									&ast.ReturnStmt{
@@ -3667,8 +3667,8 @@ func TestClassThis(t *testing.T) {
 					Methods: []*ast.FunctionStmt{
 						{
 							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "setName"},
-							Params: []*token.Token{
-								{Type: token.IDENTIFIER, Lexeme: "n"},
+							Params: []ast.Param{
+								{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "n"}},
 							},
 							Body: &ast.BlockStmt{
 								Statements: []ast.Stmt{
@@ -3686,7 +3686,7 @@ func TestClassThis(t *testing.T) {
 						},
 						{
 							Name:   &token.Token{Type: token.IDENTIFIER, Lexeme: "getName"},
-							Params: []*token.Token{},
+							Params: []ast.Param{},
 							Body: &ast.BlockStmt{
 								Statements: []ast.Stmt{
 									&ast.ReturnStmt{
@@ -3758,8 +3758,8 @@ func TestClassInit(t *testing.T) {
 					Methods: []*ast.FunctionStmt{
 						{
 							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "init"},
-							Params: []*token.Token{
-								{Type: token.IDENTIFIER, Lexeme: "name"},
+							Params: []ast.Param{
+								{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "name"}},
 							},
 							Body: &ast.BlockStmt{
 								Statements: []ast.Stmt{
@@ -3777,7 +3777,7 @@ func TestClassInit(t *testing.T) {
 						},
 						{
 							Name:   &token.Token{Type: token.IDENTIFIER, Lexeme: "getName"},
-							Params: []*token.Token{},
+							Params: []ast.Param{},
 							Body: &ast.BlockStmt{
 								Statements: []ast.Stmt{
 									&ast.ReturnStmt{
@@ -3838,7 +3838,7 @@ func TestClassInheritance(t *testing.T) {
 					Methods: []*ast.FunctionStmt{
 						{
 							Name:   &token.Token{Type: token.IDENTIFIER, Lexeme: "speak"},
-							Params: []*token.Token{},
+							Params: []ast.Param{},
 							Body: &ast.BlockStmt{
 								Statements: []ast.Stmt{
 									&ast.ReturnStmt{
@@ -3901,7 +3901,7 @@ func TestClassMethodOverride(t *testing.T) {
 					Methods: []*ast.FunctionStmt{
 						{
 							Name:   &token.Token{Type: token.IDENTIFIER, Lexeme: "speak"},
-							Params: []*token.Token{},
+							Params: []ast.Param{},
 							Body: &ast.BlockStmt{
 								Statements: []ast.Stmt{
 									&ast.ReturnStmt{
@@ -3921,7 +3921,7 @@ func TestClassMethodOverride(t *testing.T) {
 					Methods: []*ast.FunctionStmt{
 						{
 							Name:   &token.Token{Type: token.IDENTIFIER, Lexeme: "speak"},
-							Params: []*token.Token{},
+							Params: []ast.Param{},
 							Body: &ast.BlockStmt{
 								Statements: []ast.Stmt{
 									&ast.ReturnStmt{
@@ -3977,7 +3977,7 @@ func TestClassSuper(t *testing.T) {
 					Methods: []*ast.FunctionStmt{
 						{
 							Name:   &token.Token{Type: token.IDENTIFIER, Lexeme: "speak"},
-							Params: []*token.Token{},
+							Params: []ast.Param{},
 							Body: &ast.BlockStmt{
 								Statements: []ast.Stmt{
 									&ast.ReturnStmt{
@@ -3997,7 +3997,7 @@ func TestClassSuper(t *testing.T) {
 					Methods: []*ast.FunctionStmt{
 						{
 							Name:   &token.Token{Type: token.IDENTIFIER, Lexeme: "speak"},
-							Params: []*token.Token{},
+							Params: []ast.Param{},
 							Body: &ast.BlockStmt{
 								Statements: []ast.Stmt{
 									&ast.ReturnStmt{
@@ -4125,9 +4125,9 @@ func TestClassMethodWithArguments(t *testing.T) {
 					Methods: []*ast.FunctionStmt{
 						{
 							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "add"},
-							Params: []*token.Token{
-								{Type: token.IDENTIFIER, Lexeme: "a"},
-								{Type: token.IDENTIFIER, Lexeme: "b"},
+							Params: []ast.Param{
+								{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "a"}},
+								{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "b"}},
 							},
 							Body: &ast.BlockStmt{
 								Statements: []ast.Stmt{
@@ -4195,7 +4195,7 @@ func TestClassThisInMethods(t *testing.T) {
 					Methods: []*ast.FunctionStmt{
 						{
 							Name:   &token.Token{Type: token.IDENTIFIER, Lexeme: "init"},
-							Params: []*token.Token{},
+							Params: []ast.Param{},
 							Body: &ast.BlockStmt{
 								Statements: []ast.Stmt{
 									&ast.ExprStmt{
@@ -4212,7 +4212,7 @@ func TestClassThisInMethods(t *testing.T) {
 						},
 						{
 							Name:   &token.Token{Type: token.IDENTIFIER, Lexeme: "increment"},
-							Params: []*token.Token{},
+							Params: []ast.Param{},
 							Body: &ast.BlockStmt{
 								Statements: []ast.Stmt{
 									&ast.ExprStmt{
@@ -4311,9 +4311,9 @@ func TestClassInitWithMultipleParams(t *testing.T) {
 					Methods: []*ast.FunctionStmt{
 						{
 							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "init"},
-							Params: []*token.Token{
-								{Type: token.IDENTIFIER, Lexeme: "x"},
-								{Type: token.IDENTIFIER, Lexeme: "y"},
+							Params: []ast.Param{
+								{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "x"}},
+								{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "y"}},
 							},
 							Body: &ast.BlockStmt{
 								Statements: []ast.Stmt{
@@ -4340,7 +4340,7 @@ func TestClassInitWithMultipleParams(t *testing.T) {
 						},
 						{
 							Name:   &token.Token{Type: token.IDENTIFIER, Lexeme: "sum"},
-							Params: []*token.Token{},
+							Params: []ast.Param{},
 							Body: &ast.BlockStmt{
 								Statements: []ast.Stmt{
 									&ast.ReturnStmt{
@@ -4412,8 +4412,8 @@ func TestClassInheritedInit(t *testing.T) {
 					Methods: []*ast.FunctionStmt{
 						{
 							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "init"},
-							Params: []*token.Token{
-								{Type: token.IDENTIFIER, Lexeme: "name"},
+							Params: []ast.Param{
+								{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "name"}},
 							},
 							Body: &ast.BlockStmt{
 								Statements: []ast.Stmt{
@@ -4431,7 +4431,7 @@ func TestClassInheritedInit(t *testing.T) {
 						},
 						{
 							Name:   &token.Token{Type: token.IDENTIFIER, Lexeme: "getName"},
-							Params: []*token.Token{},
+							Params: []ast.Param{},
 							Body: &ast.BlockStmt{
 								Statements: []ast.Stmt{
 									&ast.ReturnStmt{
@@ -4501,8 +4501,8 @@ func TestClassSuperWithArgs(t *testing.T) {
 					Methods: []*ast.FunctionStmt{
 						{
 							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "greet"},
-							Params: []*token.Token{
-								{Type: token.IDENTIFIER, Lexeme: "greeting"},
+							Params: []ast.Param{
+								{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "greeting"}},
 							},
 							Body: &ast.BlockStmt{
 								Statements: []ast.Stmt{
@@ -4525,8 +4525,8 @@ func TestClassSuperWithArgs(t *testing.T) {
 					Methods: []*ast.FunctionStmt{
 						{
 							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "greet"},
-							Params: []*token.Token{
-								{Type: token.IDENTIFIER, Lexeme: "greeting"},
+							Params: []ast.Param{
+								{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "greeting"}},
 							},
 							Body: &ast.BlockStmt{
 								Statements: []ast.Stmt{
@@ -4602,7 +4602,7 @@ func TestClassDeepInheritanceWithoutSuper(t *testing.T) {
 					Methods: []*ast.FunctionStmt{
 						{
 							Name:   &token.Token{Type: token.IDENTIFIER, Lexeme: "getValue"},
-							Params: []*token.Token{},
+							Params: []ast.Param{},
 							Body: &ast.BlockStmt{
 								Statements: []ast.Stmt{
 									&ast.ReturnStmt{
@@ -4622,7 +4622,7 @@ func TestClassDeepInheritanceWithoutSuper(t *testing.T) {
 					Methods: []*ast.FunctionStmt{
 						{
 							Name:   &token.Token{Type: token.IDENTIFIER, Lexeme: "getDouble"},
-							Params: []*token.Token{},
+							Params: []ast.Param{},
 							Body: &ast.BlockStmt{
 								Statements: []ast.Stmt{
 									&ast.ReturnStmt{
@@ -4696,7 +4696,7 @@ func TestClassMethodReturnsInstance(t *testing.T) {
 					Methods: []*ast.FunctionStmt{
 						{
 							Name:   &token.Token{Type: token.IDENTIFIER, Lexeme: "init"},
-							Params: []*token.Token{},
+							Params: []ast.Param{},
 							Body: &ast.BlockStmt{
 								Statements: []ast.Stmt{
 									&ast.ExprStmt{
@@ -4713,8 +4713,8 @@ func TestClassMethodReturnsInstance(t *testing.T) {
 						},
 						{
 							Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "add"},
-							Params: []*token.Token{
-								{Type: token.IDENTIFIER, Lexeme: "n"},
+							Params: []ast.Param{
+								{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "n"}},
 							},
 							Body: &ast.BlockStmt{
 								Statements: []ast.Stmt{
@@ -4749,7 +4749,7 @@ func TestClassMethodReturnsInstance(t *testing.T) {
 						},
 						{
 							Name:   &token.Token{Type: token.IDENTIFIER, Lexeme: "getValue"},
-							Params: []*token.Token{},
+							Params: []ast.Param{},
 							Body: &ast.BlockStmt{
 								Statements: []ast.Stmt{
 									&ast.ReturnStmt{
@@ -4834,8 +4834,8 @@ func TestClassWrongNumberOfArguments(t *testing.T) {
 				Methods: []*ast.FunctionStmt{
 					{
 						Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "init"},
-						Params: []*token.Token{
-							{Type: token.IDENTIFIER, Lexeme: "name"},
+						Params: []ast.Param{
+							{Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "name"}},
 						},
 						Body: &ast.BlockStmt{
 							Statements: []ast.Stmt{
@@ -5105,5 +5105,67 @@ func TestOpGetStdlibExportNativeFunction(t *testing.T) {
 
 	if num.Value != 42.0 {
 		t.Errorf("double(21) = %v, want 42.0", num.Value)
+	}
+}
+
+// The VM's own runtime guards. These are reachable today, but the checker
+// (Phase 2) will reject the same programs before they ever run, so the
+// end-to-end fixtures that used to cover these paths stop exercising them.
+// These tests compile a statement directly rather than going through
+// CompileProgram, so they bypass the checker and keep covering the VM until
+// Phase 4 removes the guards themselves.
+
+func TestBinaryOperandTypeError(t *testing.T) {
+	// "hello" - 5
+	input := &ast.ExprStmt{
+		Expr: &ast.BinaryExpr{
+			Left:     &ast.LiteralExpr{Value: "hello"},
+			Right:    &ast.LiteralExpr{Value: 5},
+			Operator: &token.Token{Type: token.MINUS, Lexeme: "-"},
+		},
+	}
+
+	comp := compiler.New(nil)
+	if err := comp.Compile(input); err != nil {
+		t.Fatalf("compiler error: %s", err)
+	}
+
+	vm := New(comp.Result())
+	err := vm.RunProgram()
+	if err == nil {
+		t.Fatal("expected an error subtracting a number from a string, got none")
+	}
+	if expected := "Operands must be numbers."; err.Error() != expected {
+		t.Fatalf("wrong error. want=%q, got=%q", expected, err.Error())
+	}
+}
+
+func TestNativeFunctionArityError(t *testing.T) {
+	// clock(1, 2, 3) - clock takes no arguments
+	input := &ast.ExprStmt{
+		Expr: &ast.CallExpr{
+			Callee: &ast.VariableExpr{
+				Name: &token.Token{Type: token.IDENTIFIER, Lexeme: "clock"},
+			},
+			Arguments: []ast.Expr{
+				&ast.LiteralExpr{Value: 1},
+				&ast.LiteralExpr{Value: 2},
+				&ast.LiteralExpr{Value: 3},
+			},
+		},
+	}
+
+	comp := compiler.New(nil)
+	if err := comp.Compile(input); err != nil {
+		t.Fatalf("compiler error: %s", err)
+	}
+
+	vm := New(comp.Result())
+	err := vm.RunProgram()
+	if err == nil {
+		t.Fatal("expected an arity error calling clock with 3 arguments, got none")
+	}
+	if expected := "Expected 0 arguments but got 3."; err.Error() != expected {
+		t.Fatalf("wrong error. want=%q, got=%q", expected, err.Error())
 	}
 }

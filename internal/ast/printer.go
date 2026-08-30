@@ -129,13 +129,13 @@ func (p *Printer) printExpr(expr Expr) {
 			p.withPrefix(p.childPrefix(), true, func() { p.printExpr(n.Value) })
 		})
 	case *FunctionExpr:
-		p.writeNode("Function (anonymous)")
+		p.writeNode("Function (anonymous)" + returnLabel(n.ReturnType))
 		newPrefix := p.childPrefix()
 		p.withPrefix(newPrefix, false, func() {
 			p.writeNode("params")
 			paramsPrefix := p.childPrefix()
 			for i, param := range n.Params {
-				p.withPrefix(paramsPrefix, i == len(n.Params)-1, func() { p.writeNode(param.Lexeme) })
+				p.withPrefix(paramsPrefix, i == len(n.Params)-1, func() { p.writeNode(paramLabel(param)) })
 			}
 		})
 		p.withPrefix(newPrefix, true, func() {
@@ -171,7 +171,7 @@ func (p *Printer) printStmt(stmt Stmt) {
 		if n.IsConst {
 			declType = "ConstDecl"
 		}
-		p.writeNode(declType + " (" + n.Name.Lexeme + ")")
+		p.writeNode(declType + " (" + n.Name.Lexeme + ": " + TypeExprString(n.Type) + ")")
 		if n.Initializer != nil {
 			p.withPrefix(p.childPrefix(), true, func() { p.printExpr(n.Initializer) })
 		}
@@ -245,13 +245,13 @@ func (p *Printer) printStmt(stmt Stmt) {
 	case *ContinueStmt:
 		p.writeNode("Continue")
 	case *FunctionStmt:
-		p.writeNode("Function (" + n.Name.Lexeme + ")")
+		p.writeNode("Function (" + n.Name.Lexeme + ")" + returnLabel(n.ReturnType))
 		newPrefix := p.childPrefix()
 		p.withPrefix(newPrefix, false, func() {
 			p.writeNode("params")
 			paramsPrefix := p.childPrefix()
 			for i, param := range n.Params {
-				p.withPrefix(paramsPrefix, i == len(n.Params)-1, func() { p.writeNode(param.Lexeme) })
+				p.withPrefix(paramsPrefix, i == len(n.Params)-1, func() { p.writeNode(paramLabel(param)) })
 			}
 		})
 		p.withPrefix(newPrefix, true, func() {
@@ -266,6 +266,17 @@ func (p *Printer) printStmt(stmt Stmt) {
 	case *ClassStmt:
 		p.writeNode("Class (" + n.Name.Lexeme + ")")
 		newPrefix := p.childPrefix()
+		if len(n.Fields) > 0 {
+			p.withPrefix(newPrefix, false, func() {
+				p.writeNode("fields")
+				fieldsPrefix := p.childPrefix()
+				for i, f := range n.Fields {
+					p.withPrefix(fieldsPrefix, i == len(n.Fields)-1, func() {
+						p.writeNode(f.Name.Lexeme + ": " + TypeExprString(f.Type))
+					})
+				}
+			})
+		}
 		p.withPrefix(newPrefix, true, func() {
 			p.writeNode("methods")
 			methodsPrefix := p.childPrefix()
@@ -308,4 +319,17 @@ func (p *Printer) childPrefix() string {
 		return p.prefix + "    "
 	}
 	return p.prefix + "│   "
+}
+
+// paramLabel renders a parameter as it was declared, "name: type".
+func paramLabel(p Param) string {
+	return p.Name.Lexeme + ": " + TypeExprString(p.Type)
+}
+
+// returnLabel renders a function's return type, or nothing for a void function.
+func returnLabel(t TypeExpr) string {
+	if t == nil {
+		return ""
+	}
+	return ": " + TypeExprString(t)
 }

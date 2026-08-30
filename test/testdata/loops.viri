@@ -1,17 +1,17 @@
-var sum = 0;
-for (var i = 1; i <= 5; i = i + 1) {
+var sum: number = 0;
+for (var i: number = 1; i <= 5; i = i + 1) {
 	sum = sum + i;
 }
 print sum;
 
-var j = 0;
+var j: number = 0;
 while (j < 10) {
 	if (j == 5) break;
 	j = j + 1;
 }
 print j;
 
-for (var k = 0; k < 5; k = k + 1) {
+for (var k: number = 0; k < 5; k = k + 1) {
 	if (k == 2) continue;
 	print k;
 }

@@ -21,6 +21,7 @@ const (
 	SLASH
 	STAR
 	COLON
+	MAP
 
 	// One or two character tokens.
 	BANG
@@ -98,6 +99,8 @@ func (tt Type) String() string {
 		return "STAR"
 	case COLON:
 		return "COLON"
+	case MAP:
+		return "MAP"
 	case BANG:
 		return "BANG"
 	case BANG_EQUAL:

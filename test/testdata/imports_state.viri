@@ -2,7 +2,7 @@ import "module_counter.viri" as c;
 
 // A function exported from a module reads its own module's globals,
 // even when called from the importer
-var mine = "main-global";
+var mine: string = "main-global";
 print c.getSecret();
 print mine;
 

@@ -85,8 +85,13 @@ func (p *Parser) parseExpression(minPrec precedence) (ast.Expr, error) {
 
 func (p *Parser) parsePrefix(tok *token.Token) (ast.Expr, error) {
 	switch tok.Type {
-	case token.NUMBER, token.STRING, token.TRUE, token.FALSE, token.NIL:
-		return &ast.LiteralExpr{Value: tok.Literal}, nil
+	case token.NUMBER, token.STRING, token.TRUE, token.FALSE:
+		return &ast.LiteralExpr{Value: tok.Literal, Token: tok}, nil
+	case token.NIL:
+		// Viri has no nil value: every type is non-nilable, so there is
+		// nothing for `nil` to be. The token is still scanned so this reads
+		// better than "undefined variable 'nil'".
+		return nil, p.error(tok, "'nil' is not a value in Viri; every type must hold a real value.")
 	case token.IDENTIFIER:
 		return &ast.VariableExpr{Name: tok}, nil
 	case token.THIS:
@@ -107,11 +112,11 @@ func (p *Parser) parsePrefix(tok *token.Token) (ast.Expr, error) {
 		}
 		return &ast.UnaryExpr{Operator: tok, Expr: right}, nil
 	case token.FUN:
-		params, body, err := p.parseFunctionBody(objects.FunctionTypeAnonymous)
+		params, returnType, body, err := p.parseFunctionBody(objects.FunctionTypeAnonymous)
 		if err != nil {
 			return nil, err
 		}
-		return &ast.FunctionExpr{Params: params, Body: body}, nil
+		return &ast.FunctionExpr{Params: params, ReturnType: returnType, Body: body, Keyword: tok}, nil
 	case token.LEFT_PAREN:
 		expr, err := p.parseExpression(precNone)
 		if err != nil {
@@ -138,7 +143,7 @@ func (p *Parser) parsePrefix(tok *token.Token) (ast.Expr, error) {
 		if _, err := p.consume(token.RIGHT_BRACKET, "Expected ']' after expression."); err != nil {
 			return nil, err
 		}
-		return &ast.ArrayLiteralExpr{Elements: elements}, nil
+		return &ast.ArrayLiteralExpr{Elements: elements, Bracket: tok}, nil
 	case token.LEFT_BRACE:
 		pairs := make([]ast.HashPair, 0)
 		if !p.check(token.RIGHT_BRACE) {

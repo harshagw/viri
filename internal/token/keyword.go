@@ -15,6 +15,7 @@ var keywordLookup = map[string]Type{
 	"false":    FALSE,
 	"nil":      NIL,
 	"fun":      FUN,
+	"map":      MAP,
 	"class":    CLASS,
 	"return":   RETURN,
 	"super":    SUPER,

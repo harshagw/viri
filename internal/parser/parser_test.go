@@ -29,6 +29,8 @@ func TestParseVarDecl(t *testing.T) {
 			tokens: []token.Token{
 				token.New(token.VAR, "var", nil, 1, nil),
 				token.New(token.IDENTIFIER, "x", nil, 1, nil),
+				token.New(token.COLON, ":", nil, 1, nil),
+				token.New(token.IDENTIFIER, "number", "number", 1, nil),
 				token.New(token.SEMICOLON, ";", nil, 1, nil),
 				token.New(token.EOF, "", nil, 1, nil),
 			},
@@ -52,6 +54,8 @@ func TestParseVarDecl(t *testing.T) {
 			tokens: []token.Token{
 				token.New(token.VAR, "var", nil, 1, nil),
 				token.New(token.IDENTIFIER, "x", nil, 1, nil),
+				token.New(token.COLON, ":", nil, 1, nil),
+				token.New(token.IDENTIFIER, "number", "number", 1, nil),
 				token.New(token.EQUAL, "=", nil, 1, nil),
 				token.New(token.NUMBER, "42", 42.0, 1, nil),
 				token.New(token.SEMICOLON, ";", nil, 1, nil),
@@ -78,6 +82,8 @@ func TestParseVarDecl(t *testing.T) {
 			tokens: []token.Token{
 				token.New(token.VAR, "var", nil, 1, nil),
 				token.New(token.IDENTIFIER, "x", nil, 1, nil),
+				token.New(token.COLON, ":", nil, 1, nil),
+				token.New(token.IDENTIFIER, "number", "number", 1, nil),
 				token.New(token.EOF, "", nil, 1, nil),
 			},
 			wantErr: true,
@@ -218,6 +224,8 @@ func TestParseBlockStmt(t *testing.T) {
 				token.New(token.LEFT_BRACE, "{", nil, 1, nil),
 				token.New(token.VAR, "var", nil, 1, nil),
 				token.New(token.IDENTIFIER, "x", nil, 1, nil),
+				token.New(token.COLON, ":", nil, 1, nil),
+				token.New(token.IDENTIFIER, "number", "number", 1, nil),
 				token.New(token.EQUAL, "=", nil, 1, nil),
 				token.New(token.NUMBER, "1", 1.0, 1, nil),
 				token.New(token.SEMICOLON, ";", nil, 1, nil),
@@ -615,6 +623,8 @@ func TestParseForStmt(t *testing.T) {
 				token.New(token.LEFT_PAREN, "(", nil, 1, nil),
 				token.New(token.VAR, "var", nil, 1, nil),
 				token.New(token.IDENTIFIER, "i", nil, 1, nil),
+				token.New(token.COLON, ":", nil, 1, nil),
+				token.New(token.IDENTIFIER, "number", "number", 1, nil),
 				token.New(token.EQUAL, "=", nil, 1, nil),
 				token.New(token.NUMBER, "0", 0.0, 1, nil),
 				token.New(token.SEMICOLON, ";", nil, 1, nil),
@@ -697,6 +707,8 @@ func TestParseForStmt(t *testing.T) {
 				token.New(token.LEFT_PAREN, "(", nil, 1, nil),
 				token.New(token.VAR, "var", nil, 1, nil),
 				token.New(token.IDENTIFIER, "i", nil, 1, nil),
+				token.New(token.COLON, ":", nil, 1, nil),
+				token.New(token.IDENTIFIER, "number", "number", 1, nil),
 				token.New(token.EQUAL, "=", nil, 1, nil),
 				token.New(token.NUMBER, "0", 0.0, 1, nil),
 				token.New(token.SEMICOLON, ";", nil, 1, nil),
@@ -737,6 +749,8 @@ func TestParseForStmt(t *testing.T) {
 				token.New(token.LEFT_PAREN, "(", nil, 1, nil),
 				token.New(token.VAR, "var", nil, 1, nil),
 				token.New(token.IDENTIFIER, "i", nil, 1, nil),
+				token.New(token.COLON, ":", nil, 1, nil),
+				token.New(token.IDENTIFIER, "number", "number", 1, nil),
 				token.New(token.EQUAL, "=", nil, 1, nil),
 				token.New(token.NUMBER, "0", 0.0, 1, nil),
 				token.New(token.SEMICOLON, ";", nil, 1, nil),
@@ -930,15 +944,21 @@ func TestParseFunction(t *testing.T) {
 		},
 		{
 			name: "function with parameters",
-			// fun add(a, b) { return a + b; }
+			// fun add(a: number, b: number): number { return a + b; }
 			tokens: []token.Token{
 				token.New(token.FUN, "fun", nil, 1, nil),
 				token.New(token.IDENTIFIER, "add", nil, 1, nil),
 				token.New(token.LEFT_PAREN, "(", nil, 1, nil),
 				token.New(token.IDENTIFIER, "a", nil, 1, nil),
+				token.New(token.COLON, ":", nil, 1, nil),
+				token.New(token.IDENTIFIER, "number", "number", 1, nil),
 				token.New(token.COMMA, ",", nil, 1, nil),
 				token.New(token.IDENTIFIER, "b", nil, 1, nil),
+				token.New(token.COLON, ":", nil, 1, nil),
+				token.New(token.IDENTIFIER, "number", "number", 1, nil),
 				token.New(token.RIGHT_PAREN, ")", nil, 1, nil),
+				token.New(token.COLON, ":", nil, 1, nil),
+				token.New(token.IDENTIFIER, "number", "number", 1, nil),
 				token.New(token.LEFT_BRACE, "{", nil, 1, nil),
 				token.New(token.RETURN, "return", nil, 1, nil),
 				token.New(token.IDENTIFIER, "a", nil, 1, nil),
@@ -957,7 +977,7 @@ func TestParseFunction(t *testing.T) {
 				if len(funStmt.Params) != 2 {
 					t.Errorf("params = %d, want 2", len(funStmt.Params))
 				}
-				if funStmt.Params[0].Lexeme != "a" || funStmt.Params[1].Lexeme != "b" {
+				if funStmt.Params[0].Name.Lexeme != "a" || funStmt.Params[1].Name.Lexeme != "b" {
 					t.Errorf("params = %v, want [a, b]", funStmt.Params)
 				}
 				if len(funStmt.Body.Statements) != 1 {
@@ -1036,6 +1056,8 @@ func TestParseFunctionExpr(t *testing.T) {
 			tokens: []token.Token{
 				token.New(token.VAR, "var", nil, 1, nil),
 				token.New(token.IDENTIFIER, "a", nil, 1, nil),
+				token.New(token.COLON, ":", nil, 1, nil),
+				token.New(token.IDENTIFIER, "number", "number", 1, nil),
 				token.New(token.EQUAL, "=", nil, 1, nil),
 				token.New(token.FUN, "fun", nil, 1, nil),
 				token.New(token.LEFT_PAREN, "(", nil, 1, nil),
@@ -1068,17 +1090,32 @@ func TestParseFunctionExpr(t *testing.T) {
 		},
 		{
 			name: "function with parameters",
-			// var add = fun(a, b) { return a + b; };
+			// var add: fun(number, number): number = fun(a: number, b: number): number { return a + b; };
 			tokens: []token.Token{
 				token.New(token.VAR, "var", nil, 1, nil),
 				token.New(token.IDENTIFIER, "add", nil, 1, nil),
+				token.New(token.COLON, ":", nil, 1, nil),
+				token.New(token.FUN, "fun", nil, 1, nil),
+				token.New(token.LEFT_PAREN, "(", nil, 1, nil),
+				token.New(token.IDENTIFIER, "number", "number", 1, nil),
+				token.New(token.COMMA, ",", nil, 1, nil),
+				token.New(token.IDENTIFIER, "number", "number", 1, nil),
+				token.New(token.RIGHT_PAREN, ")", nil, 1, nil),
+				token.New(token.COLON, ":", nil, 1, nil),
+				token.New(token.IDENTIFIER, "number", "number", 1, nil),
 				token.New(token.EQUAL, "=", nil, 1, nil),
 				token.New(token.FUN, "fun", nil, 1, nil),
 				token.New(token.LEFT_PAREN, "(", nil, 1, nil),
 				token.New(token.IDENTIFIER, "a", nil, 1, nil),
+				token.New(token.COLON, ":", nil, 1, nil),
+				token.New(token.IDENTIFIER, "number", "number", 1, nil),
 				token.New(token.COMMA, ",", nil, 1, nil),
 				token.New(token.IDENTIFIER, "b", nil, 1, nil),
+				token.New(token.COLON, ":", nil, 1, nil),
+				token.New(token.IDENTIFIER, "number", "number", 1, nil),
 				token.New(token.RIGHT_PAREN, ")", nil, 1, nil),
+				token.New(token.COLON, ":", nil, 1, nil),
+				token.New(token.IDENTIFIER, "number", "number", 1, nil),
 				token.New(token.LEFT_BRACE, "{", nil, 1, nil),
 				token.New(token.RETURN, "return", nil, 1, nil),
 				token.New(token.IDENTIFIER, "a", nil, 1, nil),
@@ -1100,11 +1137,13 @@ func TestParseFunctionExpr(t *testing.T) {
 		},
 		{
 			name: "IIFE",
-			// fun(x) { print x; }(10);
+			// fun(x: number) { print x; }(10);
 			tokens: []token.Token{
 				token.New(token.FUN, "fun", nil, 1, nil),
 				token.New(token.LEFT_PAREN, "(", nil, 1, nil),
 				token.New(token.IDENTIFIER, "x", nil, 1, nil),
+				token.New(token.COLON, ":", nil, 1, nil),
+				token.New(token.IDENTIFIER, "number", "number", 1, nil),
 				token.New(token.RIGHT_PAREN, ")", nil, 1, nil),
 				token.New(token.LEFT_BRACE, "{", nil, 1, nil),
 				token.New(token.PRINT, "print", nil, 1, nil),
@@ -1138,6 +1177,8 @@ func TestParseFunctionExpr(t *testing.T) {
 			tokens: []token.Token{
 				token.New(token.VAR, "var", nil, 1, nil),
 				token.New(token.IDENTIFIER, "f", nil, 1, nil),
+				token.New(token.COLON, ":", nil, 1, nil),
+				token.New(token.IDENTIFIER, "number", "number", 1, nil),
 				token.New(token.EQUAL, "=", nil, 1, nil),
 				token.New(token.FUN, "fun", nil, 1, nil),
 				token.New(token.LEFT_PAREN, "(", nil, 1, nil),
@@ -1214,7 +1255,7 @@ func TestParseClass(t *testing.T) {
 		},
 		{
 			name: "class with methods",
-			// class Foo { bar() {} baz(x) { print x; } }
+			// class Foo { bar() {} baz(x: number) { print x; } }
 			tokens: []token.Token{
 				token.New(token.CLASS, "class", nil, 1, nil),
 				token.New(token.IDENTIFIER, "Foo", nil, 1, nil),
@@ -1227,6 +1268,8 @@ func TestParseClass(t *testing.T) {
 				token.New(token.IDENTIFIER, "baz", nil, 1, nil),
 				token.New(token.LEFT_PAREN, "(", nil, 1, nil),
 				token.New(token.IDENTIFIER, "x", nil, 1, nil),
+				token.New(token.COLON, ":", nil, 1, nil),
+				token.New(token.IDENTIFIER, "number", "number", 1, nil),
 				token.New(token.RIGHT_PAREN, ")", nil, 1, nil),
 				token.New(token.LEFT_BRACE, "{", nil, 1, nil),
 				token.New(token.PRINT, "print", nil, 1, nil),
@@ -1329,11 +1372,15 @@ func TestParseMultipleStatements(t *testing.T) {
 	tokens := []token.Token{
 		token.New(token.VAR, "var", nil, 1, nil),
 		token.New(token.IDENTIFIER, "x", nil, 1, nil),
+		token.New(token.COLON, ":", nil, 1, nil),
+		token.New(token.IDENTIFIER, "number", "number", 1, nil),
 		token.New(token.EQUAL, "=", nil, 1, nil),
 		token.New(token.NUMBER, "1", 1.0, 1, nil),
 		token.New(token.SEMICOLON, ";", nil, 1, nil),
 		token.New(token.VAR, "var", nil, 1, nil),
 		token.New(token.IDENTIFIER, "y", nil, 1, nil),
+		token.New(token.COLON, ":", nil, 1, nil),
+		token.New(token.IDENTIFIER, "number", "number", 1, nil),
 		token.New(token.EQUAL, "=", nil, 1, nil),
 		token.New(token.NUMBER, "2", 2.0, 1, nil),
 		token.New(token.SEMICOLON, ";", nil, 1, nil),
@@ -1370,6 +1417,8 @@ func TestParseInvalidSyntax(t *testing.T) {
 				token.New(token.LEFT_BRACE, "{", nil, 1, nil),
 				token.New(token.VAR, "var", nil, 1, nil),
 				token.New(token.IDENTIFIER, "x", nil, 1, nil),
+				token.New(token.COLON, ":", nil, 1, nil),
+				token.New(token.IDENTIFIER, "number", "number", 1, nil),
 				token.New(token.EQUAL, "=", nil, 1, nil),
 				token.New(token.NUMBER, "1", 1.0, 1, nil),
 				token.New(token.SEMICOLON, ";", nil, 1, nil),

@@ -1,22 +1,22 @@
-fun add(a, b) {
+fun add(a: number, b: number): number {
 	return a + b;
 }
 print add(5, 7);
 
-fun factorial(n) {
+fun factorial(n: number): number {
 	if (n <= 1) return 1;
 	return n * factorial(n - 1);
 }
 print factorial(5);
 
-fun counter() {
-	var count = 0;
-	fun increment() {
+fun counter(): fun(): number {
+	var count: number = 0;
+	fun increment(): number {
 		count = count + 1;
 		return count;
 	}
 	return increment;
 }
-var c = counter();
+var c: fun(): number = counter();
 print c();
 print c();

@@ -1,18 +1,17 @@
 // Module with exported functions and constants
-export const PI = 3;
+export const PI: number = 3;
 
-export fun add(a, b) {
+export fun add(a: number, b: number): number {
     return a + b;
 }
 
-export fun multiply(a, b) {
+export fun multiply(a: number, b: number): number {
     return a * b;
 }
 
-var x = 10;
+var x: number = 10;
 
 // Non-exported helper function
-fun helper() {
+fun helper(): number {
     return 100;
 }
-

@@ -1,4 +1,4 @@
 // The loop variable is scoped to the for statement, so sibling loops
 // can reuse the same name
-for (var i = 0; i < 2; i = i + 1) { print i; }
-for (var i = 10; i < 12; i = i + 1) { print i; }
+for (var i: number = 0; i < 2; i = i + 1) { print i; }
+for (var i: number = 10; i < 12; i = i + 1) { print i; }

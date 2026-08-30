@@ -1,6 +1,8 @@
 // Helper class for composition tests
 class Point {
-  init(x, y) {
+  x: number;
+  y: number;
+  init(x: number, y: number) {
     this.x = x;
     this.y = y;
   }
@@ -9,70 +11,73 @@ class Point {
 // Class with closure in method
 
 class Adder {
-  init(base) {
+  base: number;
+  init(base: number) {
     this.base = base;
   }
 
-  makeAdder() {
-    var base = this.base;
-    fun adder(n) {
+  makeAdder(): fun(number): number {
+    var base: number = this.base;
+    fun adder(n: number): number {
       return base + n;
     }
     return adder;
   }
 }
 
-var adder = Adder(10);
-var addTen = adder.makeAdder();
+var adder: Adder = Adder(10);
+var addTen: fun(number): number = adder.makeAdder();
 print addTen(5);
 print addTen(20);
 
 // Passing class instance to function
 
-fun printPoint(point) {
+fun printPoint(point: Point) {
   print point.x;
   print point.y;
 }
 
-var pt = Point(100, 200);
+var pt: Point = Point(100, 200);
 printPoint(pt);
 
 // Storing class instance in array
 
-var points = [Point(1, 2), Point(3, 4), Point(5, 6)];
+var points: []Point = [Point(1, 2), Point(3, 4), Point(5, 6)];
 print points[0].x;
 print points[1].y;
 print points[2].x;
 
 // Storing class instance in hash
 
-var shapes = {"origin": Point(0, 0), "corner": Point(10, 10)};
+var shapes: map[string]Point = {"origin": Point(0, 0), "corner": Point(10, 10)};
 print shapes["origin"].x;
 print shapes["corner"].y;
 
 // Method with multiple parameters
 
 class Rectangle {
-  init(width, height) {
+  width: number;
+  height: number;
+  init(width: number, height: number) {
     this.width = width;
     this.height = height;
   }
 
-  resize(newWidth, newHeight) {
+  resize(newWidth: number, newHeight: number) {
     this.width = newWidth;
     this.height = newHeight;
   }
 
-  area() {
+  area(): number {
     return this.width * this.height;
   }
 
-  perimeter() {
+  perimeter(): number {
     return 2 * (this.width + this.height);
   }
 }
 
-var rect = Rectangle(5, 10);
+var rect: Rectangle = Rectangle(5, 10);
 print rect.area();
 print rect.perimeter();
 rect.resize(8, 12);
@@ -81,59 +86,63 @@ print rect.area();
 // Class using other class instances (composition)
 
 class Line {
-  init(start, end) {
+  start: Point;
+  end: Point;
+  init(start: Point, end: Point) {
     this.start = start;
     this.end = end;
   }
 
-  midpoint() {
-    var mx = (this.start.x + this.end.x) / 2;
-    var my = (this.start.y + this.end.y) / 2;
+  midpoint(): Point {
+    var mx: number = (this.start.x + this.end.x) / 2;
+    var my: number = (this.start.y + this.end.y) / 2;
     return Point(mx, my);
   }
 }
 
-var line = Line(Point(0, 0), Point(10, 10));
-var mid = line.midpoint();
+var line: Line = Line(Point(0, 0), Point(10, 10));
+var mid: Point = line.midpoint();
 print mid.x;
 print mid.y;
 
 // Method returning this for builder pattern
 
 class StringBuilder {
+  str: string;
   init() {
     this.str = "";
   }
 
-  append(s) {
+  append(s: string): StringBuilder {
     this.str = this.str + s;
     return this;
   }
 
-  build() {
+  build(): string {
     return this.str;
   }
 }
 
-var sb = StringBuilder();
+var sb: StringBuilder = StringBuilder();
 print sb.append("Hello").append(" ").append("World").build();
 
 // Class with conditional logic in methods
 
 class NumberChecker {
-  init(n) {
+  n: number;
+  init(n: number) {
     this.n = n;
   }
 
-  isPositive() {
+  isPositive(): bool {
     return this.n > 0;
   }
 
-  isGreaterThanTen() {
+  isGreaterThanTen(): bool {
     return this.n > 10;
   }
 
-  classify() {
+  classify(): string {
     if (this.isPositive()) {
       if (this.isGreaterThanTen()) {
         return "positive large";
@@ -146,9 +155,9 @@ class NumberChecker {
   }
 }
 
-var checker1 = NumberChecker(4);
-var checker2 = NumberChecker(20);
-var checker3 = NumberChecker(-2);
+var checker1: NumberChecker = NumberChecker(4);
+var checker2: NumberChecker = NumberChecker(20);
+var checker3: NumberChecker = NumberChecker(-2);
 print checker1.classify();
 print checker2.classify();
 print checker3.classify();
@@ -156,15 +165,14 @@ print checker3.classify();
 // Class with loop in method
 
 class Summer {
-  sumTo(n) {
-    var total = 0;
-    for (var i = 1; i <= n; i = i + 1) {
+  sumTo(n: number): number {
+    var total: number = 0;
+    for (var i: number = 1; i <= n; i = i + 1) {
       total = total + i;
     }
     return total;
   }
 }
 
-var summer = Summer();
+var summer: Summer = Summer();
 print summer.sumTo(10);
-

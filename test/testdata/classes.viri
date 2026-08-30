@@ -1,19 +1,22 @@
 // Basic Class Definition and Instantiation
 
 class Point {
-  init(x, y) {
+  x: number;
+  y: number;
+  init(x: number, y: number) {
     this.x = x;
     this.y = y;
   }
 }
 
-var p = Point(3, 4);
+var p: Point = Point(3, 4);
 print p.x;
 print p.y;
 
 // Class with Methods
 
 class Counter {
+  count: number;
   init() {
     this.count = 0;
   }
@@ -26,12 +29,12 @@ class Counter {
     this.count = this.count - 1;
   }
 
-  getCount() {
+  getCount(): number {
     return this.count;
   }
 }
 
-var counter = Counter();
+var counter: Counter = Counter();
 print counter.getCount();
 counter.increment();
 counter.increment();
@@ -43,50 +46,53 @@ print counter.getCount();
 // Class with Method Returning Value
 
 class Calculator {
-  init(value) {
+  value: number;
+  init(value: number) {
     this.value = value;
   }
 
-  add(n) {
+  add(n: number): Calculator {
     this.value = this.value + n;
     return this;
   }
 
-  multiply(n) {
+  multiply(n: number): Calculator {
     this.value = this.value * n;
     return this;
   }
 
-  getValue() {
+  getValue(): number {
     return this.value;
   }
 }
 
-var calc = Calculator(10);
+var calc: Calculator = Calculator(10);
 calc.add(5);
 calc.multiply(2);
 print calc.getValue();
 
 // Method Chaining
 
-var calc2 = Calculator(1);
+var calc2: Calculator = Calculator(1);
 print calc2.add(2).multiply(3).add(4).getValue();
 
 // Class with Multiple Instances
 
 class Dog {
-  init(name, breed) {
+  name: string;
+  breed: string;
+  init(name: string, breed: string) {
     this.name = name;
     this.breed = breed;
   }
 
-  bark() {
+  bark(): string {
     return this.name + " says woof!";
   }
 }
 
-var dog1 = Dog("Rex", "German Shepherd");
-var dog2 = Dog("Buddy", "Golden Retriever");
+var dog1: Dog = Dog("Rex", "German Shepherd");
+var dog2: Dog = Dog("Buddy", "Golden Retriever");
 print dog1.bark();
 print dog2.bark();
 print dog1.name;
@@ -95,27 +101,29 @@ print dog2.breed;
 // Class without init
 
 class Empty {
-  getValue() {
+  getValue(): number {
     return 42;
   }
 }
 
-var e = Empty();
+var e: Empty = Empty();
 print e.getValue();
 
-// Setting properties dynamically
+// A field that init does not set is still declared on the class
 
 class Box {
+  items: number;
+  label: string;
   init() {
     this.items = 0;
   }
 
-  getLabel() {
+  getLabel(): string {
     return this.label;
   }
 }
 
-var box = Box();
+var box: Box = Box();
 box.label = "Fragile";
 print box.label;
 box.items = 5;

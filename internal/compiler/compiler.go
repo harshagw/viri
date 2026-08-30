@@ -823,7 +823,7 @@ func (c *Compiler) trackGlobal(index int) {
 	}
 }
 
-func (c *Compiler) compileFunction(params []*token.Token, body *ast.BlockStmt, functionName string) error {
+func (c *Compiler) compileFunction(params []ast.Param, body *ast.BlockStmt, functionName string) error {
 	c.enterScope(functionName)
 
 	// A function nested inside an init method is an ordinary function: its
@@ -833,10 +833,11 @@ func (c *Compiler) compileFunction(params []*token.Token, body *ast.BlockStmt, f
 		defer func() { c.classCompiler.isCompilingInit = true }()
 	}
 
-	// Define parameters as local variables
+	// Define parameters as local variables. Param.Type is ignored here —
+	// codegen is untyped; the checker is what reads annotations.
 	for _, param := range params {
-		if _, ok := c.symbolTable.Define(param.Lexeme, false); !ok {
-			return c.error(param, "Cannot declare variable with this name again.")
+		if _, ok := c.symbolTable.Define(param.Name.Lexeme, false); !ok {
+			return c.error(param.Name, "Cannot declare variable with this name again.")
 		}
 	}
 
@@ -977,8 +978,8 @@ func (c *Compiler) compileMethod(method *ast.FunctionStmt) error {
 	}
 
 	for _, param := range method.Params {
-		if _, ok := c.symbolTable.Define(param.Lexeme, false); !ok {
-			return c.error(param, "Cannot declare variable with this name again.")
+		if _, ok := c.symbolTable.Define(param.Name.Lexeme, false); !ok {
+			return c.error(param.Name, "Cannot declare variable with this name again.")
 		}
 	}
 

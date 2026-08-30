@@ -1,29 +1,35 @@
 // Block-scoped locals get their own frame slots
 fun blockLocals() {
   {
-    var a = 1;
-    var b = 2;
-    var c = 3;
+    var a: number = 1;
+    var b: number = 2;
+    var c: number = 3;
     print a + b + c;
   }
 }
 blockLocals();
 
-// A top-level block variable does not collide with later globals
-var g = nil;
+// A top-level block variable does not collide with later globals.
+// The placeholder is overwritten inside the block; Viri has no nil, so a
+// declaration must start with a real value.
+var g: fun(): number = fun(): number { return 0; };
 {
-  var a = 10;
-  g = fun() { return a; };
+  var a: number = 10;
+  g = fun(): number { return a; };
 }
-var after = 20;
+var after: number = 20;
 print g();
 print after;
 
 // Closures created in a loop capture per-iteration values
-var fns = [nil, nil, nil];
-for (var i = 0; i < 3; i = i + 1) {
-  var j = i;
-  fns[i] = fun() { return j; };
+var fns: []fun(): number = [
+  fun(): number { return -1; },
+  fun(): number { return -1; },
+  fun(): number { return -1; }
+];
+for (var i: number = 0; i < 3; i = i + 1) {
+  var j: number = i;
+  fns[i] = fun(): number { return j; };
 }
 print fns[0]();
 print fns[1]();
@@ -31,12 +37,12 @@ print fns[2]();
 
 // Captured variables appear as plain values in arrays and hashes
 fun captured() {
-  var x = 1;
+  var x: number = 1;
   fun set() { x = 2; }
   set();
   print [x];
   print {"k": x};
-  var k = "key";
+  var k: string = "key";
   fun rename() { k = "keyB"; }
   rename();
   print {k: 1};
@@ -45,9 +51,9 @@ captured();
 
 // Arguments are passed by value, even when the caller passes a captured variable
 fun outer() {
-  var x = 1;
+  var x: number = 1;
   fun mid() {
-    fun take(y) {
+    fun take(y: number): number {
       fun set() { y = 99; }
       set();
       return y;
