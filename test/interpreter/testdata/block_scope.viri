@@ -1,0 +1,16 @@
+var initial = 10;
+{
+  var initial = 20;
+  fun add(a,b){
+    return initial + a + b;
+  }
+  print add(10, 20);
+}
+print initial;
+
+{
+  initial = 30;
+  var initial = 40;
+  print initial;
+}
+print initial;

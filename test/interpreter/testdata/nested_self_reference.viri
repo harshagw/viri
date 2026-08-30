@@ -1,0 +1,17 @@
+// A nested function that mentions the enclosing function's name calls
+// the enclosing function, not itself
+fun outer(n) {
+  fun inner() {
+    if (n > 0) { return outer(n - 1); }
+    return "done";
+  }
+  return inner();
+}
+print outer(2);
+
+// A method calling a global function that shares its name calls the global
+fun greet() { print "global greet"; }
+class A {
+  greet() { greet(); }
+}
+A().greet();

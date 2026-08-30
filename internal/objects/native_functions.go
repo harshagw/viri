@@ -17,18 +17,6 @@ type NativeFunction struct {
 func (n *NativeFunction) Type() Type      { return TypeNativeFun }
 func (n *NativeFunction) Inspect() string { return fmt.Sprintf("<native_fun %s>", n.Name) }
 
-func (n *NativeFunction) Call(exec BlockExecutor, arguments []Object) (Object, error) {
-	return n.Fn(arguments...)
-}
-
-func (n *NativeFunction) Arity() int {
-	return n.NumArgs
-}
-
-func (n *NativeFunction) String() string {
-	return n.Inspect()
-}
-
 var NativeFunctions = []*NativeFunction{
 	{Name: "clock", NumArgs: 0, Fn: nativeClock},
 	{Name: "len", NumArgs: 1, Fn: nativeLen},

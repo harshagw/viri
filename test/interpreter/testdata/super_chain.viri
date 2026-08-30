@@ -1,0 +1,11 @@
+// 'super' is lexical: three-level chains terminate
+class A {
+  hello() { print "A"; }
+}
+class B < A {
+  hello() { print "B"; super.hello(); }
+}
+class C < B {
+  hello() { print "C"; super.hello(); }
+}
+C().hello();

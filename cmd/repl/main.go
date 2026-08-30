@@ -9,12 +9,12 @@ import (
 	prompt "github.com/c-bata/go-prompt"
 	figure "github.com/common-nighthawk/go-figure"
 	"github.com/fatih/color"
-	"github.com/harshagw/viri/internal/ast"
-	"github.com/harshagw/viri/internal/interp"
-	"github.com/harshagw/viri/internal/objects"
-	"github.com/harshagw/viri/internal/parser"
-	"github.com/harshagw/viri/internal/scanner"
-	"github.com/harshagw/viri/internal/token"
+	"github.com/harshagw/viri/internal/interpreter/ast"
+	"github.com/harshagw/viri/internal/interpreter/interp"
+	"github.com/harshagw/viri/internal/interpreter/objects"
+	"github.com/harshagw/viri/internal/interpreter/parser"
+	"github.com/harshagw/viri/internal/interpreter/scanner"
+	"github.com/harshagw/viri/internal/interpreter/token"
 )
 
 func main() {

@@ -1,0 +1,99 @@
+// Inheritance - Basic
+
+class Animal {
+  init(name) {
+    this.name = name;
+  }
+
+  speak() {
+    return this.name + " makes a sound";
+  }
+}
+
+class Cat < Animal {
+  init(name, color) {
+    super.init(name);
+    this.color = color;
+  }
+
+  speak() {
+    return this.name + " says meow!";
+  }
+}
+
+var animal = Animal("Generic");
+var cat = Cat("Whiskers", "orange");
+print animal.speak();
+print cat.speak();
+print cat.color;
+
+// Inheritance - Calling parent methods via super
+
+class Vehicle {
+  init(brand) {
+    this.brand = brand;
+  }
+
+  describe() {
+    return "Brand: " + this.brand;
+  }
+}
+
+class Car < Vehicle {
+  init(brand, model) {
+    super.init(brand);
+    this.model = model;
+  }
+
+  describe() {
+    return super.describe() + ", Model: " + this.model;
+  }
+}
+
+var car = Car("Toyota", "Camry");
+print car.describe();
+
+// Inherited method access
+
+class Shape {
+  init(name) {
+    this.name = name;
+  }
+
+  getName() {
+    return this.name;
+  }
+}
+
+class Circle < Shape {
+  init(radius) {
+    super.init("Circle");
+    this.radius = radius;
+  }
+
+  getArea() {
+    return 3.14159 * this.radius * this.radius;
+  }
+}
+
+var circle = Circle(5);
+print circle.getName();
+print circle.getArea();
+
+// Overriding and extending parent behavior
+
+class Logger {
+  log(msg) {
+    return "[LOG] " + msg;
+  }
+}
+
+class TimestampLogger < Logger {
+  log(msg) {
+    return "[2024] " + super.log(msg);
+  }
+}
+
+var logger = TimestampLogger();
+print logger.log("Hello");
+

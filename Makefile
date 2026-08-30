@@ -25,7 +25,7 @@ test:
 
 e2e: build
 	@echo "========================================="
-	@echo "Running E2E tests (Interpreter Engine)"
+	@echo "Running E2E tests (Interpreter Engine, frozen)"
 	@echo "========================================="
 	go test -tags=e2e -run TestE2E$$ ./test/...
 	@echo ""
@@ -33,11 +33,6 @@ e2e: build
 	@echo "Running E2E tests (VM Engine)"
 	@echo "========================================="
 	go test -tags=e2e -run TestE2E_VM ./test/...
-	@echo ""
-	@echo "========================================="
-	@echo "Running E2E tests (Engine Differential)"
-	@echo "========================================="
-	go test -tags=e2e -run TestE2E_Diff ./test/...
 	rm -f viri
 
 build-plugin:

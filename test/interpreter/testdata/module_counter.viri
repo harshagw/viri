@@ -1,0 +1,4 @@
+var secret = "module-secret";
+export fun getSecret() { return secret; }
+export var count = 0;
+export fun inc() { count = count + 1; }

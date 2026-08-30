@@ -1,0 +1,21 @@
+if (true) {
+	print "true";
+} else {
+	print "false";
+}
+
+if (false) {
+	print "true";
+} else {
+	print "false";
+}
+
+var x = 10;
+if (x > 5) {
+	print "greater than 5";
+}
+if (x < 5) {
+	print "less than 5";
+} else {
+	print "not less than 5";
+}

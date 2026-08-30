@@ -1,0 +1,22 @@
+fun add(a, b) {
+	return a + b;
+}
+print add(5, 7);
+
+fun factorial(n) {
+	if (n <= 1) return 1;
+	return n * factorial(n - 1);
+}
+print factorial(5);
+
+fun counter() {
+	var count = 0;
+	fun increment() {
+		count = count + 1;
+		return count;
+	}
+	return increment;
+}
+var c = counter();
+print c();
+print c();

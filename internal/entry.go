@@ -5,11 +5,9 @@ import (
 	"time"
 
 	"github.com/fatih/color"
-	"github.com/harshagw/viri/internal/ast"
 	"github.com/harshagw/viri/internal/compiler"
-	"github.com/harshagw/viri/internal/interp"
+	"github.com/harshagw/viri/internal/interpreter"
 	"github.com/harshagw/viri/internal/objects"
-	"github.com/harshagw/viri/internal/parser"
 	"github.com/harshagw/viri/internal/token"
 	"github.com/harshagw/viri/internal/vm"
 )
@@ -18,7 +16,7 @@ type ViriRuntimeConfig struct {
 	DebugMode      bool
 	StatsMode      bool
 	DisableWarning bool
-	Engine         string // "interpreter" or "vm"
+	Engine         string // "vm" or "interpreter"
 }
 
 type Viri struct {
@@ -34,6 +32,7 @@ func NewViriRuntime(config *ViriRuntimeConfig) *Viri {
 			DebugMode:      false,
 			StatsMode:      false,
 			DisableWarning: false,
+			Engine:         "vm",
 		}
 	}
 	return &Viri{
@@ -77,11 +76,20 @@ func printRuntimeError(filePath string, line int, message string) {
 }
 
 func (v *Viri) Run(filePath string) {
-	if v.config.Engine == "vm" {
-		v.runWithVM(filePath)
-	} else {
-		v.runWithInterpreter(filePath)
+	// The interpreter is a secondary engine owning its whole run, including
+	// its own diagnostic formatting. Retiring it means deleting
+	// internal/interpreter and this branch; nothing else here refers to it.
+	if v.config.Engine == "interpreter" {
+		if interpreter.Run(filePath, interpreter.Options{
+			DebugMode:      v.config.DebugMode,
+			StatsMode:      v.config.StatsMode,
+			DisableWarning: v.config.DisableWarning,
+		}) {
+			v.hasErrors = true
+		}
+		return
 	}
+	v.runWithVM(filePath)
 }
 
 func (v *Viri) runWithVM(filePath string) {
@@ -118,65 +126,6 @@ func (v *Viri) runWithVM(filePath string) {
 		return
 	}
 
-	elapsed := time.Since(startTime)
-	if v.config.StatsMode {
-		fmt.Printf("Time taken: %s\n", elapsed)
-	}
-}
-
-func (v *Viri) runWithInterpreter(filePath string) {
-	mod, err := parser.LoadModuleFile(filePath, v)
-	if err != nil {
-		// Per-token diagnostics were already printed through the handler;
-		// only surface errors that carry extra information (e.g. scanning
-		// or file-loading failures).
-		if !v.hasErrors {
-			color.New(color.FgRed).Fprintln(color.Error, "Error parsing module:", err)
-		}
-		v.hasErrors = true
-		return
-	}
-
-	if v.hasErrors {
-		return
-	}
-
-	if v.config.DebugMode {
-		printer := ast.NewPrinter()
-		tree := printer.PrintStatements(mod.GetAllStatements())
-		fmt.Println(tree)
-	}
-
-	res := parser.NewResolver(v)
-	locals, err := res.Resolve(mod)
-	if err != nil {
-		v.hasErrors = true
-		return
-	}
-
-	interpreter := interp.NewInterpreter(nil)
-	interpreter.SetLocals(locals)
-	interpreter.SetResolvedModules(res.GetResolvedModules())
-	interpreter.SetCurrentModule(mod.Path)
-
-	startTime := time.Now()
-	if _, err := interpreter.Interpret(mod.GetAllStatements()); err != nil {
-		if runtimeErr, ok := err.(*objects.RuntimeError); ok {
-			filePath := ""
-			line := 0
-			if runtimeErr.Token != nil {
-				line = runtimeErr.Token.Line
-				if runtimeErr.Token.FilePath != nil {
-					filePath = *runtimeErr.Token.FilePath
-				}
-			}
-			printRuntimeError(filePath, line, runtimeErr.Message)
-		} else {
-			printRuntimeError("", 0, err.Error())
-		}
-		v.hasErrors = true
-		return
-	}
 	elapsed := time.Since(startTime)
 	if v.config.StatsMode {
 		fmt.Printf("Time taken: %s\n", elapsed)

@@ -1,0 +1,21 @@
+import "module_math.viri" as math;
+import "module_classes.viri" as classes;
+import "module_wrapper.viri" as wrapper;
+
+// Use math functions
+var sum = math.add(10, 5);
+print sum;
+
+// Use class with math constant
+var counter = classes.Counter(math.PI);
+counter.increment();
+print counter.getValue();
+
+// Use chained wrapper (calls math internally)
+print wrapper.double(sum);
+print wrapper.addPI(10);
+
+// Should be able to reclare global variable in new module
+var x = 20;
+
+print x;

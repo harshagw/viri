@@ -12,7 +12,7 @@ import (
 )
 
 func TestE2E(t *testing.T) {
-	testDataDir := "testdata"
+	testDataDir := "interpreter/testdata"
 	files, err := os.ReadDir(testDataDir)
 	if err != nil {
 		t.Fatalf("failed to read testdata dir: %v", err)
@@ -58,7 +58,7 @@ func TestE2E(t *testing.T) {
 }
 
 func runViriBinary(t *testing.T, viriPath, scriptPath string) string {
-	cmd := exec.Command(viriPath, "--no-warning", scriptPath)
+	cmd := exec.Command(viriPath, "--no-warning", "--engine=interpreter", scriptPath)
 	var out bytes.Buffer
 	var stderr bytes.Buffer
 	cmd.Stdout = &out

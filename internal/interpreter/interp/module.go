@@ -1,0 +1,43 @@
+package interp
+
+import (
+	"github.com/harshagw/viri/internal/interpreter/ast"
+	"github.com/harshagw/viri/internal/interpreter/objects"
+)
+
+func (i *Interpreter) ExecuteModule(astMod *ast.Module, importStmt *ast.ImportStmt) (*objects.Module, error) {
+	moduleEnv := objects.NewEnvironment(i.globals)
+
+	previousEnv := i.environment
+	previousExports := i.moduleExports
+	previousModule := i.currentModule
+
+	i.environment = moduleEnv
+	i.moduleExports = make(map[string]objects.Object)
+	i.currentModule = astMod.Path
+
+	defer func() {
+		i.environment = previousEnv
+		i.moduleExports = previousExports
+		i.currentModule = previousModule
+	}()
+
+	for _, stmt := range astMod.GetAllStatements() {
+		if _, err := i.evalStmt(stmt); err != nil {
+			return nil, err
+		}
+	}
+
+	runtimeMod := objects.NewModule(astMod.Path, astMod.Imports, astMod.Statements)
+	runtimeMod.Exports = i.moduleExports
+	// The namespace reads the module environment live: assignments to
+	// exported variables after loading (e.g. from exported functions)
+	// stay visible to the importer.
+	exportedNames := make(map[string]bool, len(i.moduleExports))
+	for name := range i.moduleExports {
+		exportedNames[name] = true
+	}
+	runtimeMod.Namespace = objects.NewLiveNamespace(importStmt.Alias.Lexeme, moduleEnv, exportedNames)
+
+	return runtimeMod, nil
+}

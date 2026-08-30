@@ -18,11 +18,6 @@ func NewNativeModule(name string, exports map[string]objects.Object) *NativeModu
 	}
 }
 
-// ToNamespace converts the native module to a namespace object for use in the interpreter.
-func (m *NativeModule) ToNamespace(alias string) *objects.Namespace {
-	return objects.NewNamespace(alias, m.Exports)
-}
-
 // GetExportNames returns a list of all exported symbol names.
 func (m *NativeModule) GetExportNames() []string {
 	names := make([]string, 0, len(m.Exports))

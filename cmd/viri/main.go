@@ -14,11 +14,11 @@ func main() {
 	var fileName string
 	var debugMode bool
 	var statsMode bool
-	var engine string = "interpreter" // default to interpreter
+	var engine string = "vm" // default to the compiler + VM pipeline
 	showWarning := true
 
 	usage := func() {
-		fmt.Println("Usage: viri [--debug] [--stats] [--no-warning] [--engine=interpreter|vm] <file.viri>")
+		fmt.Println("Usage: viri [--debug] [--stats] [--no-warning] [--engine=vm|interpreter] <file.viri>")
 		os.Exit(64) // EX_USAGE
 	}
 
