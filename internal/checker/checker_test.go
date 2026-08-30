@@ -676,3 +676,56 @@ func TestUnresolvedImportDoesNotCrash(t *testing.T) {
 		wantError(t, `var x: missing.Thing = 1;`, "Unknown module 'missing'")
 	})
 }
+
+// Loop placement and export placement moved out of the compiler in Phase 4.
+// They are user-facing rules about a program that parses, so the checker owns
+// them; the compiler keeps only an invariant guard, since it needs a jump
+// target and a module scope to emit against.
+func TestLoopPlacement(t *testing.T) {
+	t.Run("rejects break outside a loop", func(t *testing.T) {
+		wantError(t, `break;`, "'break' can only be used inside a loop")
+	})
+	t.Run("rejects continue outside a loop", func(t *testing.T) {
+		wantError(t, `continue;`, "'continue' can only be used inside a loop")
+	})
+	t.Run("rejects break in a function nested in a loop", func(t *testing.T) {
+		// The loop does not reach into the function, so there is nothing to
+		// break out of.
+		wantError(t, `while (true) {
+  fun g() { break; }
+}`, "'break' can only be used inside a loop")
+	})
+	t.Run("accepts break and continue inside their loop", func(t *testing.T) {
+		wantOK(t, `while (true) { break; }
+for (var i: number = 0; i < 3; i = i + 1) { continue; }`)
+	})
+	t.Run("accepts break inside a nested loop", func(t *testing.T) {
+		wantOK(t, `while (true) {
+  for (var i: number = 0; i < 3; i = i + 1) { break; }
+  break;
+}`)
+	})
+	t.Run("rejects break after its loop closes", func(t *testing.T) {
+		wantError(t, `while (true) { print 1; }
+break;`, "'break' can only be used inside a loop")
+	})
+}
+
+func TestExportPlacement(t *testing.T) {
+	t.Run("rejects an exported local variable", func(t *testing.T) {
+		wantError(t, `fun f() { export var a: number = 1; }`,
+			"'a' cannot be exported")
+	})
+	t.Run("rejects an exported nested function", func(t *testing.T) {
+		wantError(t, `fun f() { export fun g() { print 1; } }`,
+			"'g' cannot be exported")
+	})
+	t.Run("rejects an exported class inside a block", func(t *testing.T) {
+		wantError(t, `{ export class C {} }`, "'C' cannot be exported")
+	})
+	t.Run("accepts exports at module level", func(t *testing.T) {
+		wantOK(t, `export var a: number = 1;
+export fun f() { print a; }
+export class C {}`)
+	})
+}

@@ -322,6 +322,13 @@ func TestBlockStatements(t *testing.T) {
 // compileTestProgram compiles a test input. A top-level BlockStmt is treated
 // as a sequence of module-level statements (not as a lexical block), matching
 // how real programs are compiled statement by statement at module level.
+//
+// It builds the AST directly and never runs the checker, which is why the
+// error tests below expect "the program was not type-checked" phrasing. Since
+// Phase 4 the checker owns every user-facing rule; what these tests pin is
+// that codegen still refuses to emit against an unchecked program rather than
+// producing a store to slot 0 or a jump with no target. The user-facing
+// diagnostic for each of these rules is tested in internal/checker.
 func compileTestProgram(c *Compiler, input interface{}) error {
 	if block, ok := input.(*ast.BlockStmt); ok {
 		for _, stmt := range block.Statements {
@@ -723,7 +730,7 @@ func TestConstAssignmentError(t *testing.T) {
 		t.Fatalf("expected error for const assignment, got none")
 	}
 
-	expected := "Cannot reassign const variable 'PI'."
+	expected := "Cannot assign to constant 'PI'; the program was not type-checked."
 	if err.Error() != expected {
 		t.Fatalf("wrong error. want=%q, got=%q", expected, err.Error())
 	}
@@ -1417,7 +1424,7 @@ func TestBreakOutsideLoop(t *testing.T) {
 		t.Fatalf("expected error for break outside loop, got none")
 	}
 
-	expected := "break statement must be inside a loop."
+	expected := "'break' is not inside a loop; the program was not type-checked."
 	if err.Error() != expected {
 		t.Fatalf("wrong error. want=%q, got=%q", expected, err.Error())
 	}
@@ -1432,7 +1439,7 @@ func TestContinueOutsideLoop(t *testing.T) {
 		t.Fatalf("expected error for continue outside loop, got none")
 	}
 
-	expected := "continue statement must be inside a loop."
+	expected := "'continue' is not inside a loop; the program was not type-checked."
 	if err.Error() != expected {
 		t.Fatalf("wrong error. want=%q, got=%q", expected, err.Error())
 	}
@@ -2445,7 +2452,7 @@ func TestThisOutsideClass(t *testing.T) {
 		t.Fatalf("expected error for 'this' outside class, got none")
 	}
 
-	expected := "cannot use 'this' outside of a class"
+	expected := "'this' is outside a class; the program was not type-checked."
 	if err.Error() != expected {
 		t.Fatalf("wrong error. want=%q, got=%q", expected, err.Error())
 	}
@@ -2466,7 +2473,7 @@ func TestSuperOutsideClass(t *testing.T) {
 		t.Fatalf("expected error for 'super' outside class, got none")
 	}
 
-	expected := "cannot use 'super' outside of a class"
+	expected := "'super' is outside a class; the program was not type-checked."
 	if err.Error() != expected {
 		t.Fatalf("wrong error. want=%q, got=%q", expected, err.Error())
 	}
@@ -2504,7 +2511,7 @@ func TestSuperWithoutSuperclass(t *testing.T) {
 		t.Fatalf("expected error for 'super' without superclass, got none")
 	}
 
-	expected := "cannot use 'super' in a class with no superclass"
+	expected := "'super' is in a class with no superclass; the program was not type-checked."
 	if err.Error() != expected {
 		t.Fatalf("wrong error. want=%q, got=%q", expected, err.Error())
 	}
@@ -2569,7 +2576,7 @@ func TestModuleExportAccessNotFound(t *testing.T) {
 		t.Fatalf("expected error for non-exported symbol, got none")
 	}
 
-	expected := "'subtract' is not exported from module 'math'"
+	expected := "'subtract' is not exported from module 'math'; the program was not type-checked."
 	if err.Error() != expected {
 		t.Fatalf("wrong error. want=%q, got=%q", expected, err.Error())
 	}
@@ -2591,7 +2598,7 @@ func TestClassSelfInheritance(t *testing.T) {
 		t.Fatalf("expected error for self-inheritance, got none")
 	}
 
-	expected := "A class cannot inherit from itself."
+	expected := "A class inherits from itself; the program was not type-checked."
 	if err.Error() != expected {
 		t.Fatalf("wrong error. want=%q, got=%q", expected, err.Error())
 	}

@@ -111,7 +111,8 @@ func (c *Compiler) compileModule(path string) (objects.CompiledModule, error) {
 		}
 		symbol, ok := c.symbolTable.Hoist(nameTok.Lexeme, isConst)
 		if !ok {
-			return objects.CompiledModule{}, c.error(nameTok, "Cannot declare variable with this name again.")
+			return objects.CompiledModule{}, c.invariant(nameTok,
+				"'"+nameTok.Lexeme+"' is already declared in this scope")
 		}
 		hoistedSlots[nameTok.Lexeme] = symbol.Index
 	}

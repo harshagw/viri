@@ -1,0 +1,66 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/harshagw/viri/test
+cpu: Apple M1 Pro
+BenchmarkFib27-10                           	      21	  49957478 ns/op	22926886 B/op	 1589069 allocs/op
+BenchmarkFib27-10                           	      24	  50250170 ns/op	22926910 B/op	 1589069 allocs/op
+BenchmarkFib27-10                           	      22	  50240799 ns/op	22926988 B/op	 1589069 allocs/op
+BenchmarkFib27-10                           	      22	  50007309 ns/op	22927131 B/op	 1589069 allocs/op
+BenchmarkFib27-10                           	      24	  49957833 ns/op	22926831 B/op	 1589068 allocs/op
+BenchmarkFib27-10                           	      24	  50309165 ns/op	22926895 B/op	 1589069 allocs/op
+BenchmarkArithmeticLoop3M-10                	       5	 205269725 ns/op	48044644 B/op	 6000017 allocs/op
+BenchmarkArithmeticLoop3M-10                	       5	 206766783 ns/op	48044644 B/op	 6000017 allocs/op
+BenchmarkArithmeticLoop3M-10                	       5	 206618058 ns/op	48044497 B/op	 6000016 allocs/op
+BenchmarkArithmeticLoop3M-10                	       5	 228365900 ns/op	48044923 B/op	 6000020 allocs/op
+BenchmarkArithmeticLoop3M-10                	       5	 210288392 ns/op	48044587 B/op	 6000017 allocs/op
+BenchmarkArithmeticLoop3M-10                	       5	 215657108 ns/op	48044715 B/op	 6000018 allocs/op
+BenchmarkFunctionCallLoop1M-10              	      12	  95501448 ns/op	40044533 B/op	 3000017 allocs/op
+BenchmarkFunctionCallLoop1M-10              	      12	 102128399 ns/op	40044616 B/op	 3000018 allocs/op
+BenchmarkFunctionCallLoop1M-10              	      12	  99420028 ns/op	40044640 B/op	 3000018 allocs/op
+BenchmarkFunctionCallLoop1M-10              	      12	  96069212 ns/op	40044673 B/op	 3000018 allocs/op
+BenchmarkFunctionCallLoop1M-10              	      12	 100450004 ns/op	40044644 B/op	 3000018 allocs/op
+BenchmarkFunctionCallLoop1M-10              	      12	  96677080 ns/op	40044622 B/op	 3000018 allocs/op
+BenchmarkArrayReadWrite2M-10                	       7	 150888875 ns/op	24044685 B/op	 3000018 allocs/op
+BenchmarkArrayReadWrite2M-10                	       7	 163219333 ns/op	24044649 B/op	 3000018 allocs/op
+BenchmarkArrayReadWrite2M-10                	       7	 156492036 ns/op	24044699 B/op	 3000019 allocs/op
+BenchmarkArrayReadWrite2M-10                	       7	 159034929 ns/op	24044587 B/op	 3000018 allocs/op
+BenchmarkArrayReadWrite2M-10                	       7	 150774702 ns/op	24044665 B/op	 3000018 allocs/op
+BenchmarkArrayReadWrite2M-10                	       7	 150619506 ns/op	24044601 B/op	 3000018 allocs/op
+BenchmarkMethodCallLoop1M-10                	       9	 118688704 ns/op	56045125 B/op	 4000026 allocs/op
+BenchmarkMethodCallLoop1M-10                	       9	 118299736 ns/op	56045178 B/op	 4000027 allocs/op
+BenchmarkMethodCallLoop1M-10                	       9	 117952194 ns/op	56045224 B/op	 4000027 allocs/op
+BenchmarkMethodCallLoop1M-10                	       9	 120927537 ns/op	56045240 B/op	 4000027 allocs/op
+BenchmarkMethodCallLoop1M-10                	       9	 120600917 ns/op	56045267 B/op	 4000027 allocs/op
+BenchmarkMethodCallLoop1M-10                	       9	 124381500 ns/op	56045223 B/op	 4000027 allocs/op
+BenchmarkClosureCreateCall500k-10           	      13	  89696503 ns/op	72044750 B/op	 4000018 allocs/op
+BenchmarkClosureCreateCall500k-10           	      12	  89832424 ns/op	72044874 B/op	 4000019 allocs/op
+BenchmarkClosureCreateCall500k-10           	      12	 103177806 ns/op	72045321 B/op	 4000023 allocs/op
+BenchmarkClosureCreateCall500k-10           	      12	  97670972 ns/op	72044940 B/op	 4000020 allocs/op
+BenchmarkClosureCreateCall500k-10           	      12	  95906288 ns/op	72044898 B/op	 4000019 allocs/op
+BenchmarkClosureCreateCall500k-10           	      12	  97676663 ns/op	72044882 B/op	 4000019 allocs/op
+BenchmarkGlobalReadThrough3Frames300k-10    	      26	  47468792 ns/op	26444832 B/op	 1500020 allocs/op
+BenchmarkGlobalReadThrough3Frames300k-10    	      26	  44220465 ns/op	26444686 B/op	 1500020 allocs/op
+BenchmarkGlobalReadThrough3Frames300k-10    	      26	  44365304 ns/op	26444776 B/op	 1500020 allocs/op
+BenchmarkGlobalReadThrough3Frames300k-10    	      26	  44380098 ns/op	26444699 B/op	 1500020 allocs/op
+BenchmarkGlobalReadThrough3Frames300k-10    	      26	  48092104 ns/op	26444717 B/op	 1500020 allocs/op
+BenchmarkGlobalReadThrough3Frames300k-10    	      24	  46314941 ns/op	26444746 B/op	 1500020 allocs/op
+BenchmarkHashSetGet200k-10                  	      62	  19304145 ns/op	 2444396 B/op	  300019 allocs/op
+BenchmarkHashSetGet200k-10                  	      63	  19321101 ns/op	 2444434 B/op	  300019 allocs/op
+BenchmarkHashSetGet200k-10                  	      61	  19268511 ns/op	 2444398 B/op	  300019 allocs/op
+BenchmarkHashSetGet200k-10                  	      62	  19222608 ns/op	 2444411 B/op	  300019 allocs/op
+BenchmarkHashSetGet200k-10                  	      63	  19753581 ns/op	 2444413 B/op	  300019 allocs/op
+BenchmarkHashSetGet200k-10                  	      62	  20938888 ns/op	 2444420 B/op	  300019 allocs/op
+BenchmarkStringConcat20k-10                 	      48	  29689387 ns/op	211304411 B/op	   60030 allocs/op
+BenchmarkStringConcat20k-10                 	      48	  25969944 ns/op	211304279 B/op	   60029 allocs/op
+BenchmarkStringConcat20k-10                 	      49	  24902872 ns/op	211304182 B/op	   60028 allocs/op
+BenchmarkStringConcat20k-10                 	      40	  26587633 ns/op	211304218 B/op	   60028 allocs/op
+BenchmarkStringConcat20k-10                 	      45	  28380565 ns/op	211304486 B/op	   60030 allocs/op
+BenchmarkStringConcat20k-10                 	      43	  30101902 ns/op	211304557 B/op	   60031 allocs/op
+BenchmarkHashBuild500k-10                   	       7	 153027024 ns/op	99929257 B/op	 1508634 allocs/op
+BenchmarkHashBuild500k-10                   	       7	 156783756 ns/op	99952656 B/op	 1508635 allocs/op
+BenchmarkHashBuild500k-10                   	       7	 165059393 ns/op	99964377 B/op	 1508636 allocs/op
+BenchmarkHashBuild500k-10                   	       7	 179877327 ns/op	99929229 B/op	 1508634 allocs/op
+BenchmarkHashBuild500k-10                   	       7	 150726875 ns/op	99929200 B/op	 1508634 allocs/op
+BenchmarkHashBuild500k-10                   	       7	 168495018 ns/op	99894150 B/op	 1508633 allocs/op
+PASS
+ok  	github.com/harshagw/viri/test	84.780s

@@ -2,6 +2,7 @@ package checker
 
 import (
 	"github.com/harshagw/viri/internal/ast"
+	"github.com/harshagw/viri/internal/token"
 	"github.com/harshagw/viri/internal/types"
 )
 
@@ -10,6 +11,16 @@ import (
 // report a spurious duplicate.
 func (c *Checker) atModuleLevel() bool {
 	return len(c.scopes) == 1
+}
+
+// checkExportPlacement rejects `export` anywhere but the outermost scope. A
+// module's exports are its public surface, and a name that only exists for the
+// length of a function body has no surface to be part of.
+func (c *Checker) checkExportPlacement(name *token.Token, exported bool) {
+	if exported && !c.atModuleLevel() {
+		c.errorAt(name, "'"+name.Lexeme+"' cannot be exported: only a "+
+			"module's top-level declarations can be exported.")
+	}
 }
 
 func (c *Checker) checkStatements(statements []ast.Stmt) {
@@ -51,7 +62,9 @@ func (c *Checker) checkStatement(stmt ast.Stmt) {
 
 	case *ast.WhileStmt:
 		c.checkCondition(s.Condition, "while")
+		c.loopDepth++
 		c.checkStatement(s.Body)
+		c.loopDepth--
 
 	case *ast.ForStmt:
 		// The initialiser's scope is the loop, so a sibling loop can reuse
@@ -64,7 +77,9 @@ func (c *Checker) checkStatement(stmt ast.Stmt) {
 		if s.Increment != nil {
 			c.checkExpr(s.Increment)
 		}
+		c.loopDepth++
 		c.checkStatement(s.Body)
+		c.loopDepth--
 		c.endScope()
 
 	case *ast.FunctionStmt:
@@ -76,8 +91,18 @@ func (c *Checker) checkStatement(stmt ast.Stmt) {
 	case *ast.ClassStmt:
 		c.checkClassStmt(s)
 
-	case *ast.BreakStmt, *ast.ContinueStmt, *ast.ImportStmt:
-		// Nothing to type. Placement is checked by the compiler.
+	case *ast.BreakStmt:
+		if c.loopDepth == 0 {
+			c.errorAt(s.Keyword, "'break' can only be used inside a loop.")
+		}
+
+	case *ast.ContinueStmt:
+		if c.loopDepth == 0 {
+			c.errorAt(s.Keyword, "'continue' can only be used inside a loop.")
+		}
+
+	case *ast.ImportStmt:
+		// Nothing to type: collect already resolved the module.
 
 	default:
 		c.error(stmt, "Unrecognised statement.")
@@ -102,6 +127,8 @@ func (c *Checker) checkCondition(expr ast.Expr, keyword string) {
 }
 
 func (c *Checker) checkVarDecl(s *ast.VarDeclStmt) {
+	c.checkExportPlacement(s.Name, s.Exported)
+
 	// At module level collect already resolved this annotation and bound the
 	// name. Resolving it again would report any problem with it twice.
 	var declared types.Type
@@ -140,6 +167,8 @@ func (c *Checker) checkVarDecl(s *ast.VarDeclStmt) {
 }
 
 func (c *Checker) checkFunctionStmt(s *ast.FunctionStmt) {
+	c.checkExportPlacement(s.Name, s.Exported)
+
 	// As with variables, a module-level signature was already resolved by
 	// collect; reuse it rather than reporting its errors a second time.
 	var sig *types.Function
@@ -162,7 +191,14 @@ func (c *Checker) checkFunctionStmt(s *ast.FunctionStmt) {
 func (c *Checker) checkFunctionBody(params []ast.Param, sig *types.Function, body *ast.BlockStmt) {
 	previousFn, previousInit := c.currentFn, c.inInit
 	c.currentFn, c.inInit = sig, false
-	defer func() { c.currentFn, c.inInit = previousFn, previousInit }()
+	// A loop does not reach into a function declared inside it, so `break` in
+	// a nested function is as unplaced as one at module level.
+	previousLoopDepth := c.loopDepth
+	c.loopDepth = 0
+	defer func() {
+		c.currentFn, c.inInit = previousFn, previousInit
+		c.loopDepth = previousLoopDepth
+	}()
 
 	c.beginScope()
 	for i, p := range params {
@@ -213,6 +249,8 @@ func (c *Checker) checkReturn(s *ast.ReturnStmt) {
 }
 
 func (c *Checker) checkClassStmt(s *ast.ClassStmt) {
+	c.checkExportPlacement(s.Name, s.Exported)
+
 	class := c.classes[s.Name.Lexeme]
 	if class == nil {
 		return // already reported during collect

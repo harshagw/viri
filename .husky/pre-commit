@@ -1,9 +1,33 @@
 #!/bin/sh
+#
+# Gate a commit on the test suites, then refresh the benchmark baseline and
+# include it in the same commit.
+#
+# Order matters. The benchmarks run last and only after everything else has
+# passed, so the baseline never moves for a commit that was going to be
+# rejected. `make bench-save` replaces the file only on success, so a failed
+# or interrupted run leaves the previous baseline in place.
+#
+# BENCH_COUNT is the repetition count; 6 is the floor for a number worth
+# trusting, and takes roughly 90s. Lower it for a faster loop:
+#
+#     BENCH_COUNT=1 git commit ...
+#
+# Skip the whole hook with `git commit --no-verify`.
 
-# Check if any changes were made to the core directories
-if git diff --cached --name-only | grep -qE '^(cmd/|internal/|test/)'; then
-  echo "Core changes detected, running tests..."
-  make test && make e2e
-else
-  echo "No core changes detected, skipping pre-commit tests."
+set -e
+
+if ! git diff --cached --name-only | grep -qE '^(cmd/|internal/|test/)'; then
+  echo "No core changes detected, skipping pre-commit checks."
+  exit 0
 fi
+
+echo "Core changes detected, running tests..."
+make test
+make e2e
+
+echo ""
+echo "Refreshing benchmark baseline (BENCH_COUNT=${BENCH_COUNT:-6})..."
+make bench-save BENCH_COUNT="${BENCH_COUNT:-6}"
+git add test/benchmarks/baseline.txt
+echo "Baseline staged for this commit."

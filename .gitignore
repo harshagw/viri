@@ -23,3 +23,6 @@ yarn.lock
 # Built wasm artifacts (built by CI / make build-playground)
 viri-web/public/viri.wasm
 viri-web/public/wasm_exec.js
+
+# Benchmark working output; baseline.txt is committed, this is not.
+test/benchmarks/current.txt

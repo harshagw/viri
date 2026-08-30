@@ -245,7 +245,7 @@ func (c *Compiler) compileStatement(stmt ast.Stmt) error {
 	case *ast.VarDeclStmt:
 		// Validate: exports are only allowed at global scope
 		if stmt.Exported && (c.symbolTable.frameDepth > 0 || c.symbolTable.isBlock) {
-			return c.error(stmt.Name, "cannot export from local scope")
+			return c.invariant(stmt.Name, "Cannot export from a local scope")
 		}
 
 		// Compile the initializer before defining the name, so the variable is
@@ -269,7 +269,7 @@ func (c *Compiler) compileStatement(stmt ast.Stmt) error {
 
 		symbol, ok := c.symbolTable.DefineOrActivate(stmt.Name.Lexeme, stmt.IsConst)
 		if !ok {
-			return c.error(stmt.Name, "Cannot declare variable with this name again.")
+			return c.invariant(stmt.Name, "'"+stmt.Name.Lexeme+"' is already declared in this scope")
 		}
 
 		c.emitSetSymbol(symbol)
@@ -371,7 +371,7 @@ func (c *Compiler) compileStatement(stmt ast.Stmt) error {
 
 	case *ast.BreakStmt:
 		if !c.loopStack.IsInLoop() {
-			return c.error(stmt.Keyword, "break statement must be inside a loop.")
+			return c.invariant(stmt.Keyword, "'break' is not inside a loop")
 		}
 		jumpPos := c.emit(code.OpJump, 9999)
 		c.loopStack.AddBreakJump(jumpPos)
@@ -379,7 +379,7 @@ func (c *Compiler) compileStatement(stmt ast.Stmt) error {
 
 	case *ast.ContinueStmt:
 		if !c.loopStack.IsInLoop() {
-			return c.error(stmt.Keyword, "continue statement must be inside a loop.")
+			return c.invariant(stmt.Keyword, "'continue' is not inside a loop")
 		}
 		if c.loopStack.ContinuePos() == -1 {
 			// For for-loops, continuePos isn't known yet, record jump for patching
@@ -394,13 +394,13 @@ func (c *Compiler) compileStatement(stmt ast.Stmt) error {
 	case *ast.FunctionStmt:
 		// Validate: exports are only allowed at global scope
 		if stmt.Exported && (c.symbolTable.frameDepth > 0 || c.symbolTable.isBlock) {
-			return c.error(stmt.Name, "cannot export from local scope")
+			return c.invariant(stmt.Name, "Cannot export from a local scope")
 		}
 
 		// Define the function name in the current scope
 		symbol, ok := c.symbolTable.DefineOrActivate(stmt.Name.Lexeme, false)
 		if !ok {
-			return c.error(stmt.Name, "Cannot declare variable with this name again.")
+			return c.invariant(stmt.Name, "'"+stmt.Name.Lexeme+"' is already declared in this scope")
 		}
 
 		// Compile the function body
@@ -415,7 +415,7 @@ func (c *Compiler) compileStatement(stmt ast.Stmt) error {
 		// In init methods a bare 'return' returns 'this'; returning a value is an error
 		if c.classCompiler != nil && c.classCompiler.isCompilingInit {
 			if stmt.Value != nil {
-				return c.error(stmt.Keyword, "Can't return a value from an initializer.")
+				return c.invariant(stmt.Keyword, "'init' returns a value")
 			}
 			c.emit(code.OpGetLocal, 0) // 'this' is always local 0
 			c.emit(code.OpReturnValue)
@@ -476,7 +476,7 @@ func (c *Compiler) compileExpression(node ast.Expr) error {
 		case token.MINUS:
 			c.emit(code.OpMinus)
 		default:
-			return c.error(node.Operator, fmt.Sprintf("unknown unary operator %s", node.Operator.Lexeme))
+			return c.unreachable(node.Operator, fmt.Sprintf("the parser produced unary operator %q", node.Operator.Lexeme))
 		}
 
 	case *ast.GroupingExpr:
@@ -528,28 +528,25 @@ func (c *Compiler) compileExpression(node ast.Expr) error {
 		case token.BANG_EQUAL:
 			c.emit(code.OpNotEqual)
 		default:
-			return c.error(node.Operator, fmt.Sprintf("unknown operator %s", node.Operator.Lexeme))
+			return c.unreachable(node.Operator, fmt.Sprintf("the parser produced binary operator %q", node.Operator.Lexeme))
 		}
 
 	case *ast.VariableExpr:
 		symbol, ok := c.symbolTable.Resolve(node.Name.Lexeme)
 		if !ok {
-			return c.error(node.Name, fmt.Sprintf("undefined variable %s", node.Name.Lexeme))
+			return c.invariant(node.Name, fmt.Sprintf("Undefined variable '%s'", node.Name.Lexeme))
 		}
 		c.emitGetSymbol(symbol)
 
 	case *ast.AssignExpr:
-		// Prevent assignment to 'this'
-		if node.Name.Lexeme == "this" {
-			return c.error(node.Name, "cannot assign to 'this'")
-		}
-
+		// No guard against assigning to 'this': the parser rejects it as an
+		// invalid assignment target, so it never reaches an AssignExpr.
 		symbol, ok := c.symbolTable.Resolve(node.Name.Lexeme)
 		if !ok {
-			return c.error(node.Name, fmt.Sprintf("undefined variable %s", node.Name.Lexeme))
+			return c.invariant(node.Name, fmt.Sprintf("Undefined variable '%s'", node.Name.Lexeme))
 		}
 		if symbol.IsConst {
-			return c.error(node.Name, fmt.Sprintf("Cannot reassign const variable '%s'.", node.Name.Lexeme))
+			return c.invariant(node.Name, fmt.Sprintf("Cannot assign to constant '%s'", node.Name.Lexeme))
 		}
 
 		if err := c.compileExpression(node.Value); err != nil {
@@ -658,7 +655,7 @@ func (c *Compiler) compileExpression(node ast.Expr) error {
 				if c.symbolTable.IsStdlibImport(varExpr.Name.Lexeme) {
 					stdlibName, exportName, found := c.symbolTable.ResolveStdlibImport(varExpr.Name.Lexeme, node.Name.Lexeme)
 					if !found {
-						return c.error(node.Name, fmt.Sprintf("'%s' is not exported from stdlib module '%s'", node.Name.Lexeme, varExpr.Name.Lexeme))
+						return c.invariant(node.Name, fmt.Sprintf("'%s' is not exported from stdlib module '%s'", node.Name.Lexeme, varExpr.Name.Lexeme))
 					}
 					// Get the export object from stdlib and add to constants
 					stdMod, _ := stdlib.Get(stdlibName)
@@ -671,7 +668,7 @@ func (c *Compiler) compileExpression(node ast.Expr) error {
 				// This is a regular module access - must resolve to an export
 				moduleIdx, exportIdx, found := c.symbolTable.ResolveImport(varExpr.Name.Lexeme, node.Name.Lexeme)
 				if !found {
-					return c.error(node.Name, fmt.Sprintf("'%s' is not exported from module '%s'", node.Name.Lexeme, varExpr.Name.Lexeme))
+					return c.invariant(node.Name, fmt.Sprintf("'%s' is not exported from module '%s'", node.Name.Lexeme, varExpr.Name.Lexeme))
 				}
 				c.emit(code.OpGetModuleExport, moduleIdx, exportIdx)
 				return nil
@@ -703,22 +700,21 @@ func (c *Compiler) compileExpression(node ast.Expr) error {
 			// Instance fields are slots now, so there is no name-based store
 			// to fall back to. The checker rejects assignment to anything but
 			// a declared field, so reaching here means it did not run.
-			return c.error(node.Name, fmt.Sprintf(
-				"Cannot resolve field '%s' to a slot; the program was not type-checked.",
-				node.Name.Lexeme))
+			return c.invariant(node.Name, fmt.Sprintf(
+				"Cannot resolve field '%s' to a slot", node.Name.Lexeme))
 		}
 		c.emit(code.OpSetField, slot)
 
 	case *ast.ThisExpr:
 		// Validate: must be inside a class
 		if c.classCompiler == nil {
-			return c.error(node.Keyword, "cannot use 'this' outside of a class")
+			return c.invariant(node.Keyword, "'this' is outside a class")
 		}
 
 		// Validate: must be inside a method (this is defined)
 		symbol, ok := c.symbolTable.Resolve("this")
 		if !ok {
-			return c.error(node.Keyword, "cannot use 'this' outside of a method")
+			return c.invariant(node.Keyword, "'this' is outside a method")
 		}
 
 		c.emitGetSymbol(symbol)
@@ -726,18 +722,18 @@ func (c *Compiler) compileExpression(node ast.Expr) error {
 	case *ast.SuperExpr:
 		// Validate: must be inside a class
 		if c.classCompiler == nil {
-			return c.error(node.Keyword, "cannot use 'super' outside of a class")
+			return c.invariant(node.Keyword, "'super' is outside a class")
 		}
 
 		// Validate: class must have a superclass
 		if !c.classCompiler.hasSuperClass {
-			return c.error(node.Keyword, "cannot use 'super' in a class with no superclass")
+			return c.invariant(node.Keyword, "'super' is in a class with no superclass")
 		}
 
 		// Validate: must be inside a method
 		symbol, ok := c.symbolTable.Resolve("this")
 		if !ok {
-			return c.error(node.Keyword, "cannot use 'super' outside of a method")
+			return c.invariant(node.Keyword, "'super' is outside a method")
 		}
 
 		// Push 'this' instance (super method will be bound to it)
@@ -870,7 +866,7 @@ func (c *Compiler) compileFunction(params []ast.Param, body *ast.BlockStmt, func
 	// codegen is untyped; the checker is what reads annotations.
 	for _, param := range params {
 		if _, ok := c.symbolTable.Define(param.Name.Lexeme, false); !ok {
-			return c.error(param.Name, "Cannot declare variable with this name again.")
+			return c.invariant(param.Name, "'"+param.Name.Lexeme+"' is already declared in this scope")
 		}
 	}
 
@@ -933,6 +929,24 @@ func (c *Compiler) patchContinueJumps(continueTarget int) {
 	}
 }
 
+// unreachable reports a state no source program can produce — the parser
+// cannot emit the operator, the symbol table cannot already hold the name.
+// It is a compiler bug, not a rule about the program, and is kept separate
+// from invariant so an audit of user-facing rules does not turn it up.
+func (c *Compiler) unreachable(tok *token.Token, what string) error {
+	return c.error(tok, "compiler bug: "+what+".")
+}
+
+// invariant reports a condition the checker is responsible for rejecting.
+// Codegen still needs the property to hold — without it there is no slot to
+// store into, no jump to target, or no class to resolve against — so the guard
+// stays. But it can only fire on a program that was never checked, so it names
+// that rather than blaming the source. The user-facing diagnostic for each of
+// these rules lives in internal/checker, and only there.
+func (c *Compiler) invariant(tok *token.Token, what string) error {
+	return c.error(tok, what+"; the program was not type-checked.")
+}
+
 func (c *Compiler) error(tok *token.Token, message string) error {
 	if c.diagnosticHandler != nil && tok != nil {
 		c.diagnosticHandler.Error(*tok, message)
@@ -943,7 +957,7 @@ func (c *Compiler) error(tok *token.Token, message string) error {
 func (c *Compiler) compileClassStmt(stmt *ast.ClassStmt) error {
 	// Validate: exports are only allowed at global scope
 	if stmt.Exported && (c.symbolTable.frameDepth > 0 || c.symbolTable.isBlock) {
-		return c.error(stmt.Name, "cannot export from local scope")
+		return c.invariant(stmt.Name, "Cannot export from a local scope")
 	}
 
 	className := stmt.Name.Lexeme
@@ -951,7 +965,7 @@ func (c *Compiler) compileClassStmt(stmt *ast.ClassStmt) error {
 	// Define class name in symbol table (allows recursive references)
 	symbol, ok := c.symbolTable.DefineOrActivate(className, false)
 	if !ok {
-		return c.error(stmt.Name, "Cannot declare variable with this name again.")
+		return c.invariant(stmt.Name, "'"+stmt.Name.Lexeme+"' is already declared in this scope")
 	}
 
 	// Enter class compilation context
@@ -968,7 +982,7 @@ func (c *Compiler) compileClassStmt(stmt *ast.ClassStmt) error {
 		}
 		// Validate: can't inherit from self
 		if stmt.SuperClass.Name.Lexeme == className {
-			return c.error(stmt.SuperClass.Name, "A class cannot inherit from itself.")
+			return c.invariant(stmt.SuperClass.Name, "A class inherits from itself")
 		}
 	} else {
 		c.emit(code.OpNil)
@@ -1007,12 +1021,12 @@ func (c *Compiler) compileMethod(method *ast.FunctionStmt) error {
 	// Define 'this' as first local (index 0)
 	// 'this' should never conflict with imports, but handle it for safety
 	if _, ok := c.symbolTable.Define("this", true); !ok {
-		return c.error(method.Name, "cannot define 'this' in method scope")
+		return c.unreachable(method.Name, "'this' was already defined in the method scope")
 	}
 
 	for _, param := range method.Params {
 		if _, ok := c.symbolTable.Define(param.Name.Lexeme, false); !ok {
-			return c.error(param.Name, "Cannot declare variable with this name again.")
+			return c.invariant(param.Name, "'"+param.Name.Lexeme+"' is already declared in this scope")
 		}
 	}
 

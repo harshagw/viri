@@ -35,8 +35,51 @@ e2e: build
 	go test -tags=e2e -run TestE2E_VM ./test/...
 	rm -f viri
 
+# Benchmarks run the VM only; the interpreter is frozen and no longer runs the
+# same language. COUNT repetitions feed benchstat's variance estimate, so keep
+# it at 6+ for any number you intend to act on.
+BENCH_COUNT ?= 6
+BENCH_FILTER ?= .
+BENCH_DIR := test/benchmarks
+BASELINE := $(BENCH_DIR)/baseline.txt
+CURRENT := $(BENCH_DIR)/current.txt
+
 bench:
-	go test -tags=e2e -run XXX -bench . -benchmem ./test/...
+	go test -tags=e2e -run XXX -bench '$(BENCH_FILTER)' -benchmem ./test/...
+
+# Record the current tree as the reference to compare future runs against.
+# The run writes to a temporary file and only replaces the baseline once it has
+# succeeded, so a failed or interrupted run leaves the old baseline intact
+# rather than a truncated one. Output still streams: the exit status travels
+# out of the pipeline in a side file, since 'set -o pipefail' is not portable.
+bench-save:
+	@mkdir -p $(BENCH_DIR)
+	@tmp=$$(mktemp); rc=$$(mktemp); \
+	{ go test -tags=e2e -run XXX -bench '$(BENCH_FILTER)' -benchmem \
+		-count=$(BENCH_COUNT) ./test/...; echo $$? >$$rc; } | tee $$tmp; \
+	status=$$(cat $$rc); rm -f $$rc; \
+	if [ "$$status" -eq 0 ]; then \
+		mv $$tmp $(BASELINE); \
+		echo ""; echo "baseline written to $(BASELINE)"; \
+	else \
+		rm -f $$tmp; \
+		echo ""; echo "benchmarks failed; $(BASELINE) left unchanged"; \
+		exit 1; \
+	fi
+
+# Measure the working tree and diff it against the saved baseline. benchstat
+# reports the delta with a p-value, so noise does not read as a change.
+bench-cmp:
+	@test -f $(BASELINE) || { echo "no baseline: run 'make bench-save' first"; exit 1; }
+	@mkdir -p $(BENCH_DIR)
+	@tmp=$$(mktemp); rc=$$(mktemp); \
+	{ go test -tags=e2e -run XXX -bench '$(BENCH_FILTER)' -benchmem \
+		-count=$(BENCH_COUNT) ./test/...; echo $$? >$$rc; } | tee $$tmp; \
+	status=$$(cat $$rc); rm -f $$rc; \
+	if [ "$$status" -ne 0 ]; then rm -f $$tmp; exit 1; fi; \
+	mv $$tmp $(CURRENT)
+	@echo ""
+	go run golang.org/x/perf/cmd/benchstat@latest $(BASELINE) $(CURRENT)
 
 build-plugin:
 	cd /Users/harsh/code/viri/viri-syntax-plugin && vsce package

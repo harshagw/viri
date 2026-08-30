@@ -49,6 +49,11 @@ type Checker struct {
 	// assignment, or nil outside that analysis.
 	initClass *types.Class
 
+	// loopDepth counts the loops enclosing the statement being checked, so
+	// break and continue can be rejected outside one. It resets across a
+	// function boundary: a loop does not extend into a nested function.
+	loopDepth int
+
 	hadError bool
 }
 

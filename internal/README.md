@@ -194,3 +194,35 @@ matters: a module's dependencies have already run and filled their globals
 before anything reads them. Globals are rebound on every call and return, keyed
 by `frame.cl.Fn.ModuleIdx` — a function defined in module A but *called* from B
 still reads A's globals.
+
+## Where a rule lives
+
+Every rejection has exactly one home. The rule is that **a check belongs to the
+earliest pass with enough knowledge to decide it** — that pass can give the
+clearest message, and every later pass gets to assume the property holds.
+
+| Pass | Knows | Owns |
+| --- | --- | --- |
+| `parser` | tokens, shape | rules decidable from syntactic position alone — `this = 1` is an "Invalid assignment target" |
+| `compiler`'s module loader | the filesystem, the stdlib registry | whether an imported module exists |
+| `checker` | names, scopes, types, the whole program | everything else a user can write that parses |
+| `compiler` | slots, jump offsets, constant indices | **nothing user-facing** |
+
+Which is one question per rule: *can a user cause this by writing source that
+parses?* If yes it is the checker's, and only the checker's.
+
+Codegen still depends on many of those properties — a duplicate declaration
+leaves `SymbolTable.Define` returning a zero `Symbol`, and a stray `break` has
+no jump to target — so the guards stay. They just do not compete for the
+diagnostic. Two helpers in [compiler.go](compiler/compiler.go) mark them:
+
+- `invariant` — the checker rejects this, so reaching it means the compiler ran
+  on an unchecked program. It says so: *"'x' is already declared in this scope;
+  the program was not type-checked."* The tests in `compiler_test.go` build
+  ASTs directly and are the only thing that reaches these.
+- `unreachable` — no source program can produce this state at all (the parser
+  cannot emit an unknown operator). It is a compiler bug and reads as one.
+
+So `grep 'c\.error('` across `internal/compiler` should only ever turn up the
+two helpers and the unknown-module diagnostic. Anything else is a rule that has
+drifted out of the checker.
