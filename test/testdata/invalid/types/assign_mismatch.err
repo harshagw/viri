@@ -1,0 +1,1 @@
+Error in testdata/invalid/types/assign_mismatch.viri at line 1: Cannot assign string to 'x' of type number.

@@ -1,0 +1,1 @@
+Error in testdata/invalid/classes/undeclared_field_assign.viri at line 2: Class 'P' has no field 'y'. Declare it on the class to assign it.

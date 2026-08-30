@@ -32,7 +32,7 @@ e2e: build
 	@echo "========================================="
 	@echo "Running E2E tests (VM Engine)"
 	@echo "========================================="
-	go test -tags=e2e -run TestE2E_VM ./test/...
+	go test -tags=e2e -run 'TestE2E_VM_' ./test/...
 	rm -f viri
 
 # Benchmarks run the VM only; the interpreter is frozen and no longer runs the

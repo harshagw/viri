@@ -1,0 +1,1 @@
+Error in testdata/invalid/classes/this_outside_class.viri at line 1: 'this' can only be used inside a class.

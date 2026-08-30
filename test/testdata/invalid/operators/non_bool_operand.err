@@ -1,0 +1,1 @@
+Error in testdata/invalid/operators/non_bool_operand.viri at line 1: 'and' needs bool operands, got number.

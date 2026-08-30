@@ -1,0 +1,1 @@
+Error in testdata/invalid/classes/self_inheritance.viri at line 1: A class cannot inherit from itself.

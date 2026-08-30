@@ -1,0 +1,2 @@
+Error in testdata/invalid/collections/map_key_not_string.viri at line 1: Map keys must be string, got number.
+Error in testdata/invalid/collections/map_key_not_string.viri at line 1: Cannot infer the type of an empty map; annotate the declaration.

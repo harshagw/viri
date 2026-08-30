@@ -1,0 +1,2 @@
+class P { x: number; init() { this.x = 1; } }
+print P().y;

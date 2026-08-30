@@ -1,0 +1,2 @@
+const k: number = 1;
+k = 2;

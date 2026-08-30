@@ -1,0 +1,1 @@
+Error in testdata/invalid/variables/const_reassign.viri at line 2: Cannot assign to constant 'k'.

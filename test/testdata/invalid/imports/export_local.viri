@@ -1,0 +1,2 @@
+fun f() { export var a: number = 1; }
+f();

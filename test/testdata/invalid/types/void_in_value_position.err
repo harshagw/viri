@@ -1,0 +1,1 @@
+Error in testdata/invalid/types/void_in_value_position.viri at line 2: Cannot assign void to 'x' of type number.

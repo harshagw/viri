@@ -1,0 +1,1 @@
+Error in testdata/invalid/control_flow/non_bool_condition.viri at line 1: An if condition must be bool, got number.

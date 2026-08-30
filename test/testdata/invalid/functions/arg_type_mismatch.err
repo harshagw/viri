@@ -1,0 +1,1 @@
+Error in testdata/invalid/functions/arg_type_mismatch.viri at line 2: Argument 2 is string, expected number.

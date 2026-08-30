@@ -1,0 +1,36 @@
+print 2 + 3 * 4;
+print (2 + 3) * 4;
+print 10 - 4 - 3;
+print 10 / 2 - 1;
+print 12 / 4 / 3;
+print -5 + 2;
+print - -7;
+print 7 / 2;
+
+print 1 < 2;
+print 2 <= 2;
+print 3 > 4;
+print 4 >= 4;
+print 1 == 1;
+print 1 != 1;
+print "a" == "a";
+print true == false;
+print true != false;
+
+print true and false;
+print true or false;
+print !true;
+print !(1 > 2);
+print 1 < 2 and 3 < 4;
+print 1 > 2 or 3 < 4;
+
+fun boom(): bool { print "evaluated"; return true; }
+print false and boom();
+print true or boom();
+
+var n: number = 5;
+n = n + 1;
+print n;
+
+const k: number = 3;
+print k * k;

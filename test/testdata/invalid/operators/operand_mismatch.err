@@ -1,0 +1,1 @@
+Error in testdata/invalid/operators/operand_mismatch.viri at line 1: '+' needs two numbers or two strings, got number and string.

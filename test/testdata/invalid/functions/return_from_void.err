@@ -1,0 +1,1 @@
+Error in testdata/invalid/functions/return_from_void.viri at line 1: This function returns nothing, so it cannot return a value.

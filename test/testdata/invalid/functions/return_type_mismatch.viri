@@ -1,0 +1,2 @@
+fun f(): number { return "s"; }
+print f();

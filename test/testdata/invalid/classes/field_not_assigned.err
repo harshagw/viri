@@ -1,0 +1,1 @@
+Error in testdata/invalid/classes/field_not_assigned.viri at line 1: 'init' must assign 'y' on every path; this field has no value otherwise.

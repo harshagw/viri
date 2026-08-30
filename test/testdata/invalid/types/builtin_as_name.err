@@ -1,0 +1,1 @@
+Error in testdata/invalid/types/builtin_as_name.viri at line 1: Cannot use builtin type name 'number' as a class name.

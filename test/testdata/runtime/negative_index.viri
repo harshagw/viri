@@ -1,0 +1,2 @@
+var nums: []number = [1, 2, 3];
+print nums[0 - 1];

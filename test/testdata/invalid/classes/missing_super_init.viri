@@ -1,0 +1,3 @@
+class A { a: number; init() { this.a = 1; } }
+class B < A { b: number; init() { this.b = 2; } }
+print B().b;

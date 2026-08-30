@@ -1,0 +1,1 @@
+Error in testdata/invalid/classes/missing_super_init.viri at line 2: 'init' must call super.init(...) on every path, because superclass 'A' has fields to assign.

@@ -1,0 +1,29 @@
+var a: string = "hello";
+var b: string = "world";
+print a + " " + b;
+print len(a);
+print len("");
+
+print a == "hello";
+print a == b;
+print a != b;
+
+var joined: string = "";
+for (var i: number = 0; i < 3; i = i + 1) {
+  joined = joined + "ab";
+}
+print joined;
+print len(joined);
+
+fun shout(s: string): string { return s + "!"; }
+print shout("hi");
+
+var parts: []string = ["x", "y", "z"];
+var all: string = "";
+for (var i: number = 0; i < len(parts); i = i + 1) {
+  all = all + parts[i];
+}
+print all;
+
+print "line1
+line2";

@@ -1,0 +1,1 @@
+Error in testdata/invalid/operators/compare_mismatch.viri at line 1: '<' needs two numbers, got number and string.

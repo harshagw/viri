@@ -1,0 +1,32 @@
+fun greet(name: string) {
+  print "hi " + name;
+}
+greet("ann");
+
+fun earlyExit(n: number) {
+  if (n < 0) {
+    return;
+  }
+  print n;
+}
+earlyExit(-1);
+earlyExit(7);
+
+fun outer() {
+  fun inner() {
+    print "inner";
+  }
+  inner();
+  print "outer";
+}
+outer();
+
+class Printer {
+  prefix: string;
+  init(prefix: string) { this.prefix = prefix; }
+  emit(msg: string) { print this.prefix + msg; }
+}
+Printer("> ").emit("done");
+
+var f: fun(string) = greet;
+f("bob");

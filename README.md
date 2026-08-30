@@ -110,6 +110,24 @@ make e2e     # end-to-end suites, both engines
 make bench   # VM benchmarks
 ```
 
+The compiler's end-to-end cases live in `test/testdata/`, split by what the
+program is supposed to do:
+
+| Directory | Contract |
+| --- | --- |
+| `valid/` | runs to completion; exit 0, stdout matches `.out` |
+| `runtime/` | compiles, then fails while running; stdout matches `.out`, stderr matches `.err` |
+| `invalid/` | rejected before execution; stderr matches `.err`, and **stdout is empty** |
+| `modules/` | imported by other cases, never run directly |
+
+`valid/` and `invalid/` are split further by language feature — `classes/`,
+`collections/`, `control_flow/`, `functions/`, `imports/`, `operators/`,
+`strings/`, `types/`, `variables/`, `stdlib/` — so a failing subtest names the
+feature it broke.
+
+Every case needs its expectation files — a case without them fails rather than
+silently passing.
+
 The website and its WebAssembly playground live in
 [viri-web/](viri-web/README.md), which documents how to run it locally and how
 to pull compiler changes into it.

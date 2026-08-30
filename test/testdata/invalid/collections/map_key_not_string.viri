@@ -1,0 +1,2 @@
+var m: map[number]string = {};
+print len(m);

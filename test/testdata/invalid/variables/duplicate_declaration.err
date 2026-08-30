@@ -1,0 +1,1 @@
+Error in testdata/invalid/variables/duplicate_declaration.viri at line 2: 'x' is already declared in this scope.

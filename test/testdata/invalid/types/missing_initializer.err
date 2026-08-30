@@ -1,0 +1,1 @@
+Error in testdata/invalid/types/missing_initializer.viri at line 1: 'x' needs an initializer; number has no default value.

@@ -1,0 +1,3 @@
+var ages: map[string]number = {"ann": 30};
+print ages["ann"];
+print ages["nope"];

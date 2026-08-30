@@ -1,0 +1,32 @@
+var ages: map[string]number = {"ann": 30, "bob": 25};
+print ages["ann"];
+print len(ages);
+
+ages["cal"] = 40;
+print ages["cal"];
+print len(ages);
+
+ages["ann"] = 31;
+print ages["ann"];
+print len(ages);
+
+var empty: map[string]number = {};
+print len(empty);
+
+var flags: map[string]bool = {"on": true};
+print flags["on"];
+
+var lists: map[string][]number = {"a": [1, 2, 3]};
+print lists["a"][1];
+print len(lists["a"]);
+
+var nested: map[string]map[string]number = {"outer": {"inner": 9}};
+print nested["outer"]["inner"];
+
+fun lookup(m: map[string]number, k: string): number {
+  return m[k];
+}
+print lookup(ages, "bob");
+
+var key: string = "b" + "ob";
+print ages[key];

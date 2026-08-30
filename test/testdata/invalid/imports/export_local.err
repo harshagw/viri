@@ -1,0 +1,1 @@
+Error in testdata/invalid/imports/export_local.viri at line 1: 'a' cannot be exported: only a module's top-level declarations can be exported.

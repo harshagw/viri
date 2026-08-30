@@ -1,0 +1,1 @@
+Error in testdata/invalid/classes/read_before_assign.viri at line 1: Cannot read 'this.x' before it is assigned.

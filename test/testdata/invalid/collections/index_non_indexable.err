@@ -1,0 +1,1 @@
+Error in testdata/invalid/collections/index_non_indexable.viri at line 2: Cannot index number; only arrays and maps can be indexed.

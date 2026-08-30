@@ -4,71 +4,162 @@ package test
 
 import (
 	"bytes"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 )
 
-func TestE2E_VM(t *testing.T) {
-	testDataDir := "testdata"
-	files, err := os.ReadDir(testDataDir)
+// The compiler suite is split by what a program is supposed to do, because the
+// three outcomes have different contracts:
+//
+// Within valid/ and invalid/, cases are grouped by language feature
+// (classes/, collections/, control_flow/, functions/, imports/, operators/,
+// strings/, types/, variables/, stdlib/) so a failure names the feature.
+//
+//	valid/    compiles and runs to completion. exit 0, stdout matches .out.
+//	runtime/  compiles, then fails while running. non-zero exit, stdout matches
+//	          .out (output produced before the failure), stderr matches .err.
+//	invalid/  rejected before execution. non-zero exit, stderr matches .err,
+//	          and stdout is empty — nothing ran.
+//	modules/  imported by other cases, never executed directly.
+//
+// The empty-stdout assertion on invalid/ is the one that matters most: it is
+// the end-to-end proof that an ill-typed program produces no effects.
+
+type result struct {
+	stdout string
+	stderr string
+	code   int
+}
+
+func runViri(t *testing.T, script string) result {
+	t.Helper()
+
+	bin, err := filepath.Abs("../viri")
 	if err != nil {
-		t.Fatalf("failed to read testdata dir: %v", err)
+		t.Fatalf("resolve viri path: %v", err)
+	}
+	if _, err := os.Stat(bin); err != nil {
+		t.Fatalf("viri binary not built at %s: run 'make build' or 'make e2e'", bin)
 	}
 
-	// Ensure the binary is built and available in the root
-	viriPath, err := filepath.Abs("../viri")
-	if err != nil {
-		t.Fatalf("failed to get absolute path for viri: %v", err)
+	cmd := exec.Command(bin, "--no-warning", "--engine=vm", script)
+	var out, errBuf bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &errBuf
+
+	code := 0
+	if err := cmd.Run(); err != nil {
+		exit, ok := err.(*exec.ExitError)
+		if !ok {
+			t.Fatalf("running %s: %v", script, err)
+		}
+		code = exit.ExitCode()
 	}
+	return result{stdout: out.String(), stderr: errBuf.String(), code: code}
+}
 
-	for _, file := range files {
-		if !strings.HasSuffix(file.Name(), ".viri") {
-			continue
+// golden reads an expected-output file. A case without one is a failure, not a
+// skip: a missing .out used to make the test pass silently, so any program
+// added without expectations looked like coverage it was not.
+func golden(t *testing.T, path string) string {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("missing expectation file %s: every case needs one", path)
+	}
+	return string(data)
+}
+
+func equal(t *testing.T, what, got, want string) {
+	t.Helper()
+	if strings.TrimSpace(got) != strings.TrimSpace(want) {
+		t.Errorf("%s mismatch\ngot:\n%s\nwant:\n%s", what, got, want)
+	}
+}
+
+// cases lists every .viri file under dir, recursing into the feature
+// subdirectories. The returned paths are relative to dir, so a subtest is named
+// "classes/polymorphism.viri" and a failure says which feature broke.
+func cases(t *testing.T, dir string) []string {
+	t.Helper()
+	var found []string
+	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
 		}
-
-		// Skip module files that are just for importing
-		if strings.Contains(file.Name(), "module_") {
-			continue
-		}
-
-		t.Run(file.Name(), func(t *testing.T) {
-			path := filepath.Join(testDataDir, file.Name())
-
-			// Expected output is in a .out file with same name
-			expectedPath := strings.TrimSuffix(path, ".viri") + ".out"
-			expectedOutput, err := os.ReadFile(expectedPath)
+		if !d.IsDir() && strings.HasSuffix(d.Name(), ".viri") {
+			rel, err := filepath.Rel(dir, path)
 			if err != nil {
-				t.Logf("Warning: no .out file for %s", file.Name())
+				return err
 			}
+			found = append(found, rel)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walk %s: %v", dir, err)
+	}
+	if len(found) == 0 {
+		t.Fatalf("no cases in %s", dir)
+	}
+	sort.Strings(found)
+	return found
+}
 
-			// Run the binary with VM engine
-			output := runViriBinaryVM(t, viriPath, path)
+func TestE2E_VM_Valid(t *testing.T) {
+	dir := filepath.Join("testdata", "valid")
+	for _, name := range cases(t, dir) {
+		t.Run(name, func(t *testing.T) {
+			path := filepath.Join(dir, name)
+			got := runViri(t, path)
 
-			if expectedOutput != nil {
-				if strings.TrimSpace(output) != strings.TrimSpace(string(expectedOutput)) {
-					t.Errorf("output mismatch\ngot:\n%s\nwant:\n%s", output, string(expectedOutput))
-				}
+			if got.code != 0 {
+				t.Fatalf("expected success, got exit %d\nstderr:\n%s", got.code, got.stderr)
 			}
+			if strings.TrimSpace(got.stderr) != "" {
+				t.Errorf("expected no diagnostics, got:\n%s", got.stderr)
+			}
+			equal(t, "stdout", got.stdout, golden(t, strings.TrimSuffix(path, ".viri")+".out"))
 		})
 	}
 }
 
-func runViriBinaryVM(t *testing.T, viriPath, scriptPath string) string {
-	cmd := exec.Command(viriPath, "--no-warning", "--engine=vm", scriptPath)
-	var out bytes.Buffer
-	var stderr bytes.Buffer
-	cmd.Stdout = &out
-	cmd.Stderr = &stderr
+func TestE2E_VM_Runtime(t *testing.T) {
+	dir := filepath.Join("testdata", "runtime")
+	for _, name := range cases(t, dir) {
+		t.Run(name, func(t *testing.T) {
+			path := filepath.Join(dir, name)
+			base := strings.TrimSuffix(path, ".viri")
+			got := runViri(t, path)
 
-	err := cmd.Run()
-	if err != nil {
-		// Some tests might expect failure (e.g. runtime errors)
-		// We combine stdout/stderr for these tests
-		return strings.TrimSpace(out.String() + "\n" + stderr.String())
+			if got.code == 0 {
+				t.Fatalf("expected a runtime error, got exit 0\nstdout:\n%s", got.stdout)
+			}
+			equal(t, "stdout", got.stdout, golden(t, base+".out"))
+			equal(t, "stderr", got.stderr, golden(t, base+".err"))
+		})
 	}
+}
 
-	return out.String()
+func TestE2E_VM_Invalid(t *testing.T) {
+	dir := filepath.Join("testdata", "invalid")
+	for _, name := range cases(t, dir) {
+		t.Run(name, func(t *testing.T) {
+			path := filepath.Join(dir, name)
+			got := runViri(t, path)
+
+			if got.code == 0 {
+				t.Fatalf("expected rejection, got exit 0\nstdout:\n%s", got.stdout)
+			}
+			if got.stdout != "" {
+				t.Errorf("a rejected program must not run, but it wrote to stdout:\n%s", got.stdout)
+			}
+			equal(t, "stderr", got.stderr, golden(t, strings.TrimSuffix(path, ".viri")+".err"))
+		})
+	}
 }

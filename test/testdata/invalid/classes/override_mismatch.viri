@@ -1,0 +1,3 @@
+class A { f(): number { return 1; } }
+class B < A { f(): string { return "s"; } }
+print B().f();

@@ -1,0 +1,1 @@
+Error in testdata/invalid/functions/call_non_function.viri at line 2: Cannot call number; it is not a function.

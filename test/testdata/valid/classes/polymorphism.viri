@@ -1,0 +1,53 @@
+class Shape {
+  name: string;
+  init(name: string) { this.name = name; }
+  area(): number { return 0; }
+}
+
+class Square < Shape {
+  side: number;
+  init(side: number) {
+    super.init("square");
+    this.side = side;
+  }
+  area(): number { return this.side * this.side; }
+}
+
+class Circle < Shape {
+  radius: number;
+  init(radius: number) {
+    super.init("circle");
+    this.radius = radius;
+  }
+  area(): number { return 3 * this.radius * this.radius; }
+}
+
+var s: Shape = Square(4);
+var c: Shape = Circle(2);
+print s.area();
+print c.area();
+print s.name;
+
+fun areaOf(shape: Shape): number {
+  return shape.area();
+}
+print areaOf(Square(3));
+print areaOf(Circle(1));
+print areaOf(Shape("plain"));
+
+var shapes: []Shape = [Square(2), Circle(3), Shape("none")];
+var total: number = 0;
+for (var i: number = 0; i < len(shapes); i = i + 1) {
+  total = total + shapes[i].area();
+}
+print total;
+
+var byName: map[string]Shape = {"sq": Square(5)};
+print byName["sq"].area();
+
+class Tiny < Square {
+  init() { super.init(1); }
+}
+var t: Shape = Tiny();
+print t.area();
+print t.name;

@@ -1,0 +1,1 @@
+Error in testdata/invalid/classes/undeclared_field.viri at line 2: Class 'P' has no field or method 'y'.

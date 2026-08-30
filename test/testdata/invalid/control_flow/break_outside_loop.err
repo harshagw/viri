@@ -1,0 +1,1 @@
+Error in testdata/invalid/control_flow/break_outside_loop.viri at line 1: 'break' can only be used inside a loop.

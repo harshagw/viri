@@ -1,0 +1,1 @@
+Error in testdata/invalid/types/nil_not_a_value.viri at line 1: 'nil' is not a value in Viri; every type must hold a real value.

@@ -1,0 +1,1 @@
+Error in testdata/invalid/classes/override_mismatch.viri at line 2: Method 'f' does not match the one it overrides: declared fun(): string, superclass declares fun(): number.

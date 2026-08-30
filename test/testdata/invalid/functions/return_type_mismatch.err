@@ -1,0 +1,1 @@
+Error in testdata/invalid/functions/return_type_mismatch.viri at line 1: Cannot return string from a function returning number.
