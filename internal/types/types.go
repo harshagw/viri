@@ -140,8 +140,24 @@ func (c *Class) Constructor() *Function {
 	return &Function{Params: nil, Return: c}
 }
 
+// FieldSlot returns the index of a field in the instance layout, walking up
+// the superclass chain. Superclass fields come first, so a subclass layout is
+// its parent's layout with its own fields appended — an instance of Square can
+// be read as a Shape without remapping.
+func (c *Class) FieldSlot(name string) (int, bool) {
+	for i, f := range c.AllFields() {
+		if f.Name == name {
+			return i, true
+		}
+	}
+	return 0, false
+}
+
+// NumFields is the size of an instance's field storage.
+func (c *Class) NumFields() int { return len(c.AllFields()) }
+
 // AllFields returns every field visible on the class, superclass fields first.
-// The order is the layout Phase 3 will assign slots from.
+// The order is the instance layout: slot i is AllFields()[i].
 func (c *Class) AllFields() []Field {
 	if c.Super == nil {
 		return append([]Field(nil), c.Fields...)

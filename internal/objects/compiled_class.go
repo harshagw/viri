@@ -7,6 +7,10 @@ type CompiledClass struct {
 	Name       string
 	Methods    map[string]*Closure // Method name -> closure
 	SuperClass *CompiledClass      // nil if no superclass
+	// NumFields is the size of an instance's field storage. The checker
+	// computed the layout; the VM only needs its size, because every access
+	// is already resolved to a slot at compile time.
+	NumFields int
 }
 
 func (c *CompiledClass) Type() Type {
@@ -29,15 +33,21 @@ func (c *CompiledClass) LookupMethod(name string) (*Closure, bool) {
 }
 
 // CompiledInstance represents an instance of a CompiledClass.
+//
+// Fields is indexed, not named: the checker proved every access refers to a
+// declared field and resolved it to a slot, so the runtime needs no hash
+// lookup and no "undefined property" case. Superclass fields occupy the first
+// slots, so a subclass instance can be read through a superclass type without
+// remapping.
 type CompiledInstance struct {
 	Class  *CompiledClass
-	Fields map[string]Object
+	Fields []Object
 }
 
 func NewCompiledInstance(class *CompiledClass) *CompiledInstance {
 	return &CompiledInstance{
 		Class:  class,
-		Fields: make(map[string]Object),
+		Fields: make([]Object, class.NumFields),
 	}
 }
 

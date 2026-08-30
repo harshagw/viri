@@ -42,6 +42,9 @@ type Compiler struct {
 	// field access and Phase 4 to pick typed arithmetic opcodes.
 	exprTypes map[ast.Expr]types.Type
 
+	// classTypes gives each class declaration its field layout.
+	classTypes map[*ast.ClassStmt]*types.Class
+
 	// Track highest global index used (for NumGlobals calculation)
 	maxGlobalIndex int
 
@@ -491,7 +494,17 @@ func (c *Compiler) compileExpression(node ast.Expr) error {
 
 		switch node.Operator.Type {
 		case token.PLUS:
-			c.emit(code.OpAdd)
+			// '+' is the one overloaded operator. The checker already decided
+			// which meaning applies, so emit the specific instruction and let
+			// the VM skip the dispatch.
+			switch c.exprTypes[node] {
+			case types.Number:
+				c.emit(code.OpAddNumber)
+			case types.String:
+				c.emit(code.OpAddString)
+			default:
+				c.emit(code.OpAdd)
+			}
 		case token.MINUS:
 			c.emit(code.OpSub)
 		case token.STAR:
@@ -669,6 +682,12 @@ func (c *Compiler) compileExpression(node ast.Expr) error {
 		if err := c.compileExpression(node.Object); err != nil {
 			return err
 		}
+		// A field access is an index the checker already worked out; only a
+		// method still needs its name at runtime.
+		if slot, ok := c.fieldSlot(node.Object, node.Name.Lexeme); ok {
+			c.emit(code.OpGetField, slot)
+			return nil
+		}
 		nameIdx := c.addConstant(&objects.String{Value: node.Name.Lexeme})
 		c.emit(code.OpGetProperty, nameIdx)
 
@@ -679,8 +698,16 @@ func (c *Compiler) compileExpression(node ast.Expr) error {
 		if err := c.compileExpression(node.Value); err != nil {
 			return err
 		}
-		nameIdx := c.addConstant(&objects.String{Value: node.Name.Lexeme})
-		c.emit(code.OpSetProperty, nameIdx)
+		slot, ok := c.fieldSlot(node.Object, node.Name.Lexeme)
+		if !ok {
+			// Instance fields are slots now, so there is no name-based store
+			// to fall back to. The checker rejects assignment to anything but
+			// a declared field, so reaching here means it did not run.
+			return c.error(node.Name, fmt.Sprintf(
+				"Cannot resolve field '%s' to a slot; the program was not type-checked.",
+				node.Name.Lexeme))
+		}
+		c.emit(code.OpSetField, slot)
 
 	case *ast.ThisExpr:
 		// Validate: must be inside a class
@@ -955,7 +982,7 @@ func (c *Compiler) compileClassStmt(stmt *ast.ClassStmt) error {
 	}
 
 	nameIdx := c.addConstant(&objects.String{Value: className})
-	c.emit(code.OpClass, nameIdx, len(stmt.Methods))
+	c.emit(code.OpClass, nameIdx, len(stmt.Methods), c.classFieldCount(stmt))
 
 	c.emitSetSymbol(symbol)
 

@@ -75,7 +75,7 @@ func (c *Checker) resolveType(t ast.TypeExpr) types.Type {
 // resolveQualifiedType resolves `alias.Name` against an imported module.
 func (c *Checker) resolveQualifiedType(n *ast.NamedType) types.Type {
 	mod, ok := c.imports[n.Module.Lexeme]
-	if !ok {
+	if !ok || mod == nil {
 		c.errorAt(n.Module, "Unknown module '"+n.Module.Lexeme+"'.")
 		return types.Invalid
 	}

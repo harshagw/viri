@@ -10,6 +10,7 @@ import (
 	figure "github.com/common-nighthawk/go-figure"
 	"github.com/fatih/color"
 	"github.com/harshagw/viri/internal/ast"
+	"github.com/harshagw/viri/internal/checker"
 	"github.com/harshagw/viri/internal/compiler"
 	"github.com/harshagw/viri/internal/objects"
 	"github.com/harshagw/viri/internal/parser"
@@ -40,6 +41,9 @@ func main() {
 	// across REPL inputs: closures created on earlier lines hold indices
 	// into the shared constants pool, so it must never restart.
 	comp := compiler.NewWithState(handler, compiler.NewSymbolTable())
+	// One checker for the whole session: each line extends the scope the
+	// previous lines built.
+	ck := checker.New(handler)
 	globals := make([]objects.Object, 0, vm.GlobalsSize)
 
 	executor := func(line string) {
@@ -78,6 +82,14 @@ func main() {
 		if len(newStmts) == 0 {
 			return
 		}
+
+		// Type-check before compiling: codegen assumes a well-typed program
+		// (field access is resolved to slots, arithmetic to typed opcodes),
+		// so an unchecked line would emit instructions the VM cannot run.
+		if !ck.CheckIncremental(newStmts) {
+			return
+		}
+		comp.SetTypeInfo(ck.ExprTypes(), ck.ClassTypes())
 
 		comp.ResetForNextInput()
 		for _, stmt := range newStmts {

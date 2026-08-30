@@ -48,11 +48,14 @@ const (
 	OpMakeCell
 	OpClass
 	OpGetProperty
-	OpSetProperty
 	OpGetSuper
 	OpGetModuleExport
 	OpGetStdlibExport
 	OpLess
+	OpGetField
+	OpSetField
+	OpAddNumber
+	OpAddString
 )
 
 type Definition struct {
@@ -96,9 +99,12 @@ var definitions = map[Opcode]*Definition{
 	OpSetFree:           {"OpSetFree", []int{1}},       // operand: free variable index
 	OpGetCurrentClosure: {"OpGetCurrentClosure", []int{}},
 	OpMakeCell:          {"OpMakeCell", []int{1}},           // operand: local index - wraps local in Cell, stores back, and pushes Cell
-	OpClass:             {"OpClass", []int{2, 1}},           // operands: name constant index, method count - pops superclass + methods, pushes class
-	OpGetProperty:       {"OpGetProperty", []int{2}},        // operand: property name constant index - pops object, pushes property/bound method
-	OpSetProperty:       {"OpSetProperty", []int{2}},        // operand: property name constant index - pops value, pops object, sets field, pushes value
+	OpClass:             {"OpClass", []int{2, 1, 1}},        // operands: name constant index, method count, field count - pops superclass + methods, pushes class
+	OpGetProperty:       {"OpGetProperty", []int{2}},        // operand: property name constant index - pops object, pushes bound method
+	OpGetField:          {"OpGetField", []int{1}},           // operand: field slot - pops instance, pushes field
+	OpSetField:          {"OpSetField", []int{1}},           // operand: field slot - pops value and instance, sets field, pushes value
+	OpAddNumber:         {"OpAddNumber", []int{}},           // both operands known to be numbers
+	OpAddString:         {"OpAddString", []int{}},           // both operands known to be strings
 	OpGetSuper:          {"OpGetSuper", []int{2}},           // operand: method name constant index - pops instance, pushes bound method from superclass
 	OpGetModuleExport:   {"OpGetModuleExport", []int{2, 2}}, // operands: module index, export index - pushes export value from module globals
 	OpGetStdlibExport:   {"OpGetStdlibExport", []int{2}},    // operand: constant index containing stdlib export object

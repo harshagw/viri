@@ -109,13 +109,15 @@ class Empty {
 var e: Empty = Empty();
 print e.getValue();
 
-// A field that init does not set is still declared on the class
+// Every declared field must hold a value once init returns, so a field the
+// caller will overwrite still starts from something
 
 class Box {
   items: number;
   label: string;
   init() {
     this.items = 0;
+    this.label = "";
   }
 
   getLabel(): string {

@@ -34,6 +34,10 @@ type Checker struct {
 	// NamedType can resolve to it.
 	classes map[string]*types.Class
 
+	// classTypes links each class declaration to the type built from it, so
+	// codegen can read the field layout without repeating the work.
+	classTypes map[*ast.ClassStmt]*types.Class
+
 	// imports maps an import alias to the module it names.
 	imports map[string]*types.Module
 
@@ -41,6 +45,9 @@ type Checker struct {
 	currentFn    *types.Function // signature of the function being checked
 	currentClass *types.Class    // class whose method is being checked
 	inInit       bool
+	// initClass is the class whose init is being analysed for definite
+	// assignment, or nil outside that analysis.
+	initClass *types.Class
 
 	hadError bool
 }
@@ -48,16 +55,23 @@ type Checker struct {
 // New creates a checker reporting through handler.
 func New(handler objects.DiagnosticHandler) *Checker {
 	return &Checker{
-		handler:   handler,
-		exprTypes: make(map[ast.Expr]types.Type),
-		classes:   make(map[string]*types.Class),
-		imports:   make(map[string]*types.Module),
+		handler:    handler,
+		exprTypes:  make(map[ast.Expr]types.Type),
+		classes:    make(map[string]*types.Class),
+		classTypes: make(map[*ast.ClassStmt]*types.Class),
+		imports:    make(map[string]*types.Module),
 	}
 }
 
 // ExprTypes returns the synthesised type of every expression checked so far.
 func (c *Checker) ExprTypes() map[ast.Expr]types.Type {
 	return c.exprTypes
+}
+
+// ClassTypes maps each class declaration to the type built from it. Codegen
+// reads it for the instance field layout.
+func (c *Checker) ClassTypes() map[*ast.ClassStmt]*types.Class {
+	return c.classTypes
 }
 
 // CheckModule checks one module. imports maps each import alias used by the
@@ -154,4 +168,22 @@ func (c *Checker) errorAt(tok *token.Token, message string) {
 		return
 	}
 	c.handler.Error(token.Token{}, message)
+}
+
+// CheckIncremental checks one more batch of statements against the scope built
+// by previous calls, and reports whether they were well-typed.
+//
+// It exists for the REPL, where each line extends the same program rather than
+// starting a new one: declarations from earlier lines stay in scope, and the
+// expression types accumulate so codegen can resolve field slots across lines.
+// Use CheckModule for a whole file; that resets the scope, this does not.
+func (c *Checker) CheckIncremental(statements []ast.Stmt) bool {
+	if c.scopes == nil {
+		c.scopes = []*scope{newScope()}
+		c.declareNatives()
+	}
+	c.hadError = false
+	c.collect(statements)
+	c.checkStatements(statements)
+	return !c.hadError
 }

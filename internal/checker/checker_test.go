@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/harshagw/viri/internal/ast"
+
 	"github.com/harshagw/viri/internal/checker"
 	"github.com/harshagw/viri/internal/objects"
 	"github.com/harshagw/viri/internal/parser"
@@ -436,4 +438,241 @@ func TestExprTypesArePopulated(t *testing.T) {
 	if found != 3 {
 		t.Errorf("expected 3 number-typed expressions in the side table, got %d", found)
 	}
+}
+
+// Definite assignment is what makes "no implicit nil" true for fields: a field
+// typed string must never be readable before something put a string in it.
+func TestDefiniteAssignment(t *testing.T) {
+	t.Run("rejects a field init never assigns", func(t *testing.T) {
+		wantError(t, `class P { x: number; y: number; init(x: number) { this.x = x; } }`,
+			"'init' must assign 'y' on every path")
+	})
+	t.Run("rejects a class with fields and no init", func(t *testing.T) {
+		wantError(t, `class P { x: number; }`, "has no 'init' to assign it")
+	})
+	t.Run("accepts a class with no fields and no init", func(t *testing.T) {
+		wantOK(t, `class P { m(): number { return 1; } }`)
+	})
+	t.Run("accepts assignment on both branches", func(t *testing.T) {
+		wantOK(t, `class P {
+			x: number;
+			init(c: bool) { if (c) { this.x = 1; } else { this.x = 2; } }
+		}`)
+	})
+	t.Run("rejects assignment on only one branch", func(t *testing.T) {
+		wantError(t, `class P {
+			x: number;
+			init(c: bool) { if (c) { this.x = 1; } }
+		}`, "must assign 'x' on every path")
+	})
+	t.Run("rejects assignment only inside a loop", func(t *testing.T) {
+		// The body may run zero times.
+		wantError(t, `class P {
+			x: number;
+			init(c: bool) { while (c) { this.x = 1; } }
+		}`, "must assign 'x' on every path")
+	})
+	t.Run("an early return does not weaken the other path", func(t *testing.T) {
+		wantOK(t, `class P {
+			x: number;
+			init(c: bool) { if (c) { return; } this.x = 1; }
+		}`)
+	})
+	t.Run("accepts assignment inside a nested block", func(t *testing.T) {
+		wantOK(t, `class P { x: number; init() { { this.x = 1; } } }`)
+	})
+}
+
+func TestSuperInitIsRequired(t *testing.T) {
+	const base = `class Base { n: number; init(n: number) { this.n = n; } }
+	`
+	t.Run("rejects a subclass init that omits super.init", func(t *testing.T) {
+		wantError(t, base+`class Sub < Base {
+			s: number;
+			init(s: number) { this.s = s; }
+		}`, "must call super.init(...) on every path")
+	})
+	t.Run("accepts a subclass init that calls super.init", func(t *testing.T) {
+		wantOK(t, base+`class Sub < Base {
+			s: number;
+			init(s: number) { super.init(1); this.s = s; }
+		}`)
+	})
+	t.Run("a subclass with no init inherits its superclass's", func(t *testing.T) {
+		// Base's init already assigns Base's fields, so there is nothing for
+		// Sub to do — and the VM looks up the inherited init the same way.
+		wantOK(t, base+`class Sub < Base { }`)
+	})
+	t.Run("but a subclass with its own fields still needs an init", func(t *testing.T) {
+		wantError(t, base+`class Sub < Base { s: number; }`, "has no 'init' to assign it")
+	})
+	t.Run("rejects super.init on only one branch", func(t *testing.T) {
+		wantError(t, base+`class Sub < Base {
+			s: number;
+			init(c: bool, s: number) { if (c) { super.init(1); } this.s = s; }
+		}`, "must call super.init(...) on every path")
+	})
+	t.Run("a superclass with no fields needs no super.init", func(t *testing.T) {
+		wantOK(t, `class Base { m(): number { return 1; } }
+		class Sub < Base { s: number; init(s: number) { this.s = s; } }`)
+	})
+}
+
+// The REPL checks one line at a time against a scope the earlier lines built.
+// Codegen depends on this: field access is resolved to slots, so an unchecked
+// line would emit instructions the VM cannot run.
+func TestCheckIncremental(t *testing.T) {
+	parseLine := func(t *testing.T, src string) []ast.Stmt {
+		t.Helper()
+		tokens, err := scanner.New(bytes.NewBufferString(src), nil).Scan()
+		if err != nil {
+			t.Fatalf("scan %q: %v", src, err)
+		}
+		mod, err := parser.NewParser(tokens, &objects.DiagnosticCollector{}).Parse()
+		if err != nil {
+			t.Fatalf("parse %q: %v", src, err)
+		}
+		return mod.GetAllStatements()
+	}
+
+	collector := &objects.DiagnosticCollector{}
+	ck := checker.New(collector)
+
+	lines := []struct {
+		src     string
+		wantOK  bool
+		comment string
+	}{
+		{`var x: number = 1;`, true, "declares x"},
+		{`print x + 1;`, true, "x is still in scope on the next line"},
+		{`var y: number = "a";`, false, "type errors are still caught"},
+		{`class P { n: number; init(n: number) { this.n = n; } }`, true, "declares a class"},
+		{`var p: P = P(7);`, true, "the class is usable on a later line"},
+		{`print p.n;`, true, "its fields are known"},
+		{`print p.missing;`, false, "unknown fields are still rejected"},
+	}
+
+	for _, line := range lines {
+		if got := ck.CheckIncremental(parseLine(t, line.src)); got != line.wantOK {
+			t.Errorf("%s: CheckIncremental(%q) = %v, want %v", line.comment, line.src, got, line.wantOK)
+		}
+	}
+
+	// Field slots must be resolvable across lines, which is what lets codegen
+	// emit OpGetField for `p.n` typed on an earlier line.
+	classes := ck.ClassTypes()
+	if len(classes) != 1 {
+		t.Fatalf("expected 1 class type, got %d", len(classes))
+	}
+	for _, class := range classes {
+		if slot, ok := class.FieldSlot("n"); !ok || slot != 0 {
+			t.Errorf("field 'n' slot = (%d, %v), want (0, true)", slot, ok)
+		}
+	}
+}
+
+// Reading a field before it is assigned is the one way nil could still be
+// observed: an unassigned slot holds no value at all. Every case here printed
+// "nil" before these checks existed.
+func TestNoReadBeforeAssignment(t *testing.T) {
+	t.Run("own field", func(t *testing.T) {
+		wantError(t, `class P { x: number; init() { print this.x; this.x = 1; } }`,
+			"Cannot read 'this.x' before it is assigned")
+	})
+	t.Run("assigning a field to itself", func(t *testing.T) {
+		wantError(t, `class P { x: number; init() { this.x = this.x; } }`,
+			"Cannot read 'this.x' before it is assigned")
+	})
+	t.Run("inside a for body", func(t *testing.T) {
+		// The body may not run, so it assigns nothing — but if it does run,
+		// its reads happen, so they still have to be checked.
+		wantError(t, `class P {
+			x: number;
+			init() { for (var i: number = 0; i < 1; i = i + 1) { print this.x; } this.x = 1; }
+		}`, "Cannot read 'this.x' before it is assigned")
+	})
+	t.Run("inside a while body", func(t *testing.T) {
+		wantError(t, `class P {
+			x: number;
+			init() { while (false) { print this.x; } this.x = 1; }
+		}`, "Cannot read 'this.x' before it is assigned")
+	})
+	t.Run("inside a lambda that closes over this", func(t *testing.T) {
+		wantError(t, `class P {
+			x: number;
+			init() { var f: fun(): number = fun(): number { return this.x; }; print f(); this.x = 1; }
+		}`, "Cannot read 'this.x' before it is assigned")
+	})
+	t.Run("calling a method that may read a field", func(t *testing.T) {
+		wantError(t, `class P {
+			x: number;
+			init() { this.show(); this.x = 1; }
+			show() { print this.x; }
+		}`, "Cannot call 'this.show' before 'x' is assigned")
+	})
+	t.Run("passing this out before it is built", func(t *testing.T) {
+		wantError(t, `fun take(p: P) { print p.x; }
+		class P { x: number; init() { take(this); this.x = 1; } }`,
+			"Cannot pass 'this' before 'x' is assigned")
+	})
+	t.Run("inherited field before super.init", func(t *testing.T) {
+		wantError(t, `class A { a: number; init(a: number) { this.a = a; } }
+		class B < A { b: number; init() { print this.a; super.init(1); this.b = 2; } }`,
+			"before super.init(...) assigns it")
+	})
+	t.Run("superclass method before super.init", func(t *testing.T) {
+		wantError(t, `class A { a: number; init(a: number) { this.a = a; } get(): number { return this.a; } }
+		class B < A { b: number; init() { print super.get(); super.init(1); this.b = 2; } }`,
+			"before super.init(...)")
+	})
+}
+
+// The read checks must not reject ordinary constructors.
+func TestReadsAfterAssignmentAreFine(t *testing.T) {
+	t.Run("reading a field once assigned", func(t *testing.T) {
+		wantOK(t, `class P {
+			x: number;
+			y: number;
+			init() { this.x = 1; this.y = this.x + 1; }
+		}`)
+	})
+	t.Run("calling a method once every field is assigned", func(t *testing.T) {
+		wantOK(t, `class P {
+			x: number;
+			init() { this.x = 1; this.show(); }
+			show() { print this.x; }
+		}`)
+	})
+	t.Run("looping over a field after assigning it", func(t *testing.T) {
+		wantOK(t, `class P {
+			x: number;
+			init() { this.x = 0; for (var i: number = 0; i < 3; i = i + 1) { this.x = this.x + i; } }
+		}`)
+	})
+	t.Run("a lambda not touching this", func(t *testing.T) {
+		wantOK(t, `class P {
+			x: number;
+			init() { var f: fun(number): number = fun(v: number): number { return v * 2; }; this.x = f(21); }
+		}`)
+	})
+	t.Run("reads outside init need no analysis", func(t *testing.T) {
+		// Once init returns, definite assignment guarantees every field holds
+		// a value, so no later read can be too early.
+		wantOK(t, `class P {
+			x: number;
+			init() { this.x = 1; }
+			get(): number { return this.x; }
+		}`)
+	})
+}
+
+// A module the checker cannot resolve must not leave a nil in the import map:
+// dereferencing one crashed the compiler rather than reporting anything.
+func TestUnresolvedImportDoesNotCrash(t *testing.T) {
+	t.Run("qualified read from an unbound alias", func(t *testing.T) {
+		wantError(t, `var x: number = missing.thing();`, "Undefined variable 'missing'")
+	})
+	t.Run("qualified type from an unbound alias", func(t *testing.T) {
+		wantError(t, `var x: missing.Thing = 1;`, "Unknown module 'missing'")
+	})
 }

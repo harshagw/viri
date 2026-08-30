@@ -1,4 +1,4 @@
-.PHONY: viri repl tidy test wasm build e2e repl-compiler debugger
+.PHONY: viri repl tidy test wasm build e2e bench repl-compiler debugger
 
 viri:
 	go run cmd/viri/main.go examples/demo.viri
@@ -34,6 +34,9 @@ e2e: build
 	@echo "========================================="
 	go test -tags=e2e -run TestE2E_VM ./test/...
 	rm -f viri
+
+bench:
+	go test -tags=e2e -run XXX -bench . -benchmem ./test/...
 
 build-plugin:
 	cd /Users/harsh/code/viri/viri-syntax-plugin && vsce package

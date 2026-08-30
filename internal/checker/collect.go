@@ -49,10 +49,12 @@ func (c *Checker) collectClassNames(statements []ast.Stmt) {
 			c.errorAt(class.Name, "'"+class.Name.Lexeme+"' is already declared in this scope.")
 			continue
 		}
-		c.classes[class.Name.Lexeme] = &types.Class{
+		built := &types.Class{
 			Name:    class.Name.Lexeme,
 			Methods: make(map[string]*types.Function),
 		}
+		c.classes[class.Name.Lexeme] = built
+		c.classTypes[class] = built
 	}
 }
 

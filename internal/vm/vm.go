@@ -204,6 +204,23 @@ func (vm *VM) runModule(moduleIdx int) error {
 				return err
 			}
 
+		case code.OpAddNumber:
+			// The checker proved both operands are numbers, so there is
+			// nothing to dispatch on and no failure case.
+			right := vm.pop().(*objects.Number)
+			left := vm.pop().(*objects.Number)
+			if err := vm.push(objects.NewNumber(left.Value + right.Value)); err != nil {
+				return err
+			}
+
+		case code.OpAddString:
+			// Likewise for the string meaning of '+'.
+			right := vm.pop().(*objects.String)
+			left := vm.pop().(*objects.String)
+			if err := vm.push(objects.NewString(left.Value + right.Value)); err != nil {
+				return err
+			}
+
 		case code.OpAdd, code.OpSub, code.OpMul, code.OpDiv:
 			if err := vm.executeBinaryOperation(op); err != nil {
 				return err
@@ -246,8 +263,10 @@ func (vm *VM) runModule(moduleIdx int) error {
 		case code.OpJumpNotTruthy:
 			pos := readUint16(ins, ip)
 			frame.ip += 2
-			condition := vm.pop()
-			if !objects.IsTruthy(condition) {
+			// Conditions are bool: the checker rejects anything else, so this
+			// is an unwrap rather than a truthiness coercion.
+			condition := unwrapCell(vm.pop())
+			if b, ok := condition.(*objects.Bool); !ok || !b.Value {
 				frame.ip = pos - 1
 			}
 
@@ -469,7 +488,8 @@ func (vm *VM) runModule(moduleIdx int) error {
 		case code.OpClass:
 			nameIdx := readUint16(ins, ip)
 			numMethods := readUint8(ins, ip+2)
-			frame.ip += 3
+			numFields := readUint8(ins, ip+3)
+			frame.ip += 4
 
 			// Get class name from constants
 			className := vm.constants[nameIdx].(*objects.String).Value
@@ -497,6 +517,7 @@ func (vm *VM) runModule(moduleIdx int) error {
 				Name:       className,
 				Methods:    methods,
 				SuperClass: superClass,
+				NumFields:  numFields,
 			}
 			// Stamp the lexical class on each method so 'super' resolves
 			// against the class the method was declared in.
@@ -507,48 +528,43 @@ func (vm *VM) runModule(moduleIdx int) error {
 				return err
 			}
 
-		case code.OpGetProperty:
-			nameIdx := readUint16(ins, ip)
-			frame.ip += 2
+		case code.OpGetField:
+			slot := readUint8(ins, ip)
+			frame.ip++
 
-			name := vm.constants[nameIdx].(*objects.String).Value
-			obj := vm.pop()
-
-			switch target := obj.(type) {
-			case *objects.CompiledInstance:
-				// Check fields first
-				if val, ok := target.Fields[name]; ok {
-					if err := vm.push(val); err != nil {
-						return err
-					}
-				} else if method, ok := target.Class.LookupMethod(name); ok {
-					// Bind method to instance
-					bound := &objects.BoundMethod{Receiver: target, Method: method}
-					if err := vm.push(bound); err != nil {
-						return err
-					}
-				} else {
-					return vm.runtimeError("instance does not have field " + name)
-				}
-			default:
-				return vm.runtimeError("Only instances and namespaces have properties.")
+			// The checker resolved this to a declared field on a known class,
+			// so there is nothing to look up and nothing that can be missing.
+			instance := vm.pop().(*objects.CompiledInstance)
+			if err := vm.push(instance.Fields[slot]); err != nil {
+				return err
 			}
 
-		case code.OpSetProperty:
-			nameIdx := readUint16(ins, ip)
-			frame.ip += 2
+		case code.OpSetField:
+			slot := readUint8(ins, ip)
+			frame.ip++
 
-			name := vm.constants[nameIdx].(*objects.String).Value
 			value := vm.pop()
-			obj := vm.pop()
-
-			instance, ok := obj.(*objects.CompiledInstance)
-			if !ok {
-				return vm.runtimeError("Only instances have fields.")
+			instance := vm.pop().(*objects.CompiledInstance)
+			instance.Fields[slot] = value
+			if err := vm.push(value); err != nil {
+				return err
 			}
 
-			instance.Fields[name] = value
-			if err := vm.push(value); err != nil {
+		case code.OpGetProperty:
+			// Only method access reaches here; field access compiles to
+			// OpGetField. Methods still resolve by name because they live on
+			// the class rather than the instance.
+			nameIdx := readUint16(ins, ip)
+			frame.ip += 2
+
+			name := vm.constants[nameIdx].(*objects.String).Value
+			instance := vm.pop().(*objects.CompiledInstance)
+
+			method, ok := instance.Class.LookupMethod(name)
+			if !ok {
+				return vm.runtimeError("instance does not have method " + name)
+			}
+			if err := vm.push(&objects.BoundMethod{Receiver: instance, Method: method}); err != nil {
 				return err
 			}
 
@@ -632,6 +648,9 @@ func (vm *VM) executeCall(numArgs int) (*Frame, error) {
 }
 
 func (vm *VM) callNativeFunction(fn *objects.NativeFunction, numArgs int) error {
+	// Arity is checked at compile time now. This guard stays as a backstop for
+	// the same reason as the one in callValue: one integer comparison per
+	// call, against a whole class of silent misbehaviour if it were wrong.
 	if fn.NumArgs >= 0 && numArgs != fn.NumArgs {
 		return vm.runtimeError(fmt.Sprintf("Expected %d arguments but got %d.", fn.NumArgs, numArgs))
 	}

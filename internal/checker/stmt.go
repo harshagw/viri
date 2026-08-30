@@ -220,6 +220,7 @@ func (c *Checker) checkClassStmt(s *ast.ClassStmt) {
 
 	c.checkInheritedFields(s, class)
 	c.checkOverrides(s, class)
+	c.checkDefiniteAssignment(s, class)
 
 	previousClass := c.currentClass
 	c.currentClass = class

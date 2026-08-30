@@ -29,11 +29,12 @@ func (c *Compiler) CompileProgram(entryPath string) (*objects.CompiledProgram, e
 	// Type-check every module before compiling any of them. Codegen is
 	// untyped and assumes a well-typed program, so nothing may be emitted
 	// until the whole program checks.
-	exprTypes, err := c.checkProgram()
+	exprTypes, classTypes, err := c.checkProgram()
 	if err != nil {
 		return nil, err
 	}
 	c.exprTypes = exprTypes
+	c.classTypes = classTypes
 
 	// Compile all modules using shared constants table
 	compiledModules := make([]objects.CompiledModule, len(c.moduleOrder))

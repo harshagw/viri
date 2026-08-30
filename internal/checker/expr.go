@@ -317,6 +317,9 @@ func (c *Checker) checkGet(e *ast.GetExpr) types.Type {
 
 	// `alias.name` on an import reads that module's export.
 	if mod, ok := object.(*types.Module); ok {
+		if mod == nil {
+			return types.Invalid
+		}
 		exported, ok := mod.Exports[e.Name.Lexeme]
 		if !ok {
 			c.errorAt(e.Name, "'"+e.Name.Lexeme+"' is not exported from module '"+mod.Path+"'.")
