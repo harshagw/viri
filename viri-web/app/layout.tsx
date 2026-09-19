@@ -18,9 +18,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Viri",
   description: "A small, statically typed programming language, built from scratch in Go to learn how languages work.",
-  metadataBase: new URL("https://harshagw.github.io/viri"),
+  metadataBase: new URL("https://viri.harshagw.dev"),
   keywords: ["viri", "programming language", "interpreter", "compiler", "bytecode", "vm", "learning"],
-  authors: [{ name: "Harsh Agarwal", url: "https://harshagw.github.io" }],
+  authors: [{ name: "Harsh Agarwal", url: "https://harshagw.dev" }],
   creator: "Harsh Agarwal",
   openGraph: {
     title: "Viri",
@@ -28,10 +28,10 @@ export const metadata: Metadata = {
     siteName: "Viri",
     type: "website",
     locale: "en_US",
-    url: "https://harshagw.github.io/viri",
+    url: "https://viri.harshagw.dev",
     images: [
       {
-        url: "https://harshagw.github.io/viri/og-image.png",
+        url: "https://viri.harshagw.dev/og-image.png",
         width: 1200,
         height: 630,
         alt: "Viri - A simple, expressive programming language",
@@ -45,7 +45,7 @@ export const metadata: Metadata = {
     title: "Viri",
     description: "A small, statically typed programming language, built from scratch in Go to learn how languages work.",
     images: {
-      url: "https://harshagw.github.io/viri/og-image.png",
+      url: "https://viri.harshagw.dev/og-image.png",
       alt: "Viri - A simple, expressive programming language",
     },
   },
