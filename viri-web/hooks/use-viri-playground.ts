@@ -1,4 +1,3 @@
-import { basePath } from "@/lib/utils";
 import { useEffect, useState, useCallback, useRef } from "react";
 
 interface ViriResponse {
@@ -55,7 +54,7 @@ export function useViriPlayground(): UseViriReturn {
 
     workerRef.current = worker;
 
-    worker.postMessage({ type: "init", basePath: basePath });
+    worker.postMessage({ type: "init" });
 
     worker.onmessage = (e) => {
       const { type, data, content } = e.data;

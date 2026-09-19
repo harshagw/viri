@@ -27,8 +27,8 @@ var s: Shape = Square(4);
 print s.area();
 ```
 
-Try it in the browser at the [Viri playground](https://harshagw.github.io/viri/),
-or read the [grammar reference](https://harshagw.github.io/viri/grammar).
+Try it in the browser at the [Viri playground](https://viri.harshagw.dev/),
+or read the [grammar reference](https://viri.harshagw.dev/grammar).
 
 ## Two engines, one of them frozen
 

@@ -1,19 +1,14 @@
-name: Deploy Viri Web to Pages
+name: Deploy Viri Web to VPS
 
 on:
   workflow_dispatch:
 
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
 concurrency:
-  group: "pages"
+  group: "deploy"
   cancel-in-progress: false
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
     env:
       NEXT_PUBLIC_POSTHOG_KEY: ${{ secrets.NEXT_PUBLIC_POSTHOG_KEY }}
@@ -42,12 +37,6 @@ jobs:
           cache: npm
           cache-dependency-path: ./viri-web/package-lock.json
 
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-        with:
-          static_site_generator: next
-          generator_config_file: ./viri-web/next.config.ts
-
       - name: Restore cache
         uses: actions/cache@v4
         with:
@@ -69,18 +58,15 @@ jobs:
           sudo apt-get install -y librsvg2-bin
           rsvg-convert -w 1200 -h 630 out/og-image.svg -o out/og-image.png
 
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: ./viri-web/out
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
 
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      # --delete removes files from old builds so stale pages don't linger
+      - name: Upload build
+        run: |
+          rsync -avz --delete -e "ssh -i ~/.ssh/deploy_key" \
+            out/ "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.DEPLOY_PATH }}/"

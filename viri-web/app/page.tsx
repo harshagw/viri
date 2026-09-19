@@ -89,7 +89,7 @@ export default function Page() {
             <p className="text-sm text-muted-foreground">viri — a learning language</p>
             <p className="text-sm text-muted-foreground">
               Made by{" "}
-              <a href="https://harshagw.github.io" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground transition-colors">
+              <a href="https://harshagw.dev" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground transition-colors">
                 Harsh Agarwal
               </a>
             </p>

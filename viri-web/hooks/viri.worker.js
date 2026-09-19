@@ -1,9 +1,7 @@
 let isReady = false;
-let basePath = "";
 
 self.onmessage = async (e) => {
   if (e.data.type === "init") {
-    basePath = e.data.basePath || "";
     await loadWasm();
     return;
   }
@@ -30,8 +28,8 @@ self.onmessage = async (e) => {
 async function loadWasm() {
   try {
     const origin = self.location.origin;
-    const wasmExecUrl = `${origin}${basePath}/wasm_exec.js`;
-    const wasmUrl = `${origin}${basePath}/viri.wasm`;
+    const wasmExecUrl = `${origin}/wasm_exec.js`;
+    const wasmUrl = `${origin}/viri.wasm`;
 
     importScripts(wasmExecUrl);
 
